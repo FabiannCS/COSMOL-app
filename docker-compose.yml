@@ -1,0 +1,100 @@
+services:
+  # ----------------------------------------------------------------------------
+  # Backend API (FastAPI)
+  # ----------------------------------------------------------------------------
+  backend-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cosmol-backend-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      db-postgres:
+        condition: service_healthy
+      cache-redis:
+        condition: service_healthy
+
+  # ----------------------------------------------------------------------------
+  # Base de Datos Relacional (PostgreSQL 16)
+  # ----------------------------------------------------------------------------
+  db-postgres:
+    image: postgres:16-alpine
+    container_name: cosmol-db-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cosmol_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cosmol_secret_pass}
+      POSTGRES_DB: ${POSTGRES_DB:-cosmol_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cosmol_user} -d ${POSTGRES_DB:-cosmol_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # Memoria y Caché (Redis 7)
+  # ----------------------------------------------------------------------------
+  cache-redis:
+    image: redis:7-alpine
+    container_name: cosmol-cache-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # Almacenamiento de Objetos / PDFs (MinIO S3)
+  # ----------------------------------------------------------------------------
+  storage-minio:
+    image: minio/minio:latest
+    container_name: cosmol-storage-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cosmol_minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cosmol_minio_secret_pass}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+
+  # ----------------------------------------------------------------------------
+  # Gateway / Reverse Proxy (Caddy v2)
+  # ----------------------------------------------------------------------------
+  gateway-caddy:
+    image: caddy:2-alpine
+    container_name: cosmol-gateway-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - backend-api
+
+volumes:
+  postgres_data:
+    name: cosmol_postgres_data
+  redis_data:
+    name: cosmol_redis_data
+  minio_data:
+    name: cosmol_minio_data

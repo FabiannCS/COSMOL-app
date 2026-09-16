@@ -1,0 +1,24 @@
+{
+    # En desarrollo local desactivamos auto_https
+    auto_https off
+}
+
+:80 {
+    # 1. Reverse proxy hacia FastAPI
+    handle /api/* {
+        reverse_proxy backend-api:8000
+    }
+
+    # 2. Documentación interactiva de Swagger / OpenAPI
+    handle /docs* {
+        reverse_proxy backend-api:8000
+    }
+    handle /openapi.json {
+        reverse_proxy backend-api:8000
+    }
+
+    # 3. Respuesta base de verificación del Gateway
+    handle {
+        respond "COSMOL App Gateway (Caddy) - Operativo" 200
+    }
+}
