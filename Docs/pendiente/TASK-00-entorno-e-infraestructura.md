@@ -21,7 +21,7 @@ Establecer la infraestructura base de contenedores Docker (`docker-compose.yml`)
   - `db-postgres` (PostgreSQL 16 en `:5432` con volumen persistente `postgres_data`)
   - `cache-redis` (Redis 7 en `:6379` con volumen persistente `redis_data`)
   - `storage-minio` (MinIO API en `:9000` y Consola Web en `:9001` con volumen `minio_data`)
-  - `proxy-nginx` (Nginx Gateway en `:80` para redirección y pruebas de proxy)
+  - `gateway-caddy` (Caddy v2 Gateway en `:80` para redirección, servido y pruebas de proxy con `Caddyfile`)
 - [ ] Mapeo directo de puertos a `localhost` para conexión cómoda desde herramientas locales (DBeaver, Redis Insight, MinIO Web). *Nota: La red aislada `cosmol_net` se pospone para el entorno de producción.*
 - [ ] Crear archivo `.env.example` con variables de entorno para desarrollo y staging.
 
@@ -51,7 +51,7 @@ Establecer la infraestructura base de contenedores Docker (`docker-compose.yml`)
 ## 3. Criterios de Aceptación
 
 1. El comando `docker compose up -d` levanta los 5 contenedores sin errores.
-2. `curl http://localhost:8000/api/v1/health` (o a través de Nginx en `http://localhost/api/v1/health`) responde `200 OK` con estado de base de datos y caché conectados.
+2. `curl http://localhost:8000/api/v1/health` (o a través de Caddy en `http://localhost/api/v1/health`) responde `200 OK` con estado de base de datos y caché conectados.
 3. La documentación interactiva de Swagger UI está accesible en `http://localhost:8000/docs`.
 4. El proyecto Flutter compila y ejecuta su pantalla inicial en el **teléfono móvil físico conectado por cable USB** sin emuladores.
 5. El smartphone físico se comunica exitosamente con el backend Docker local mediante `adb reverse`.
