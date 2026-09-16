@@ -1,0 +1,414 @@
+# Hoja de Ruta de Desarrollo y Arquitectura Técnica
+## Plataforma Web y Móvil para Asociados — COSMOL R.L.
+
+> **Documento Maestro de Ejecución Técnica**  
+> **Ubicación:** `Docs/HOJA_DE_RUTA_DESARROLLO.md`  
+> **Basado en:** `AGENTS.md` y `PROPUESTA_AUTENTICACION_Y_SESIONES.md`  
+> **Estado:** Aprobado para Ejecución  
+> **Fecha:** Septiembre 2026  
+
+---
+
+## 1. Visión General y Principios de Arquitectura
+
+El objetivo es construir una solución omnicanal (Android, iOS y Web) altamente escalable, desacoplada y segura para los asociados de **COSMOL R.L.** en Montero, Bolivia.
+
+### Principios Rectores:
+1. **Frontend Desacoplado (BFF - Backend for Frontend):** Flutter interactúa exclusivamente con nuestra API REST en **FastAPI**. Flutter **nunca** conoce la base de datos interna de COSMOL ni sus esquemas legados.
+2. **Identidad Digital Independiente:** Separación estricta entre el **Usuario Digital** (persona con celular verificado) y los **Códigos de Socio** (contratos/suministros de agua vinculados con roles de Titular o Consulta/Pago).
+3. **Resiliencia y Baja Latencia:** Caché agresiva con **Redis** (<20 ms para deudas e históricos) para proteger los servidores legados de COSMOL contra picos de tráfico.
+4. **Seguridad y Cero Exposición:** Terminación TLS estricta en **Nginx**, red interna privada Docker para bases de datos (`PostgreSQL`, `Redis`, `MinIO`), y almacenamiento seguro de credenciales con cifrado de hardware en dispositivos móviles (`flutter_secure_storage`).
+5. **Auditoría Externa Unidireccional:** Todo evento sensible (login, bloqueo, descarga, pago) se despacha asíncronamente hacia la base de datos del proyecto **ChatbotReportes** sin degradar el tiempo de respuesta al socio.
+
+---
+
+## 2. Topología de Infraestructura y Contenedores Docker
+
+```
+                                  [ INTERNET ]
+                                       │
+                    ┌──────────────────┴──────────────────┐
+                    │      HTTPS (443) / HTTP (80)        │
+                    ▼                                     ▼
+        [ App Móvil Flutter ]                     [ Navegador Web ]
+      (Android / iOS vía API)                    (Build Flutter Web)
+                    │                                     │
+                    └──────────────────┬──────────────────┘
+                                       │
+                                       ▼
+                        ╔═══════════════════════════════════╗
+                        ║        proxy-nginx (Docker)       ║
+                        ║   - Terminación SSL / TLS         ║
+                        ║   - Reverse Proxy a FastAPI       ║
+                        ║   - Servido Estático Flutter Web  ║
+                        ╚═════════════════╤═════════════════╝
+                                          │ Proxy Pass HTTP :8000
+    ╔═════════════════════════════════════╪═════════════════════════════════════╗
+    ║ ENTORNO DOCKER (Red estándar en Dev / Red aislada en Producción)          ║
+    ║                                     ▼                                     ║
+    ║                          ╔═════════════════════╗                          ║
+    ║                          ║ backend-api (FastAPI║                          ║
+    ║                          ║   Puerto 8000)      ║                          ║
+    ║                          ╚═══╤═════════╤═════╤═╝                          ║
+    ║       SQL Async (:5432)      │         │     │     S3 API (:9000)         ║
+    ║    ┌─────────────────────────┘         │     └────────────────────────┐   ║
+    ║    ▼                                   ▼                              ▼   ║
+    ║ ╔═══════════════╗            ╔═══════════════╗              ╔═══════════╗ ║
+    ║ ║  db-postgres  ║            ║  cache-redis  ║              ║storage-   ║ ║
+    ║ ║  (PostgreSQL) ║            ║ (Sesión/Caché)║              ║minio (S3) ║ ║
+    ║ ╚═══════════════╝            ╚═══════════════╝              ╚═══════════╝ ║
+    ╚═════════════════════════════════════╪═════════════════════════════════════╝
+                                          │
+                     Salida Saliente (Egress) desde backend-api:
+                     ├────► Sistema Legado COSMOL (API/BD Lectura Asíncrona)
+                     ├────► BD ChatbotReportes (Solo escritura auditoría)
+                     ├────► Meta WhatsApp Cloud API / Gateway SMS (Envío OTP)
+                     └────► Pasarelas de Pago / Banca Externa (Webhooks/Redirects)
+```
+
+---
+
+## 3. Modelo de Datos Propio (PostgreSQL)
+
+Para soportar el saneamiento de datos, multicuenta, control de sesiones y bloqueo:
+
+```mermaid
+erDiagram
+    USERS ||--o{ USER_ACCOUNTS : "administra"
+    USERS ||--o{ USER_DEVICES : "inicia sesión en"
+    USERS ||--o{ OTP_LOGS : "solicita"
+    
+    USERS {
+        uuid id PK
+        string phone_number UK "Número de celular (ej. 77012345)"
+        string password_hash "Bcrypt hash de contraseña/PIN"
+        boolean is_active "Estado de la cuenta"
+        int failed_login_attempts "Contador de fallos consecutivos"
+        timestamp locked_until "Bloqueo progresivo temporal"
+        timestamp created_at
+        timestamp updated_at
+    }
+
+    USER_ACCOUNTS {
+        uuid id PK
+        uuid user_id FK "Usuario digital dueño del perfil"
+        string cod_socio "Código de socio en COSMOL"
+        string alias "Ej: Mi Casa, Local Centro"
+        string role "TITULAR o CONSULTA_PAGO"
+        boolean is_verified "Verificado con CI o Medidor"
+        timestamp linked_at
+    }
+
+    USER_DEVICES {
+        uuid id PK
+        uuid user_id FK
+        string device_id UK "Identificador único de hardware"
+        string device_model "Ej: Samsung A54, iPhone 13, Web Chrome"
+        string refresh_token_hash "Hash del último Refresh Token activo"
+        string fcm_token "Token para Notificaciones Push"
+        timestamp last_active_at
+    }
+
+    OTP_LOGS {
+        uuid id PK
+        string phone_number
+        string channel "WHATSAPP o SMS"
+        string otp_hash "Código OTP hasheado"
+        boolean is_used
+        timestamp expires_at "TTL 5 minutos"
+        timestamp created_at
+    }
+```
+
+---
+
+## 4. Estructura del Repositorio
+
+Para un desarrollo limpio y modular, se adopta la siguiente estructura de carpetas:
+
+```text
+cosmol-app/
+├── .github/
+│   └── workflows/              # CI/CD (Tests, Docker builds, Flutter builds)
+├── Docs/                       # Documentación viva del proyecto
+│   ├── HOJA_DE_RUTA_DESARROLLO.md # [Este archivo maestro]
+│   ├── pendiente/              # Historias de usuario / tareas por abordar
+│   └── realizado/              # Tareas completadas con bitácora de cambios
+├── backend/                    # Proyecto Backend FastAPI (Python 3.12+)
+│   ├── app/
+│   │   ├── api/v1/             # Endpoints (auth, socio, facturas, pagos)
+│   │   ├── core/               # Configuración, variables de entorno, seguridad (JWT, bcrypt)
+│   │   ├── db/                 # Conexión SQLAlchemy async, modelos y migraciones Alembic
+│   │   ├── integrations/       # Clientes HTTP (COSMOL Legado, WhatsApp API, SMS Gateway)
+│   │   ├── schemas/            # Esquemas Pydantic v2 (Request / Response DTOs)
+│   │   ├── services/           # Lógica de negocio (AuthService, DebtService, PdfService)
+│   │   └── tasks/              # BackgroundTasks (Auditoría hacia ChatbotReportes)
+│   ├── tests/                  # Pruebas unitarias y de integración (pytest + httpx)
+│   ├── Dockerfile
+│   └── requirements.txt
+├── frontend/                   # Proyecto Flutter (Móvil Android/iOS + Web)
+│   ├── lib/
+│   │   ├── core/               # Tema visual COSMOL, router (go_router), clientes HTTP (dio)
+│   │   ├── features/           # Módulos por Clean Architecture:
+│   │   │   ├── auth/           # Login, Onboarding OTP, PIN, Biometría
+│   │   │   ├── multicuenta/    # Selector y vinculación de suministros
+│   │   │   ├── dashboard/      # Deuda en Bs, semaforización de vencimiento
+│   │   │   ├── documents/      # Historial y visor de facturas/avisos PDF
+│   │   │   ├── consumption/    # Gráficos analíticos de consumo (fl_chart)
+│   │   │   └── payments/       # Botón "Pagar Ahora", QR interbancario
+│   │   └── main.dart
+│   ├── test/                   # Tests unitarios y de widgets
+│   └── pubspec.yaml
+├── docker-compose.yml          # Orquestación de servicios locales / staging
+├── docker-compose.prod.yml     # Orquestación para producción
+├── nginx/                      # Configuración de Nginx y TLS
+└── AGENTS.md                   # Base conceptual y reglas del proyecto
+```
+
+---
+
+## 5. Fases de Implementación Secuencial
+
+```mermaid
+gantt
+    title Cronograma de Fases de Desarrollo COSMOL
+    dateFormat  YYYY-MM-DD
+    section Fase 0: Cimientos
+    Infraestructura Docker & Entornos       :f0_1, 2026-09-17, 3d
+    Scaffolding FastAPI & Contrato OpenAPI  :f0_2, after f0_1, 3d
+    Scaffolding Flutter & Arquitectura Base :f0_3, after f0_1, 3d
+    section Fase 1: Identidad & Core Auth
+    Modelos PostgreSQL & Alembic            :f1_1, after f0_2, 2d
+    Servicio OTP Dual (WhatsApp + SMS)      :f1_2, after f1_1, 3d
+    Endpoints Onboarding & JWT              :f1_3, after f1_2, 3d
+    Vistas Flutter Auth, OTP y Biometría    :f1_4, after f0_3, 5d
+    Lógica Multicuenta (Titular vs Consulta):f1_5, after f1_3, 3d
+    section Fase 2: Consulta & Dashboard
+    Integration Layer COSMOL Legado (Async) :f2_1, after f1_3, 4d
+    Caché Redis (<20ms) & Dashboard API     :f2_2, after f2_1, 2d
+    Dashboard Flutter & Semáforo Vencimiento:f2_3, after f1_4, 4d
+    section Fase 3: Documentos PDF
+    Storage MinIO & Servido Seguro de PDFs  :f3_1, after f2_2, 3d
+    Visor & Descarga Flutter PDF            :f3_2, after f3_1, 3d
+    section Fase 4: Analítica de Consumo
+    Endpoint Historial Consumo (6+ meses)   :f4_1, after f2_2, 2d
+    Gráficos Interactivos fl_chart          :f4_2, after f4_1, 3d
+    section Fase 5: Pagos Externos
+    Integración Pasarelas & QR Interbancario:f5_1, after f2_3, 4d
+    Webhooks de Conciliación & Saldo        :f5_2, after f5_1, 3d
+    section Fase 6: Auditoría & Seguridad
+    Auditoría Async a ChatbotReportes       :f6_1, after f5_2, 2d
+    Rate Limiting, Bloqueo & OWASP MASVS    :f6_2, after f6_1, 3d
+    section Fase 7: Despliegue & Producción
+    Builds Flutter (Web, APK, IPA)          :f7_1, after f6_2, 4d
+    Despliegue Docker Producción & Testing  :f7_2, after f7_1, 3d
+```
+
+---
+
+### Detalle de Fases y Entregables Técnicos
+
+---
+
+### **Fase 0: Cimientos de Infraestructura, Entorno Docker y Contratos API**
+> **Meta:** Dejar corriendo el ecosistema local completo y definir el contrato OpenAPI sin esperar integraciones legadas.
+
+- [ ] **0.1 Orquestación Docker:**
+  - Crear `docker-compose.yml` con los contenedores: `backend-api` (FastAPI), `db-postgres` (Postgres 16), `cache-redis` (Redis 7), `storage-minio` (MinIO), y `proxy-nginx`.
+  - Configurar red estándar de desarrollo con exposición directa de puertos a `localhost` (Postgres en 5432, Redis en 6379, MinIO en 9000/9001, FastAPI en 8000) y volúmenes persistentes (`postgres_data`, `redis_data`, `minio_data`). La red aislada `cosmol_net` se pospone para producción.
+- [ ] **0.2 Scaffolding Backend (FastAPI):**
+  - Configurar Python 3.12, Uvicorn, Pydantic v2, SQLAlchemy en modo Async con `asyncpg`.
+  - Definir estructura de configuración mediante `.env` seguro.
+  - Diseñar el contrato de API REST documentado con OpenAPI/Swagger (`/docs`).
+- [ ] **0.3 Scaffolding Flutter:**
+  - Inicializar proyecto Flutter 3.x con soporte Android, iOS y Web.
+  - Configurar estructura Clean Architecture (Data, Domain, Presentation).
+  - Configurar gestión de estado (`Riverpod`), enrutamiento declarativo (`go_router`) y cliente de red (`dio` con interceptores para JWT).
+  - Implementar paleta institucional de COSMOL (Azul cooperativo, acentos cian, tipografía moderna, semaforización de alertas).
+
+---
+
+### **Fase 1: Identidad, Onboarding Dual OTP y Autenticación Multicuenta (El Core)**
+> **Meta:** Resolver la ausencia de teléfonos en la BD legada mediante el flujo de saneamiento y blindaje con contraseña/PIN.
+
+- [ ] **1.1 Base de Datos de Identidad (PostgreSQL + Alembic):**
+  - Generar migraciones para tablas `users`, `user_accounts`, `user_devices` y `otp_logs`.
+- [ ] **1.2 Integración de Mensajería OTP Dual:**
+  - Integrar cliente HTTP asíncrono para **WhatsApp Cloud API** (reutilizando WABA y número del Chatbot de COSMOL con plantilla de autenticación aprobada).
+  - Integrar cliente de fallback para **Gateway SMS**.
+  - Almacenar el OTP hasheado en Redis con TTL de 5 minutos y límite de 3 solicitudes por hora por número.
+- [ ] **1.3 Flujo de Onboarding (Primer Acceso):**
+  - Endpoint `POST /api/v1/auth/verify-socio`: Valida `cod_socio + CI` contra el sistema legado.
+  - Endpoint `POST /api/v1/auth/request-otp`: Envía el código al celular vía WhatsApp o SMS a elección.
+  - Endpoint `POST /api/v1/auth/verify-otp`: Valida el código en Redis.
+  - Endpoint `POST /api/v1/auth/set-credentials`: Registra el PIN o contraseña con `passlib[bcrypt]`, activa la cuenta e invalida el uso del CI como contraseña.
+- [ ] **1.4 Login Diario y Control de Sesiones:**
+  - Endpoint `POST /api/v1/auth/login`: Ingreso con `cod_socio` + PIN/Contraseña.
+  - Emisión de JWT: `access_token` (15 min) y `refresh_token` (7 días).
+  - Modelo de sesión única: al detectar un nuevo `Device ID`, revocar el refresh token del dispositivo previo.
+  - Endpoint `POST /api/v1/auth/refresh`: Renovación transparente de tokens.
+  - Endpoint `POST /api/v1/auth/recover-password`: Flujo de reseteo mediante OTP.
+- [ ] **1.5 UI en Flutter para Autenticación:**
+  - Pantallas: Bienvenida, Primer Ingreso (`cod_socio + CI`), Selector de canal OTP (WhatsApp / SMS), Ingreso de código de 6 dígitos con cuenta regresiva, Creación de PIN/Contraseña.
+  - Login habitual y soporte para Biometría nativa (`local_auth`: Huella dactilar / Face ID).
+- [ ] **1.6 Lógica Multicuenta:**
+  - Endpoints para asociar códigos de socio adicionales:
+    - Modo Titular (valida CI/Medidor).
+    - Modo Consulta y Pago (solo valida `cod_socio`; enmascara datos sensibles).
+  - Selector desplegable superior en el Dashboard de Flutter con alias (*"Mi Casa"*, *"Alquiler Bolívar"*).
+
+---
+
+### **Fase 2: Integración con Sistema Legado y Dashboard de Deuda (MVP de Consulta)**
+> **Meta:** Mostrar al socio su deuda real, fechas y avisos en menos de 20 ms.
+
+- [ ] **2.1 Capa de Integración Resiliente (BFF):**
+  - Cliente `httpx` async hacia el sistema legado de COSMOL con connection pooling, timeouts estrictos (3s) y manejo de excepciones.
+- [ ] **2.2 Estrategia de Caché Redis:**
+  - Endpoint `GET /api/v1/socio/dashboard?cod_socio=...`
+  - Revisar Redis (`socio:{cod_socio}:debt` con TTL de 10 min).
+  - Si hay *cache-miss*, consultar sistema legado, normalizar datos a Pydantic, guardar en Redis y retornar.
+- [ ] **2.3 Dashboard Principal en Flutter:**
+  - Visualización destacada: Saldo pendiente y monto exacto a pagar en moneda boliviana (**Bs**).
+  - Semaforización de fecha de vencimiento: Texto normal si está vigente, **color rojo destacado** con advertencia si ya expiró.
+  - Soporte de visualización sin conexión (caché local con `hive_flutter` o `isar` mostrando último saldo conocido con marca de tiempo).
+
+---
+
+### **Fase 3: Repositorio Digital de Documentos (PDFs de Facturas y Avisos)**
+> **Meta:** Eliminar el gasto de papel permitiendo visualizar y descargar facturas con valor legal y avisos de corte.
+
+- [ ] **3.1 Almacenamiento de Objetos en MinIO:**
+  - Configurar bucket privado `cosmol-docs`.
+  - Endpoint `GET /api/v1/documents/list?cod_socio=...`: Lista de facturas, avisos de cobranza y avisos de corte disponibles.
+  - Endpoint `GET /api/v1/documents/{doc_id}/download`: Valida permisos del usuario (Titular) y genera URL prefirmada temporal S3 (TTL 10 min) o transmite el flujo binario.
+- [ ] **3.2 Visor y Descarga en Flutter:**
+  - Pantalla con pestañas: *Facturas*, *Avisos de Cobranza*, *Avisos de Corte*.
+  - Integración de `flutter_pdfview` para previsualización inmediata dentro de la app.
+  - Botones de acción: *"Guardar en dispositivo"* (`path_provider` + `open_filex`) y *"Compartir"* vía WhatsApp u otras aplicaciones.
+
+---
+
+### **Fase 4: Analítica de Consumo Histórico**
+> **Meta:** Proveer al socio transparencia sobre sus hábitos de consumo mensual en metros cúbicos ($m^3$).
+
+- [ ] **4.1 Endpoint de Consumo:**
+  - `GET /api/v1/socio/consumption-history?cod_socio=...`
+  - Extraer y retornar historial de los últimos **6 a 12 meses**: mes/año, volumen en $m^3$, importe facturado y estado de lectura.
+- [ ] **4.2 Gráficos en Flutter:**
+  - Implementación de gráficos de barras o líneas con `fl_chart`.
+  - Ejes definidos: Meses vs. Volumen consumido ($m^3$).
+  - Tooltips interactivos al pulsar sobre cada mes (muestra lectura anterior, lectura actual y fecha).
+  - Detección de consumos atípicos (aviso visual si el consumo superó el 30% del promedio habitual).
+
+---
+
+### **Fase 5: Redirección a Pagos, Generación de QR y Conciliación**
+> **Meta:** Facilitar el pago inmediato cerrando el ciclo de recaudación sin procesar tarjetas internamente.
+
+- [ ] **5.1 Integración de Redirección y QR:**
+  - Botón principal *"Pagar Ahora"* en el Dashboard.
+  - Endpoint `POST /api/v1/payments/generate`: Solicita a la pasarela bancaria el registro de pago.
+  - Si la pasarela devuelve URL bancaria: Flutter la abre vía `url_launcher`.
+  - Si la pasarela devuelve cadena QR: Flutter dibuja el código con `qr_flutter` (con botón *"Guardar imagen QR"* y opción de compartir a la app del banco).
+- [ ] **5.2 Webhooks de Notificación y Conciliación:**
+  - Endpoint público seguro `POST /api/v1/payments/webhook`: Recibe la confirmación del banco con firma criptográfica.
+  - Actualiza el estado del pago en la base de datos propia.
+  - **Invalida inmediatamente la caché de Redis** de ese código de socio para que el dashboard muestre saldo Bs 0 en la siguiente consulta.
+  - Emite notificación push de confirmación al usuario vía FCM.
+
+---
+
+### **Fase 6: Auditoría a ChatbotReportes, Rate Limiting y Seguridad Avanzada**
+> **Meta:** Cumplir con las políticas de auditoría corporativa y blindar la app contra ataques.
+
+- [ ] **6.1 Despacho de Auditoría Asíncrono hacia `ChatbotReportes`:**
+  - Conexión asíncrona de solo escritura a la base de datos de ChatbotReportes.
+  - Envío en segundo plano (`BackgroundTasks` de FastAPI o cola Redis) de eventos:
+    - `USER_LOGIN_SUCCESS` / `USER_LOGIN_FAILED`
+    - `OTP_REQUESTED` / `OTP_VERIFIED`
+    - `DOCUMENT_DOWNLOADED` (id_documento, cod_socio)
+    - `PAYMENT_INITIATED` / `PAYMENT_COMPLETED`
+- [ ] **6.2 Política de Bloqueo por Intentos Fallidos:**
+  - Implementar `slowapi` en FastAPI para rate limiting por IP (previene ataques distribuidos).
+  - Bloqueo progresivo por cuenta tras **3 intentos fallidos consecutivos**:
+    - Intento 3 fallido: Bloqueo de 1 min.
+    - Intento 4 fallido: Bloqueo de 5 min.
+    - Intento 5 fallido: Bloqueo de 15 min.
+    - Intentos posteriores: Bloqueo de 1 hora.
+  - Opción de desbloqueo inmediato completando el flujo de verificación OTP al celular registrado.
+- [ ] **6.3 Revisión de Seguridad OWASP MASVS:**
+  - Verificación de que no existan secretos ni contraseñas en código fuente.
+  - Habilitar Certificate Pinning / validación estricta de TLS en el cliente `dio`.
+  - Ofuscación de código en compilación de producción (`--obfuscate --split-debug-info`).
+
+---
+
+### **Fase 7: Automatización CI/CD, Despliegue en Producción y Publicación Omnicanal**
+> **Meta:** Poner la plataforma en manos de los socios de Montero con despliegue automatizado.
+
+- [ ] **7.1 Pipelines de GitHub Actions:**
+  - Linting y tests automatizados de backend (`pytest`) y frontend (`flutter test`).
+  - Construcción de imágenes Docker multi-etapa para `backend-api` y `proxy-nginx`.
+- [ ] **7.2 Despliegue del Backend:**
+  - Despliegue en servidor de producción con `docker-compose.prod.yml`.
+  - Configuración de certificados SSL/TLS automáticos con Certbot / Let's Encrypt en Nginx.
+  - Configuración de backups automatizados de PostgreSQL y MinIO.
+- [ ] **7.3 Despliegue Flutter Web:**
+  - Generación de build optimizado (`flutter build web --release`).
+  - Servido a través de Nginx bajo la ruta web oficial de COSMOL.
+- [ ] **7.4 Publicación de Apps Móviles:**
+  - **Android:** Generación de App Bundle firmado (`.aab`) y carga en Google Play Console (Track de pruebas cerradas → Producción).
+  - **iOS:** Carga a TestFlight para pruebas beta internas y posterior envío a revisión en App Store Connect.
+
+---
+
+## 6. Entorno de Pruebas y Estrategia de Validación en Hardware Real
+
+### 6.1 Pruebas Móviles en Teléfono Físico vía Cable USB
+Para garantizar que la experiencia de usuario, el rendimiento y la seguridad sean idénticos al uso real de los socios de Montero:
+- **Dispositivo de Pruebas:** Las pruebas y depuración se realizarán directamente en un **teléfono móvil Android físico conectado por cable USB** (con *Depuración por USB* activa), **descartando el uso de emuladores de Android Studio**.
+- **Requisitos en el Equipo de Desarrollo:** Se utiliza el **Android SDK** ya instalado localmente en la máquina de desarrollo (`adb`).
+- **Ventajas de Probar en Dispositivo Físico:**
+  - Validación precisa de la autenticación biométrica (`local_auth`: lector de huella físico real).
+  - Validación del escaneo y renderizado de códigos QR en pantalla real.
+  - Comprobación real de rendimiento, transiciones y consumo de batería.
+- **Túnel de Conexión Móvil ↔ Docker Backend:**
+  - Para que el teléfono conectado por USB pueda comunicarse con la API de FastAPI corriendo dentro de Docker en la PC sin lidiar con firewalls o IPs cambiantes de Wi-Fi, se utilizará el comando de redirección de puertos de Android Debug Bridge:
+    ```bash
+    adb reverse tcp:8000 tcp:8000
+    ```
+  - Con esto, las peticiones que haga la app Flutter a `http://localhost:8000/api/v1` desde el teléfono físico viajarán transparentemente a través del cable USB directo al contenedor `backend-api` de Docker.
+
+### 6.2 Pruebas en Web (Flutter Web)
+- *Nota de alcance:* El procedimiento, entorno y estrategia de pruebas específicas para la versión **Flutter Web** se explicarán y documentarán en detalle en una etapa posterior, una vez consolidado el flujo móvil en hardware real.
+
+---
+
+## 7. Sistema de Seguimiento de Tareas (`Docs/pendiente` y `Docs/realizado`)
+
+Para mantener una gobernanza limpia del avance durante el desarrollo:
+
+1. **Tareas por iniciar o en curso:** Se crearán como archivos de especificación en `Docs/pendiente/` (ej: `TASK-01-scaffolding-backend.md`, `TASK-02-auth-otp.md`).
+2. **Tareas concluidas:** Una vez implementadas y probadas con éxito, se moverán a `Docs/realizado/` con la fecha de cierre, los archivos modificados y las pruebas de validación ejecutadas.
+
+---
+
+## 7. Matriz de Riesgos Técnicos y Estrategias de Mitigación
+
+| Riesgo Técnico | Impacto | Probabilidad | Estrategia de Mitigación |
+|---|---|---|---|
+| **Caída o lentitud de la BD Legada de COSMOL** | Crítico | Media | Caché Redis con TTL de 10 min y circuit breaker en FastAPI. El usuario verá el último saldo consultado en vez de un error de timeout. |
+| **Demora o fallo en entrega de SMS** | Alto | Media | Priorizar **WhatsApp Cloud API** como canal predeterminado (tasa de entrega >98% en segundos). Ofrecer reenvío con contador de 60 segundos. |
+| **Pérdida de conectividad móvil en el socio** | Medio | Alta | Almacenamiento local seguro en Flutter (`hive_flutter`). El socio puede abrir la app y ver su aviso/factura descargada previamente sin tener señal. |
+| **Ataques de fuerza bruta a contraseñas o OTP** | Crítico | Media | Bloqueo estricto tras 3 intentos fallidos, rate limit por IP con `slowapi`, y máximo 3 solicitudes de OTP por hora por número. |
+| **Desfase en la actualización de saldo tras un pago** | Alto | Media | El webhook de la pasarela bancaria invalida la clave de Redis al instante. Además, se añade botón manual *"Actualizar saldo"* en la app. |
+
+---
+
+## 8. Siguientes Pasos Inmediatos
+
+1. Iniciar la **Fase 0**:
+   - Crear el archivo `docker-compose.yml` base y la estructura de carpetas `backend/` y `frontend/`.
+   - Inicializar el entorno FastAPI y configurar el modelo de red interna de Docker.
+2. Crear la primera tarea en `Docs/pendiente/TASK-00-entorno-e-infraestructura.md`.
