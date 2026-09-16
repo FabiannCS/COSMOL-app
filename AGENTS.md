@@ -33,13 +33,23 @@ Una app omnicanal en Flutter que centraliza la información del socio y cierra e
 
 Estas son las 5 funcionalidades principales descritas en la propuesta original. Cada una debe tratarse como un módulo independiente del backend, consumido por Flutter vía API.
 
-### 4.1 Autenticación segura
-- Ingreso con **código de socio** + contraseña como identificador principal. No se usará correo electrónico ni nombre de usuario como identificador de login. (Número de medidor o CI quedan descartados como identificador de login diario: la CI es un dato sensible y el medidor puede cambiar; ver sección 7 para el rol que sí cumplen.)
-- **Bloqueo por intentos fallidos (decidido):**
-  - Rate limiting por IP en el backend, independiente del bloqueo por cuenta — frena ataques de credential stuffing que prueban muchas cuentas desde la misma IP.
-  - Desde el intento fallido 5, bloqueo progresivo por cuenta: 1 → 5 → 15 → 30 min, con techo de ~1 hora. El ciclo de bloqueo **no se resetea con el paso del tiempo**, solo con un login exitoso o con la recuperación de contraseña.
-  - Registro de auditoría de cada intento fallido (cuenta, IP, timestamp) para que COSMOL pueda detectar patrones de ataque, no solo bloqueos aislados.
-- **Recuperación/cambio de contraseña: pendiente de definir.** Sin correo ni usuario, se necesitará un canal alterno verificado (candidato: celular registrado, con OTP por SMS o reutilizando la infraestructura de WhatsApp/n8n si se decide más adelante) — queda como decisión abierta para una siguiente iteración.
+### 4.1 Autenticación segura y gestión de identidad (Decidido)
+- **Modelo de Identidad:** Separación entre el *Usuario Digital* (la persona que usa la app, identificada por su teléfono celular verificado) y el *Código de Socio* (el contrato/suministro en el sistema comercial de COSMOL).
+- **Flujo de Primer Acceso / Onboarding (Saneamiento de base de datos):**
+  - Dado que la base de datos de COSMOL no cuenta con números telefónicos consolidados, el socio ingresa por primera vez con su **Código de Socio + CI** (respetando el requerimiento oficial de COSMOL).
+  - La API valida la coincidencia con el sistema legado y solicita de inmediato al socio asociar su **número de teléfono celular**.
+  - **Canal OTP Dual a elección del usuario:** El socio selecciona si desea recibir el código de seguridad de 6 dígitos (TTL 5 min) vía **WhatsApp Cloud API** (canal prioritario/económico, reutilizando la WABA y línea del Chatbot existente de COSMOL) o vía **SMS tradicional** (canal alternativo para falta de conexión a WhatsApp).
+  - Tras verificar el OTP, el socio crea una **Contraseña o PIN personal** seguro. A partir de ese momento, la CI queda invalidada como contraseña, eliminando la vulnerabilidad de que un tercero con una factura física en mano pueda vulnerar la privacidad del socio.
+- **Login Diario Habitual:**
+  - Acceso mediante **Código de Socio + Contraseña/PIN personal**.
+  - Soporte de autenticación biométrica en Flutter (`local_auth`: Huella dactilar o Face ID) para ingresar de inmediato sin tipear credenciales ni incurrir en costos de mensajería.
+- **Recuperación de Contraseña y Cambio de Dispositivo:**
+  - Flujo de recuperación mediante OTP (WhatsApp o SMS a elección) enviado al celular registrado.
+  - Al iniciar sesión en un nuevo dispositivo (nuevo Device ID verificado por OTP), se revoca la sesión previa en el equipo anterior (modelo de sesión única estilo WhatsApp).
+- **Bloqueo por intentos fallidos:**
+  - Rate limiting por IP en el backend (FastAPI + `slowapi`) para mitigar ataques de fuerza bruta / credential stuffing.
+  - Bloqueo progresivo por cuenta tras **3 intentos fallidos consecutivos** (1 min → 5 min → 15 min → 30 min → 1 hora). Desbloqueo inmediato completando la verificación OTP por celular.
+  - Registro de auditoría de cada intento fallido (cuenta, IP, timestamp) hacia la base de datos de `ChatbotReportes`.
 
 ### 4.2 Módulo de consulta de deuda (dashboard principal)
 - Visualización clara de: saldo pendiente, monto exacto a pagar, fechas de vencimiento.
@@ -54,6 +64,13 @@ Estas son las 5 funcionalidades principales descritas en la propuesta original. 
 
 ### 4.5 Historial de consumo analítico
 - Gráficos de barras o líneas con consumo mensual, para que el socio compare sus hábitos de consumo.
+
+### 4.6 Gestión Multicuenta (Múltiples Códigos de Socio bajo un mismo Perfil)
+- Un único usuario digital (1 número de celular verificado) puede vincular múltiples códigos de socio (`cod_socio`) para administrar diversos suministros (casa, alquiler, negocio o familiares) sin necesidad de cerrar sesión.
+- **Roles y Niveles de Acceso por Suministro:**
+  - **Modo Titular:** Requiere validación de CI o número de medidor del titular. Permite ver histórico completo, gráficos, descargas de facturas oficiales con valor legal (PDF) y avisos de corte.
+  - **Modo Consulta y Pago (Inquilino / Pagador externo):** Solo requiere el `cod_socio`. Permite consultar el saldo adeudado, fecha de vencimiento y realizar el pago con QR. **Enmascara y oculta datos sensibles del titular** (CI, histórico confidencial, reclamos) protegiendo la confidencialidad.
+- **Experiencia en Flutter:** Selector desplegable / carrusel superior en el Dashboard que permite alternar de suministro al instante y asignar alias personalizados (*"Mi Casa"*, *"Alquiler Bolívar"*).
 
 ## 5. Beneficios esperados (criterio de éxito del proyecto)
 
@@ -84,7 +101,7 @@ La propuesta deja el backend abierto. Puntos que el agente debe resolver o escal
 2. **Fuente de datos de deuda/consumo**: ¿de dónde vienen el saldo, las fechas de vencimiento y el historial de consumo? Debe conectarse al sistema de facturación/medición existente de COSMOL. Si esa fuente es una base de datos legada (p. ej. Informix), la API actúa como capa intermedia — no se accede directamente desde Flutter.
 3. **Confirmación de pago y actualización de saldo**: como el pago ocurre fuera de la app, se necesita un mecanismo (webhook de la pasarela, conciliación por lote, o consulta periódica) para que el saldo mostrado se actualice tras un pago exitoso. Este punto no está resuelto en la propuesta y es crítico para que el dashboard sea confiable.
 4. **Generación/almacenamiento de PDFs**: ¿las facturas y avisos ya existen como PDF en algún sistema, o hay que generarlos on-demand? Define si el backend solo sirve archivos existentes o necesita un motor de generación de PDF.
-5. **Autenticación**: se recomienda JWT (access + refresh token) sobre HTTPS. La política de bloqueo por intentos fallidos ya está definida (ver sección 4.1). Falta definir: flujo de registro/alta de socio y el mecanismo de recuperación de contraseña.
+5. **Autenticación (Definido)**: JWT (access token ~15 min + refresh token ~7 días) sobre HTTPS. Modelo de activación híbrido resuelto: primer ingreso con `cod_socio + CI`, captura y verificación de celular mediante OTP dual seleccionable (WhatsApp Cloud API reutilizando WABA del Chatbot / SMS), creación obligatoria de Contraseña/PIN personal para blindar la confidencialidad, y revocación de sesión por dispositivo (estilo WhatsApp). Política de bloqueo progresivo tras 3 intentos fallidos.
 
 ## 8. Notas y recomendaciones para el agente de IA
 
@@ -147,17 +164,16 @@ Los documentos deben estar disponibles en **PDF**.
 - El gráfico debe mostrar datos precisos de al menos los últimos **6 meses**.
 - Los ejes deben ser claros: **meses vs. volumen consumido**.
 
-## 11. Reconciliación de decisiones y puntos abiertos
+## 11. Reconciliación de decisiones y puntos abiertos (Actualizado y Resuelto)
 
-Existe una diferencia entre el contexto inicial y el documento oficial de requerimientos que debe resolverse antes de implementar autenticación:
+Los puntos de discrepancia identificados entre el contexto inicial y el documento oficial de requerimientos han sido **reconciliados y formalizados**:
 
-| Tema | Contexto previo | Requerimientos funcionales | Estado |
-|---|---|---|---|
-| Credencial | Código de Socio + contraseña | Código de Socio + CI como contraseña | **Pendiente de decisión** |
-| Intentos fallidos | Bloqueo progresivo desde el intento 5 | Bloqueo tras 3 intentos | **Pendiente de decisión** |
-| Recuperación de contraseña | Canal alterno verificado (celular/OTP, posible WhatsApp/n8n) | Debe permitir recuperar contraseña | **Pendiente de definición técnica** |
-
-**Regla de implementación:** no asumir que una de estas versiones reemplaza a la otra sin validación del responsable del proyecto. El backend y Flutter deben diseñarse de forma que estas políticas puedan ajustarse sin rehacer toda la arquitectura.
+| Tema | Contexto previo | Requerimientos funcionales | Decisión Final Aprobada | Estado |
+|---|---|---|---|---|
+| **Credencial de Acceso** | Código de Socio + contraseña | Código de Socio + CI como contraseña | **Flujo Híbrido de 2 Fases:** El primer acceso se realiza con `cod_socio + CI` para validar contra el sistema legado de COSMOL; inmediatamente se solicita vincular el número de celular con OTP y se exige crear una **Contraseña/PIN personal** para blindar la cuenta ante terceros con facturas impresas. En el día a día se usa `cod_socio + Contraseña/PIN` o biometría. | **Resuelto** |
+| **Intentos fallidos y bloqueo** | Bloqueo progresivo desde intento 5 | Bloqueo tras 3 intentos | **Bloqueo progresivo desde el intento 3:** 3 intentos fallidos bloquean la cuenta por 1 min → 5 min → 15 min → 30 min → 1 hora. Rate limiting por IP en backend. Desbloqueo inmediato completando validación OTP por celular. | **Resuelto** |
+| **Recuperación de contraseña y OTP** | Canal alterno verificado (celular/OTP, posible WhatsApp/n8n) | Debe permitir recuperar contraseña | **Canal OTP Dual a Elección:** El socio elige entre **WhatsApp Cloud API** (usando la WABA y línea oficial ya operada en el Chatbot de COSMOL) o **SMS tradicional** como alternativa. Recuperación mediante código de 6 dígitos (TTL 5 min). | **Resuelto** |
+| **Gestión Multicuenta** | Consulta exclusiva de un solo socio | No especificado | **Arquitectura Multicuenta:** 1 Usuario Digital = N Códigos de Socio enlazados, con diferenciación de roles (*Titular* con acceso a facturas oficiales vs *Inquilino/Pago* con datos confidenciales ocultos). | **Resuelto** |
 
 ## 12. Stack recomendado: Flutter de desarrollo a producción
 
@@ -460,6 +476,7 @@ App Store Connect permite gestionar builds, distribución beta mediante TestFlig
 | HTTP | dio + dio_cache_interceptor |
 | Modelos | freezed + json_serializable |
 | Almacenamiento seguro (tokens) | flutter_secure_storage |
+| Biometría (cliente) | local_auth (Huella dactilar / Face ID) |
 | Caché offline | hive_flutter (o isar) |
 | QR | qr_flutter |
 | PDF (cliente) | flutter_pdfview + path_provider + open_filex |
@@ -470,6 +487,7 @@ App Store Connect permite gestionar builds, distribución beta mediante TestFlig
 | Validación | pydantic v2 |
 | API | REST + OpenAPI (autogenerado por FastAPI) |
 | Auth | pyjwt + passlib[bcrypt] + JWT (access + refresh token) |
+| Proveedores OTP | WhatsApp Cloud API (Meta Graph API) + Pasarela SMS (Fallback) |
 | Base de datos | PostgreSQL + alembic |
 | Driver BD | asyncpg + sqlalchemy[asyncio] |
 | Caché y rate limiting | Redis + slowapi |
@@ -518,7 +536,7 @@ App Store Connect permite gestionar builds, distribución beta mediante TestFlig
 
 ### 14.2 Mapeo funcional → implementación
 
-- **Autenticación (4.1 / 10.1)**: Flutter envía el login vía `dio`. FastAPI valida contra PostgreSQL con `passlib[bcrypt]`. `slowapi` + Redis registran intentos fallidos e imponen el bloqueo (política exacta pendiente de decidir, ver sección 11). Si el login es exitoso, FastAPI emite Access Token (~15 min) y Refresh Token (~7 días); Flutter los guarda en `flutter_secure_storage`.
+- **Autenticación (4.1 / 10.1)**: Flutter envía las credenciales vía `dio`. En el primer acceso (`cod_socio + CI`), FastAPI valida contra el sistema legado de COSMOL, genera un código OTP de 6 dígitos en Redis (TTL 5 min) y lo despacha al canal elegido por el usuario (WhatsApp Cloud API oficial o SMS). Tras verificar el OTP, el usuario define su Contraseña/PIN personal (hasheada con `passlib[bcrypt]` en PostgreSQL), cerrando la brecha de confidencialidad de la CI. Para accesos habituales, el socio ingresa con su PIN o biometría local (`local_auth`). Si hay fallos reiterados, `slowapi` + Redis imponen el bloqueo progresivo desde el 3er intento. FastAPI emite Access Token (~15 min) y Refresh Token (~7 días), que Flutter almacena en `flutter_secure_storage`.
 - **Dashboard de deuda (4.2 / 10.2)**: Flutter consulta `GET /api/v1/socio/dashboard`. FastAPI revisa Redis primero (respuesta cacheada, TTL ~10 min, <20 ms); si no hay caché, consulta de forma asíncrona con `httpx` la API interna de COSMOL. Flutter aplica el estilo rojo si la fecha ya venció.
 - **Redirección a pagos (4.3 / 10.3)**: el socio pulsa "Pagar Ahora"; FastAPI solicita el enlace/código a la pasarela bancaria; Flutter usa `url_launcher` para abrir la app del banco o la web externa, o dibuja el QR con `qr_flutter` si la respuesta trae un string QR.
 - **Gestión de documentos (4.4 / 10.4)**: Flutter solicita la descarga; FastAPI recupera el archivo de la API de COSMOL o de MinIO (URL firmada o flujo binario); `path_provider` lo descarga temporalmente y `flutter_pdfview`/`open_filex` lo abre en el dispositivo.
