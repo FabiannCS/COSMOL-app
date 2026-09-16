@@ -281,12 +281,12 @@ El entorno de servicios se compone de los siguientes contenedores independientes
 4. **`storage-minio` (MinIO S3-Compatible)**:
    - Object Storage para repositorios de documentos PDF (facturas, avisos de cobranza y corte).
    - Evita saturar PostgreSQL con blobs binarios. Volumen persistente (`minio_data`).
-5. **`proxy-nginx` (Nginx Reverse Proxy / Gateway)**:
+5. **`gateway-caddy` (Caddy v2 Reverse Proxy / Gateway)**:
    - Punto único de entrada exterior (puertos públicos 80 y 443).
-   - Terminación SSL/TLS (certificados Let's Encrypt / certificados gestionados).
-   - Enrutamiento inverso (Reverse Proxy) hacia `backend-api` para endpoints `/api/*`.
-   - Servido de archivos estáticos para la versión **Flutter Web**.
-   - Reglas de cabeceras de seguridad, CORS estricto y compresión gzip/brotli.
+   - Terminación SSL/TLS automática nativa (Let's Encrypt / ZeroSSL administrados por Caddy sin certbot manual).
+   - Enrutamiento inverso (Reverse Proxy) hacia `backend-api` para endpoints `/api/*` y documentación `/docs`.
+   - Servido de archivos estáticos para la versión **Flutter Web** (`file_server`).
+   - Configuración declarativa simple mediante `Caddyfile`, consistente con la infraestructura existente de COSMOL (Chatbot y Reportes).
 
 #### 12.7.2 Modelo de red y topología de comunicación
 
@@ -305,7 +305,7 @@ Los servicios se comunican bajo una arquitectura segmentada y de mínimo privile
                                        │
                                        ▼
                        ╔═══════════════════════════════════╗
-                       ║        proxy-nginx (Docker)       ║
+                       ║       gateway-caddy (Docker)      ║
                        ║   - Terminación SSL / Headers     ║
                        ║   - Sirve estáticos Flutter Web   ║
                        ╚═════════════════╤═════════════════╝
@@ -338,32 +338,32 @@ Los servicios se comunican bajo una arquitectura segmentada y de mínimo privile
      - Conexión BD: `postgresql+asyncpg://user:pass@db-postgres:5432/cosmol_db`
      - Conexión Caché: `redis://cache-redis:6379/0`
      - Conexión Storage S3: `http://storage-minio:9000` con credenciales de servicio (boto3).
-   - Solo `proxy-nginx` expone los puertos estándar `80` y `443` hacia el exterior.
+   - Solo `gateway-caddy` expone los puertos estándar `80` y `443` hacia el exterior.
 
 2. **Comunicación Cliente (Flutter) ↔ Infraestructura Backend**:
    - El cliente Flutter (móvil o web) **nunca tiene acceso directo** a PostgreSQL, Redis ni MinIO.
-   - Toda interacción pasa por `proxy-nginx`, que valida TLS y reenvía las solicitudes a `backend-api:8000`.
+   - Toda interacción pasa por `gateway-caddy`, que valida TLS y reenvía las solicitudes a `backend-api:8000`.
    - Las peticiones se autentican mediante cabecera HTTP `Authorization: Bearer <JWT_ACCESS_TOKEN>`.
    - Para la descarga de documentos PDF: Flutter solicita la descarga al backend; `backend-api` autoriza al socio y genera una URL prefirmada temporal de MinIO (o transmite el flujo binario protegido), asegurando que un socio no pueda acceder a documentos ajenos.
 
 3. **Comunicación Backend ↔ Sistemas Externos**:
    - **Sistema de Facturación/Medición COSMOL**: `backend-api` realiza peticiones HTTPS/HTTP internas asíncronas con `httpx` (connection pooling, timeouts estrictos y circuit breaker) para obtener deuda y consumos sin bloquear el event loop.
    - **Proyecto ChatbotReportes**: `backend-api` abre una conexión de solo escritura hacia la base de datos de ChatbotReportes mediante `BackgroundTasks` asíncronas para asentar eventos de auditoría (login, descargas, intentos de pago) sin penalizar el tiempo de respuesta al socio.
-   - **Pasarelas de Pago y Banca**: `backend-api` se comunica por HTTPS con las APIs bancarias para inicializar transacciones o generar strings QR; las pasarelas notifican el resultado a través de endpoints de Webhooks expuestos en Nginx/FastAPI.
+   - **Pasarelas de Pago y Banca**: `backend-api` se comunica por HTTPS con las APIs bancarias para inicializar transacciones o generar strings QR; las pasarelas notifican el resultado a través de endpoints de Webhooks expuestos en Caddy/FastAPI.
 
 #### 12.7.3 Matriz de comunicación entre componentes
 
 | Componente Origen | Componente Destino | Canal / Protocolo | Puerto | Rol de la Comunicación |
 |---|---|---|---|---|
-| Flutter Client | `proxy-nginx` | HTTPS / WSS | 443 | Peticiones API REST y consumo de la versión Web |
-| `proxy-nginx` | `backend-api` | HTTP (Proxy Pass interno) | 8000 | Reenvío de llamadas `/api/*` al servidor ASGI |
-| `proxy-nginx` | Flutter Web Assets | Filesystem local montado | N/A | Servido de estáticos HTML/JS/WASM de Flutter Web |
+| Flutter Client | `gateway-caddy` | HTTPS / WSS | 443 | Peticiones API REST y consumo de la versión Web |
+| `gateway-caddy` | `backend-api` | HTTP (Proxy Pass interno) | 8000 | Reenvío de llamadas `/api/*` al servidor ASGI |
+| `gateway-caddy` | Flutter Web Assets | Filesystem local montado | N/A | Servido de estáticos HTML/JS/WASM de Flutter Web |
 | `backend-api` | `db-postgres` | TCP / asyncpg | 5432 | Consultas y persistencia de cuentas, sesiones y auditoría local |
 | `backend-api` | `cache-redis` | TCP / Redis Protocol | 6379 | Consulta/escritura de caché, rate limits y conteo de fallos |
 | `backend-api` | `storage-minio` | HTTP / S3 API (boto3) | 9000 | Subida, lectura y generación de URLs firmadas de PDFs |
 | `backend-api` | Sistema COSMOL | HTTPS / REST interno | Específico | Extracción de deudas, consumos y metadatos de medidor |
 | `backend-api` | BD ChatbotReportes | TCP / Conexión BD async | Específico | Despacho asíncrono de eventos de auditoría (solo INSERT) |
-| Pasarelas de Pago | `proxy-nginx` → `backend-api` | HTTPS (Webhook entrante) | 443 → 8000 | Confirmación de transacciones y conciliación de saldos |
+| Pasarelas de Pago | `gateway-caddy` → `backend-api` | HTTPS (Webhook entrante) | 443 → 8000 | Confirmación de transacciones y conciliación de saldos |
 
 ### 12.8 CI/CD
 - **GitHub** para repositorio y control de versiones.
@@ -493,14 +493,14 @@ App Store Connect permite gestionar builds, distribución beta mediante TestFlig
 | Caché y rate limiting | Redis + slowapi |
 | Auditoría hacia ChatbotReportes | BackgroundTasks (FastAPI) — ver caveat de durabilidad en 12.2 |
 | Almacenamiento de PDFs | MinIO (S3-compatible) + boto3; PostgreSQL solo guarda metadatos |
-| Reverse proxy / TLS | Nginx |
+| Reverse proxy / TLS | Caddy v2 (Caddyfile con HTTPS automático nativo) |
 | Contenedores | Docker + Docker Compose |
 | CI/CD | GitHub Actions |
 | Monitoreo | sentry_flutter + sentry-sdk[fastapi] + métricas + logs |
 | Seguridad móvil | OWASP MASVS |
 | Android | Google Play Console |
 | iOS | App Store Connect + TestFlight |
-| Web | Nginx sirviendo el build de Flutter Web / Firebase Hosting |
+| Web | Caddy sirviendo el build de Flutter Web (`file_server`) |
 
 ### 14.1 Tabla maestra detallada (capa por capa)
 
@@ -530,9 +530,9 @@ App Store Connect permite gestionar builds, distribución beta mediante TestFlig
 | Seguridad y cifrado | pyjwt + passlib[bcrypt] + slowapi | JWT (access/refresh), hashing seguro de credenciales, rate limiting por IP/cuenta |
 | Despacho asíncrono | BackgroundTasks (FastAPI) | Envío en segundo plano de eventos de auditoría hacia ChatbotReportes sin demorar la respuesta al socio |
 | Almacenamiento de PDFs | MinIO (S3-compatible) + boto3 | Almacenamiento desacoplado de objetos para facturas y avisos |
-| Reverse proxy / gateway | Nginx | Terminación SSL/TLS, balanceo hacia FastAPI y servido estático del build de Flutter Web |
+| Reverse proxy / gateway | Caddy v2 | Terminación SSL/TLS automática, reverse proxy hacia FastAPI y servido estático de Flutter Web con Caddyfile |
 | Monitoreo y errores | sentry_flutter + sentry-sdk[fastapi] | Trazabilidad de fallos en producción, tanto en el cliente como en el backend |
-| Contenedores | Docker + Docker Compose | Empaquetado de FastAPI, Redis, PostgreSQL, MinIO y Nginx |
+| Contenedores | Docker + Docker Compose | Empaquetado de FastAPI, Redis, PostgreSQL, MinIO y Caddy |
 
 ### 14.2 Mapeo funcional → implementación
 

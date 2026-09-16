@@ -17,7 +17,7 @@ El objetivo es construir una solución omnicanal (Android, iOS y Web) altamente 
 1. **Frontend Desacoplado (BFF - Backend for Frontend):** Flutter interactúa exclusivamente con nuestra API REST en **FastAPI**. Flutter **nunca** conoce la base de datos interna de COSMOL ni sus esquemas legados.
 2. **Identidad Digital Independiente:** Separación estricta entre el **Usuario Digital** (persona con celular verificado) y los **Códigos de Socio** (contratos/suministros de agua vinculados con roles de Titular o Consulta/Pago).
 3. **Resiliencia y Baja Latencia:** Caché agresiva con **Redis** (<20 ms para deudas e históricos) para proteger los servidores legados de COSMOL contra picos de tráfico.
-4. **Seguridad y Cero Exposición:** Terminación TLS estricta en **Nginx**, red interna privada Docker para bases de datos (`PostgreSQL`, `Redis`, `MinIO`), y almacenamiento seguro de credenciales con cifrado de hardware en dispositivos móviles (`flutter_secure_storage`).
+4. **Seguridad y Cero Exposición:** Terminación TLS estricta en **Caddy** (Caddyfile con HTTPS automático nativo), red interna privada Docker para bases de datos (`PostgreSQL`, `Redis`, `MinIO`), y almacenamiento seguro de credenciales con cifrado de hardware en dispositivos móviles (`flutter_secure_storage`).
 5. **Auditoría Externa Unidireccional:** Todo evento sensible (login, bloqueo, descarga, pago) se despacha asíncronamente hacia la base de datos del proyecto **ChatbotReportes** sin degradar el tiempo de respuesta al socio.
 
 ---
@@ -37,8 +37,8 @@ El objetivo es construir una solución omnicanal (Android, iOS y Web) altamente 
                                        │
                                        ▼
                         ╔═══════════════════════════════════╗
-                        ║        proxy-nginx (Docker)       ║
-                        ║   - Terminación SSL / TLS         ║
+                        ║        gateway-caddy (Docker)     ║
+                        ║   - Terminación SSL / TLS Auto    ║
                         ║   - Reverse Proxy a FastAPI       ║
                         ║   - Servido Estático Flutter Web  ║
                         ╚═════════════════╤═════════════════╝
@@ -161,7 +161,7 @@ cosmol-app/
 │   └── pubspec.yaml
 ├── docker-compose.yml          # Orquestación de servicios locales / staging
 ├── docker-compose.prod.yml     # Orquestación para producción
-├── nginx/                      # Configuración de Nginx y TLS
+├── caddy/                      # Configuración de Caddy (Caddyfile con HTTPS automático)
 └── AGENTS.md                   # Base conceptual y reglas del proyecto
 ```
 
@@ -214,7 +214,7 @@ gantt
 > **Meta:** Dejar corriendo el ecosistema local completo y definir el contrato OpenAPI sin esperar integraciones legadas.
 
 - [ ] **0.1 Orquestación Docker:**
-  - Crear `docker-compose.yml` con los contenedores: `backend-api` (FastAPI), `db-postgres` (Postgres 16), `cache-redis` (Redis 7), `storage-minio` (MinIO), y `proxy-nginx`.
+  - Crear `docker-compose.yml` con los contenedores: `backend-api` (FastAPI), `db-postgres` (Postgres 16), `cache-redis` (Redis 7), `storage-minio` (MinIO), y `gateway-caddy` (Caddy v2 con Caddyfile).
   - Configurar red estándar de desarrollo con exposición directa de puertos a `localhost` (Postgres en 5432, Redis en 6379, MinIO en 9000/9001, FastAPI en 8000) y volúmenes persistentes (`postgres_data`, `redis_data`, `minio_data`). La red aislada `cosmol_net` se pospone para producción.
 - [ ] **0.2 Scaffolding Backend (FastAPI):**
   - Configurar Python 3.12, Uvicorn, Pydantic v2, SQLAlchemy en modo Async con `asyncpg`.
@@ -349,14 +349,14 @@ gantt
 
 - [ ] **7.1 Pipelines de GitHub Actions:**
   - Linting y tests automatizados de backend (`pytest`) y frontend (`flutter test`).
-  - Construcción de imágenes Docker multi-etapa para `backend-api` y `proxy-nginx`.
+  - Construcción de imágenes Docker multi-etapa para `backend-api` y `gateway-caddy`.
 - [ ] **7.2 Despliegue del Backend:**
   - Despliegue en servidor de producción con `docker-compose.prod.yml`.
-  - Configuración de certificados SSL/TLS automáticos con Certbot / Let's Encrypt en Nginx.
+  - Configuración de certificados SSL/TLS automáticos con Let's Encrypt / ZeroSSL nativo en Caddy.
   - Configuración de backups automatizados de PostgreSQL y MinIO.
 - [ ] **7.3 Despliegue Flutter Web:**
   - Generación de build optimizado (`flutter build web --release`).
-  - Servido a través de Nginx bajo la ruta web oficial de COSMOL.
+  - Servido a través de Caddy (`file_server`) bajo la ruta web oficial de COSMOL.
 - [ ] **7.4 Publicación de Apps Móviles:**
   - **Android:** Generación de App Bundle firmado (`.aab`) y carga en Google Play Console (Track de pruebas cerradas → Producción).
   - **iOS:** Carga a TestFlight para pruebas beta internas y posterior envío a revisión en App Store Connect.
