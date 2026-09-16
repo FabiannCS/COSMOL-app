@@ -1,2 +1,0 @@
-# COSMOL-app
-Aplicacion Movil
