@@ -1,6 +1,12 @@
 """
 Capa de lógica de negocio desacoplada:
-- AuthService: Onboarding, verificación OTP, emisión de tokens y control de intentos fallidos.
-- SocioService: Consulta de deuda, detalle de avisos y multicuenta.
-- DocumentService: Consulta y descarga segura de facturas y avisos PDF.
+- ServicioAutenticacion: Onboarding, verificación OTP en Redis, emisión de JWT y bloqueo por intentos fallidos.
+- ServicioSuministros: Vinculación y gestión multicuenta de suministros (Titular vs Consulta/Pago).
 """
+from app.services.servicio_autenticacion import ServicioAutenticacion
+from app.services.servicio_suministros import ServicioSuministros
+
+__all__ = [
+    "ServicioAutenticacion",
+    "ServicioSuministros",
+]
