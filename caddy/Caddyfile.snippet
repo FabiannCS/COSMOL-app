@@ -1,43 +1,30 @@
 # ==============================================================================
-# CADDY PROXY SNIPPET — COSMOL R.L. (ETAPA FINAL / DESPLIEGUE)
+# CADDY PROXY SNIPPET — COSMOL R.L. (ETAPA FINAL / DESPLIEGUE STAGING)
 # ==============================================================================
-# NOTA IMPORTANTE:
-# Este servicio y archivo se encuentran COMENTADOS E INACTIVOS en este repositorio.
-# No se levanta ningún contenedor Caddy aquí durante la etapa de desarrollo.
+# NOTA IMPORTANTE PARA EL ENCARGADO / SYSADMIN:
+# En desarrollo local este servicio NO se levanta (el frontend y tests van directo a :8000).
+# Para habilitar el acceso público en el servidor durante la demo ante los jefes:
 #
-# En la etapa final, dependiendo de la arquitectura de servidores:
-#
-# OPCIÓN A (Compartido con Cosmol-Chatbot y Reportes):
-#   - Se copia la regla de abajo en el Caddyfile central del servidor (ej. en Cosmol-Chatbot)
-#     enrutando al puerto 90 o mediante upstream de Docker.
-#
-# OPCIÓN B (Servidor Aislado/Independiente para la App de Socios):
-#   - Se descomenta el servicio `gateway-caddy` en `docker-compose.yml`.
-#   - Se descomentan las directivas de este archivo.
+# Copiar este bloque dentro del Caddyfile central del servidor (ej. en D:\Cosmol-Chatbot\Caddyfile):
 # ==============================================================================
 
-# {
-#     # En desarrollo local y puertos específicos desactivamos auto_https
-#     auto_https off
-# }
-# 
-# # Escucha en puerto 80 interno (mapeado al puerto 90 en el host/servidor)
-# :80, :90, {$APP_DOMAIN:localhost}:90 {
-#     # 1. Reverse proxy hacia FastAPI
+# {$DOMAIN_NAME:chatbot.cosmol.com.bo}:8083 {
+#     # 1. Reverse proxy hacia la API de la App de Socios
 #     handle /api/* {
-#         reverse_proxy backend-api:8000
+#         reverse_proxy host.docker.internal:8000
 #     }
 # 
-#     # 2. Documentación interactiva de Swagger / OpenAPI
+#     # 2. Documentación interactiva de Swagger UI / OpenAPI
 #     handle /docs* {
-#         reverse_proxy backend-api:8000
+#         reverse_proxy host.docker.internal:8000
 #     }
 #     handle /openapi.json {
-#         reverse_proxy backend-api:8000
+#         reverse_proxy host.docker.internal:8000
 #     }
 # 
 #     # 3. Respuesta base de verificación del Gateway
 #     handle {
-#         respond "COSMOL App Gateway (Caddy) - Operativo en Puerto 90" 200
+#         respond "COSMOL App de Socios API - Operativa en Puerto 8083 con SSL" 200
 #     }
 # }
+
