@@ -24,8 +24,20 @@ class BaseApiClient:
     async def get_client(self) -> httpx.AsyncClient:
         """
         Retorna o inicializa el cliente asíncrono persistente con connection pooling.
+        Verifica que pertenezca al event loop activo actual.
         """
-        if self._client is None or self._client.is_closed:
+        import asyncio
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        if (
+            self._client is None
+            or self._client.is_closed
+            or getattr(self, "_loop", None) is not current_loop
+        ):
+            self._loop = current_loop
             self._client = httpx.AsyncClient(
                 base_url=self.base_url,
                 timeout=self.timeout,

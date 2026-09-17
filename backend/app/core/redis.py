@@ -31,8 +31,19 @@ async def close_redis_pool():
 async def get_redis() -> aioredis.Redis:
     """
     Dependencia FastAPI para inyectar la instancia de Redis.
+    Verifica que el cliente pertenezca al event loop activo actual para evitar errores
+    de 'Event loop is closed' en ejecuciones concurrentes o tests asíncronos.
     """
+    import asyncio
     global redis_client
-    if redis_client is None:
+
+    try:
+        current_loop = asyncio.get_running_loop()
+    except RuntimeError:
+        current_loop = None
+
+    if redis_client is None or getattr(redis_client, "_created_loop", None) is not current_loop:
         redis_client = await init_redis_pool()
+        setattr(redis_client, "_created_loop", current_loop)
+
     return redis_client
