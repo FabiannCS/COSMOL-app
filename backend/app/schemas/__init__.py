@@ -17,6 +17,13 @@ from app.schemas.usuario import (
     RenovarTokenRequest,
 )
 
+from app.schemas.deuda import (
+    FacturaPendienteResponse,
+    DetalleSuministroResponse,
+    ResumenDeudaResponse,
+    DashboardMultiSuministroResponse,
+)
+
 __all__ = [
     "VincularSuministroRequest",
     "SuministroResponse",
@@ -27,4 +34,8 @@ __all__ = [
     "LoginRequest",
     "TokenResponse",
     "RenovarTokenRequest",
+    "FacturaPendienteResponse",
+    "DetalleSuministroResponse",
+    "ResumenDeudaResponse",
+    "DashboardMultiSuministroResponse",
 ]
