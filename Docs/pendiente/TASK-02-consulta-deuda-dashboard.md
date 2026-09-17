@@ -76,15 +76,15 @@ El sistema debe:
 
 ### 4.1 Entregables de DEV 1: Configuración, Conectividad Legada y Redis (EN CURSO)
 
-#### A. Configuración en `backend/app/core/config.py` y `.env`:
-* [ ] Agregar parámetros para la conexión al sistema legado de COSMOL:
+#### A. Configuración en `backend/app/core/config.py` y `.env` (COMPLETADO):
+* [x] Agregar parámetros para la conexión al sistema legado de COSMOL:
   * `COSMOL_LEGACY_URL: str = "http://api.cosmol.com.bo/api-consultas"`
   * `COSMOL_LEGACY_TIMEOUT_SECONDS: float = 4.0`
   * `MOCK_COSMOL_LEGACY: bool = False` (conectado a la API real; con fallback automático ante desconexión)
   * `DEBT_CACHE_TTL_SECONDS: int = 600` (10 minutos)
 
-#### B. Cliente de Integración en `backend/app/integrations/cosmol_client.py`:
-* [ ] Crear clase `CosmolLegacyClient(BaseApiClient)`:
+#### B. Cliente de Integración en `backend/app/integrations/cosmol_client.py` (COMPLETADO):
+* [x] Crear clase `CosmolLegacyClient(BaseApiClient)`:
   * Implementar método async `obtener_datos_socio(cod_socio: str) -> Optional[Dict[str, Any]]`:
     * Consulta `GET /socios/{cod_socio}` (retorna `CODIGO`, `NOMBRE`, `DIRECCION`, `NROCIONIT`, `ZONA`, `RUTA`, `NROC`, `NROI`).
     * Aplica `.strip()` a todos los valores de texto para eliminar el relleno de espacios en blanco fijo del sistema legado.
@@ -93,14 +93,14 @@ El sistema debe:
   * Implementar soporte `MOCK_COSMOL_LEGACY=True` (fallback offline con datos sintéticos deterministas para tests).
   * Manejo robusto de errores: capturar `httpx.TimeoutException` y `httpx.RequestError` lanzando excepciones de dominio (`ServiceUnavailableException`).
 
-#### C. Utilitarios de Caché Redis para Deuda en `backend/app/services/servicio_cache_deuda.py`:
-* [ ] Función `obtener_deuda_cache(redis_client, cod_socio) -> Optional[dict]`
-* [ ] Función `guardar_deuda_cache(redis_client, cod_socio, data_dict, ttl_seconds)`
-* [ ] Función `invalidar_deuda_cache(redis_client, cod_socio) -> bool`
+#### C. Utilitarios de Caché Redis para Deuda en `backend/app/services/servicio_cache_deuda.py` (COMPLETADO):
+* [x] Función `obtener_deuda_cache(redis_client, cod_socio) -> Optional[dict]`
+* [x] Función `guardar_deuda_cache(redis_client, cod_socio, data_dict, ttl_seconds)`
+* [x] Función `invalidar_deuda_cache(redis_client, cod_socio) -> bool`
 
 ---
 
-### 4.2 Entregables de DEV 2: Esquemas, Lógica de Negocio y Endpoints
+### 4.2 Entregables de DEV 2: Esquemas, Lógica de Negocio y Endpoints (PENDIENTE PARA DEV 2)
 
 #### A. Esquemas Pydantic v2 en `backend/app/schemas/deuda.py`:
 * [ ] **`FacturaPendienteResponse` (Alineado con API real de COSMOL):**
@@ -149,12 +149,12 @@ El sistema debe:
     2. Obtener el `rol` (`TITULAR` o `CONSULTA_PAGO`) y el `alias` asignado.
     3. Si `forzar_refresco is False`, consultar Redis. Si existe, retornar con `origen_datos="CACHE"`.
     4. Si hay *cache miss* o refresco forzado:
-       - Invocar `cosmol_client.obtener_deuda_socio(cod_socio)`.
+       - Invocar `cosmol_client.obtener_deudas_socio(cod_socio)`.
        - Si el socio no existe en el sistema legado, lanzar `NotFoundException`.
        - Normalizar datos, calcular fechas, `esta_vencida`, `dias_mora` y `alerta_corte`.
        - Guardar en Redis con TTL de 10 minutos (600 s).
     5. Aplicar enmascaramiento si `rol == "CONSULTA_PAGO"`:
-       - Ocultar CI, enmascarar nombre del titular (`J**** P****`), enmascarar medidor y dirección.
+       - Ocultar CI, enmascarar nombre del titular (`D**** E****`), enmascarar medidor y dirección.
     6. Retornar el `ResumenDeudaResponse`.
   * Método `obtener_dashboard_general(usuario_id: UUID) -> DashboardMultiSuministroResponse`:
     - Obtener todos los suministros del usuario en PostgreSQL y compilar la deuda de cada uno (aprovechando la caché de Redis para cada uno).
