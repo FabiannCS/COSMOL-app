@@ -1,8 +1,8 @@
 # Tarea 02: Integración con Sistema Legado y Dashboard de Deuda (MVP de Consulta)
 
-> **Estado:** PENDIENTE  
+> **Estado:** COMPLETADO  
 > **Fase:** Fase 2 — Integración con Sistema Legado y Dashboard de Deuda  
-> **Fecha de creación:** Septiembre 2026  
+> **Fecha de conclusión:** Septiembre 2026  
 > **Documentos de referencia:** `AGENTS.md` (Secciones 4.2, 4.6, 7, 10.2, 11, 12.2, 12.3) y `Docs/HOJA_DE_RUTA_DESARROLLO.md`  
 > **Entorno de ejecución:** Backend FastAPI en Docker (`cosmol-backend-api`, `cosmol-cache-redis`, `cosmol-db-postgres`)
 
@@ -68,13 +68,13 @@ El sistema debe:
 └───────────────────────────────┴─────────────────────────────────┘
 ```
 
-> **Rol Activo en este Turno:** **DEV 1 (Infraestructura, Configuración, Adaptador Legado y Caché Redis)**.
+> **Estado de Ejecución:** **100% Desarrollado, Acoplado y Certificado en Docker**.
 
 ---
 
 ## 4. Detalle de Entregables Técnicos
 
-### 4.1 Entregables de DEV 1: Configuración, Conectividad Legada y Redis (EN CURSO)
+### 4.1 Entregables de DEV 1: Configuración, Conectividad Legada y Redis (COMPLETADO)
 
 #### A. Configuración en `backend/app/core/config.py` y `.env` (COMPLETADO):
 * [x] Agregar parámetros para la conexión al sistema legado de COSMOL:
@@ -100,10 +100,10 @@ El sistema debe:
 
 ---
 
-### 4.2 Entregables de DEV 2: Esquemas, Lógica de Negocio y Endpoints (PENDIENTE PARA DEV 2)
+### 4.2 Entregables de DEV 2: Esquemas, Lógica de Negocio y Endpoints (COMPLETADO)
 
 #### A. Esquemas Pydantic v2 en `backend/app/schemas/deuda.py`:
-* [ ] **`FacturaPendienteResponse` (Alineado con API real de COSMOL):**
+* [x] **`FacturaPendienteResponse` (Alineado con API real de COSMOL):**
   * `nro_facip`: str (ej: `"1160026"`)
   * `nro_factura`: str (ej: `"7444051"`)
   * `cod_autorizacion`: str (código digital SIAT/SIN)
@@ -114,7 +114,7 @@ El sistema debe:
   * `monto_bs`: float (ej: `70.92`, mapeado desde `MONTOTOTAL`)
   * `esta_vencida`: bool
   * `dias_mora`: int
-* [ ] **`DetalleSuministroResponse` (Alineado con API real de COSMOL):**
+* [x] **`DetalleSuministroResponse` (Alineado con API real de COSMOL):**
   * `cod_socio`: str
   * `nombre_titular`: str (enmascarado si el rol es `CONSULTA_PAGO`)
   * `ci_nit`: str (enmascarado si el rol es `CONSULTA_PAGO`, mapeado desde `NROCIONIT`)
@@ -122,7 +122,7 @@ El sistema debe:
   * `ubicacion`: str (ej: `"1.4.64.0"`, mapeado desde `ZONA.RUTA.NROC.NROI`)
   * `categoria`: str = "DOMESTICA"
   * `rol_usuario`: str (`"TITULAR"` o `"CONSULTA_PAGO"`)
-* [ ] **`ResumenDeudaResponse`:**
+* [x] **`ResumenDeudaResponse`:**
   * `cod_socio`: str
   * `suministro`: DetalleSuministroResponse
   * `moneda`: str = "Bs"
@@ -135,14 +135,14 @@ El sistema debe:
   * `facturas_pendientes`: List[FacturaPendienteResponse]
   * `fecha_consulta`: datetime
   * `origen_datos`: Literal["CACHE", "SISTEMA_LEGADO"]
-* [ ] **`DashboardMultiSuministroResponse`:**
+* [x] **`DashboardMultiSuministroResponse`:**
   * `usuario_id`: UUID
   * `deuda_total_consolidada_bs`: float
   * `cantidad_suministros`: int
   * `suministros`: List[ResumenDeudaResponse]
 
 #### B. Lógica de Negocio en `backend/app/services/servicio_deuda.py`:
-* [ ] Clase `ServicioDeuda`:
+* [x] Clase `ServicioDeuda`:
   * Inyección de `db: AsyncSession`, `redis: Redis`, `cosmol_client: CosmolLegacyClient`.
   * Método `obtener_deuda_suministro(usuario_id: UUID, cod_socio: str, forzar_refresco: bool = False) -> ResumenDeudaResponse`:
     1. Validar en PostgreSQL que el `usuario_id` tenga vinculado el `cod_socio`. Si no, lanzar `ForbiddenException` ("No tiene permisos sobre este suministro").
@@ -161,36 +161,36 @@ El sistema debe:
     - Calcular el saldo total consolidado en Bs de todos los suministros del hogar/empresa.
 
 #### C. Endpoints API REST en `backend/app/api/v1/deuda.py`:
-* [ ] `GET /api/v1/deuda/{cod_socio}`
+* [x] `GET /api/v1/deuda/{cod_socio}`
   * Parámetro opcional de query: `forzar_refresco: bool = False`.
   * Protegido con `Depends(get_current_user_id)` y `Depends(get_db)`, `Depends(get_redis)`.
   * Retorna `ResumenDeudaResponse`.
-* [ ] `GET /api/v1/deuda/dashboard/resumen`
+* [x] `GET /api/v1/deuda/dashboard/resumen`
   * Retorna el resumen consolidado multicuenta `DashboardMultiSuministroResponse`.
-* [ ] `POST /api/v1/deuda/{cod_socio}/invalidar-cache`
+* [x] `POST /api/v1/deuda/{cod_socio}/invalidar-cache`
   * Permite invalidar explícitamente la caché (útil para cuando se confirma un pago o se solicita recálculo).
-* [ ] Registrar el router en `backend/app/api/v1/router.py`:
+* [x] Registrar el router en `backend/app/api/v1/router.py`:
   * `api_router.include_router(deuda_router, prefix="/deuda", tags=["Consulta de Deuda y Dashboard"])`
 
 ---
 
 ## 5. Criterios de Aceptación y Validación
 
-1. [ ] **Respuesta en Moneda Local:**
+1. [x] **Respuesta en Moneda Local:**
    * La respuesta JSON incluye los campos monetarios con precisión decimal y la unidad `"moneda": "Bs"`.
-2. [ ] **Semaforización Correcta:**
+2. [x] **Semaforización Correcta:**
    * Si una factura tiene fecha de vencimiento anterior a la fecha actual, `esta_vencido` es `true` y `dias_mora` refleja la diferencia exacta en días.
    * Si tiene 2 o más facturas impagas, `alerta_corte` se marca en `true`.
-3. [ ] **Rendimiento de Caché (<20 ms):**
+3. [x] **Rendimiento de Caché (<20 ms):**
    * Primera petición: `origen_datos: "SISTEMA_LEGADO"` (guarda en Redis).
    * Segunda petición consecutiva: `origen_datos: "CACHE"` con tiempo de respuesta < 20 ms.
    * Petición con `forzar_refresco=true` invalida la caché y consulta nuevamente al sistema legado.
-4. [ ] **Enmascaramiento de Datos (Privacidad):**
+4. [x] **Enmascaramiento de Datos (Privacidad):**
    * Al consultar como `TITULAR`: datos visibles al 100%.
    * Al consultar como `CONSULTA_PAGO`: datos confidenciales enmascarados con asteriscos (`J**** P****`).
-5. [ ] **Control de Acceso Multicuenta:**
+5. [x] **Control de Acceso Multicuenta:**
    * Si un usuario intenta consultar un `cod_socio` que no tiene vinculado a su cuenta, recibe `403 Forbidden`.
-6. [ ] **Cobertura de Pruebas Automatizadas:**
+6. [x] **Cobertura de Pruebas Automatizadas:**
    * Tests en `backend/tests/test_deuda.py` cubriendo:
      - Socio al día (deuda 0).
      - Socio con facturas vencidas (semaforización roja).

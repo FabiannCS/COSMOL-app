@@ -174,34 +174,34 @@ gantt
     title Cronograma de Fases de Desarrollo COSMOL
     dateFormat  YYYY-MM-DD
     section Fase 0: Cimientos
-    Infraestructura Docker & Entornos       :f0_1, 2026-09-17, 3d
-    Scaffolding FastAPI & Contrato OpenAPI  :f0_2, after f0_1, 3d
-    Scaffolding Flutter & Arquitectura Base :f0_3, after f0_1, 3d
+    [x] Infraestructura Docker & Entornos       :done, f0_1, 2026-09-17, 3d
+    [x] Scaffolding FastAPI & Contrato OpenAPI  :done, f0_2, after f0_1, 3d
+    [ ] Scaffolding Flutter & Arquitectura Base :f0_3, after f0_1, 3d
     section Fase 1: Identidad & Core Auth
-    Modelos PostgreSQL & Alembic            :f1_1, after f0_2, 2d
-    Servicio OTP Dual (WhatsApp + SMS)      :f1_2, after f1_1, 3d
-    Endpoints Onboarding & JWT              :f1_3, after f1_2, 3d
-    Vistas Flutter Auth, OTP y Biometría    :f1_4, after f0_3, 5d
-    Lógica Multicuenta (Titular vs Consulta):f1_5, after f1_3, 3d
+    [x] Modelos PostgreSQL & Alembic            :done, f1_1, after f0_2, 2d
+    [x] Servicio OTP Dual (WhatsApp + SMS)      :done, f1_2, after f1_1, 3d
+    [x] Endpoints Onboarding & JWT              :done, f1_3, after f1_2, 3d
+    [ ] Vistas Flutter Auth, OTP y Biometría    :f1_4, after f0_3, 5d
+    [x] Lógica Multicuenta (Titular vs Consulta):done, f1_5, after f1_3, 3d
     section Fase 2: Consulta & Dashboard
-    Integration Layer COSMOL Legado (Async) :f2_1, after f1_3, 4d
-    Caché Redis (<20ms) & Dashboard API     :f2_2, after f2_1, 2d
-    Dashboard Flutter & Semáforo Vencimiento:f2_3, after f1_4, 4d
+    [x] Integration Layer COSMOL Legado (Async) :done, f2_1, after f1_3, 4d
+    [x] Caché Redis (<20ms) & Dashboard API     :done, f2_2, after f2_1, 2d
+    [ ] Dashboard Flutter & Semáforo Vencimiento:f2_3, after f1_4, 4d
     section Fase 3: Documentos PDF
-    Storage MinIO & Servido Seguro de PDFs  :f3_1, after f2_2, 3d
-    Visor & Descarga Flutter PDF            :f3_2, after f3_1, 3d
+    [ ] Storage MinIO & Servido Seguro de PDFs  :f3_1, after f2_2, 3d
+    [ ] Visor & Descarga Flutter PDF            :f3_2, after f3_1, 3d
     section Fase 4: Analítica de Consumo
-    Endpoint Historial Consumo (6+ meses)   :f4_1, after f2_2, 2d
-    Gráficos Interactivos fl_chart          :f4_2, after f4_1, 3d
+    [ ] Endpoint Historial Consumo (6+ meses)   :f4_1, after f2_2, 2d
+    [ ] Gráficos Interactivos fl_chart          :f4_2, after f4_1, 3d
     section Fase 5: Pagos Externos
-    Integración Pasarelas & QR Interbancario:f5_1, after f2_3, 4d
-    Webhooks de Conciliación & Saldo        :f5_2, after f5_1, 3d
+    [ ] Integración Pasarelas & QR Interbancario:f5_1, after f2_3, 4d
+    [ ] Webhooks de Conciliación & Saldo        :f5_2, after f5_1, 3d
     section Fase 6: Auditoría & Seguridad
-    Auditoría Async a ChatbotReportes       :f6_1, after f5_2, 2d
-    Rate Limiting, Bloqueo & OWASP MASVS    :f6_2, after f6_1, 3d
+    [ ] Auditoría Async a ChatbotReportes       :f6_1, after f5_2, 2d
+    [ ] Rate Limiting, Bloqueo & OWASP MASVS    :f6_2, after f6_1, 3d
     section Fase 7: Despliegue & Producción
-    Builds Flutter (Web, APK, IPA)          :f7_1, after f6_2, 4d
-    Despliegue Docker Producción & Testing  :f7_2, after f7_1, 3d
+    [ ] Builds Flutter (Web, APK, IPA)          :f7_1, after f6_2, 4d
+    [ ] Despliegue Docker Producción & Testing  :f7_2, after f7_1, 3d
 ```
 
 ---
@@ -213,10 +213,10 @@ gantt
 ### **Fase 0: Cimientos de Infraestructura, Entorno Docker y Contratos API**
 > **Meta:** Dejar corriendo el ecosistema local completo y definir el contrato OpenAPI sin esperar integraciones legadas.
 
-- [ ] **0.1 Orquestación Docker:**
+- [x] **0.1 Orquestación Docker:**
   - Crear `docker-compose.yml` con los contenedores: `backend-api` (FastAPI), `db-postgres` (Postgres 16), `cache-redis` (Redis 7), `storage-minio` (MinIO), y `gateway-caddy` (Caddy v2 con Caddyfile).
   - Configurar red estándar de desarrollo con exposición directa de puertos a `localhost` (Postgres en 5432, Redis en 6379, MinIO en 9000/9001, FastAPI en 8000) y volúmenes persistentes (`postgres_data`, `redis_data`, `minio_data`). La red aislada `cosmol_net` se pospone para producción.
-- [ ] **0.2 Scaffolding Backend (FastAPI):**
+- [x] **0.2 Scaffolding Backend (FastAPI):**
   - Configurar Python 3.12, Uvicorn, Pydantic v2, SQLAlchemy en modo Async con `asyncpg`.
   - Definir estructura de configuración mediante `.env` seguro.
   - Diseñar el contrato de API REST documentado con OpenAPI/Swagger (`/docs`).
@@ -231,18 +231,18 @@ gantt
 ### **Fase 1: Identidad, Onboarding Dual OTP y Autenticación Multicuenta (El Core)**
 > **Meta:** Resolver la ausencia de teléfonos en la BD legada mediante el flujo de saneamiento y blindaje con contraseña/PIN.
 
-- [ ] **1.1 Base de Datos de Identidad (PostgreSQL + Alembic):**
+- [x] **1.1 Base de Datos de Identidad (PostgreSQL + Alembic):**
   - Generar migraciones para tablas `users`, `user_accounts`, `user_devices` y `otp_logs`.
-- [ ] **1.2 Integración de Mensajería OTP Dual:**
+- [x] **1.2 Integración de Mensajería OTP Dual:**
   - Integrar cliente HTTP asíncrono para **WhatsApp Cloud API** (reutilizando WABA y número del Chatbot de COSMOL con plantilla de autenticación aprobada).
   - Integrar cliente de fallback para **Gateway SMS**.
   - Almacenar el OTP hasheado en Redis con TTL de 5 minutos y límite de 3 solicitudes por hora por número.
-- [ ] **1.3 Flujo de Onboarding (Primer Acceso):**
+- [x] **1.3 Flujo de Onboarding (Primer Acceso):**
   - Endpoint `POST /api/v1/auth/verify-socio`: Valida `cod_socio + CI` contra el sistema legado.
   - Endpoint `POST /api/v1/auth/request-otp`: Envía el código al celular vía WhatsApp o SMS a elección.
   - Endpoint `POST /api/v1/auth/verify-otp`: Valida el código en Redis.
   - Endpoint `POST /api/v1/auth/set-credentials`: Registra el PIN o contraseña con `passlib[bcrypt]`, activa la cuenta e invalida el uso del CI como contraseña.
-- [ ] **1.4 Login Diario y Control de Sesiones:**
+- [x] **1.4 Login Diario y Control de Sesiones:**
   - Endpoint `POST /api/v1/auth/login`: Ingreso con `cod_socio` + PIN/Contraseña.
   - Emisión de JWT: `access_token` (15 min) y `refresh_token` (7 días).
   - Modelo de sesión única: al detectar un nuevo `Device ID`, revocar el refresh token del dispositivo previo.
@@ -251,7 +251,7 @@ gantt
 - [ ] **1.5 UI en Flutter para Autenticación:**
   - Pantallas: Bienvenida, Primer Ingreso (`cod_socio + CI`), Selector de canal OTP (WhatsApp / SMS), Ingreso de código de 6 dígitos con cuenta regresiva, Creación de PIN/Contraseña.
   - Login habitual y soporte para Biometría nativa (`local_auth`: Huella dactilar / Face ID).
-- [ ] **1.6 Lógica Multicuenta:**
+- [x] **1.6 Lógica Multicuenta:**
   - Endpoints para asociar códigos de socio adicionales:
     - Modo Titular (valida CI/Medidor).
     - Modo Consulta y Pago (solo valida `cod_socio`; enmascara datos sensibles).
@@ -262,11 +262,11 @@ gantt
 ### **Fase 2: Integración con Sistema Legado y Dashboard de Deuda (MVP de Consulta)**
 > **Meta:** Mostrar al socio su deuda real, fechas y avisos en menos de 20 ms.
 
-- [ ] **2.1 Capa de Integración Resiliente (BFF):**
+- [x] **2.1 Capa de Integración Resiliente (BFF):**
   - Cliente `httpx` async hacia el sistema legado de COSMOL con connection pooling, timeouts estrictos (3s) y manejo de excepciones.
-- [ ] **2.2 Estrategia de Caché Redis:**
-  - Endpoint `GET /api/v1/socio/dashboard?cod_socio=...`
-  - Revisar Redis (`socio:{cod_socio}:debt` con TTL de 10 min).
+- [x] **2.2 Estrategia de Caché Redis:**
+  - Endpoint `GET /api/v1/deuda/{cod_socio}` y `GET /api/v1/deuda/dashboard/resumen`.
+  - Revisar Redis (`deuda:{cod_socio}` con TTL de 10 min).
   - Si hay *cache-miss*, consultar sistema legado, normalizar datos a Pydantic, guardar en Redis y retornar.
 - [ ] **2.3 Dashboard Principal en Flutter:**
   - Visualización destacada: Saldo pendiente y monto exacto a pagar en moneda boliviana (**Bs**).
