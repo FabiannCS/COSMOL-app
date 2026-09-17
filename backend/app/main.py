@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.redis import init_redis_pool, close_redis_pool
-from app.api.v1.health import router as health_router
+from app.api.v1.router import api_router
 
 
 @asynccontextmanager
@@ -41,8 +41,8 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_headers=["*"],
     )
 
-# Montaje de routers de la versión 1
-app.include_router(health_router, prefix=settings.API_V1_STR)
+# Montaje de router maestro de la versión 1 (v1)
+app.include_router(api_router, prefix=settings.API_V1_STR)
 
 
 @app.get("/", tags=["Root"])

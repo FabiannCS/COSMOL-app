@@ -1,7 +1,8 @@
 """
 Modelos ORM de SQLAlchemy para PostgreSQL:
-- User: Identidad digital (celular, password_hash, estado, intentos fallidos).
-- UserAccount: Vinculación de Códigos de Socio con roles (Titular vs Consulta/Pago).
-- UserDevice: Control de dispositivos activos y tokens FCM.
-- OtpLog: Auditoría de códigos OTP generados y consumidos.
+- BaseModel: Clase base abstracta con UUID v4, created_at y updated_at.
+- Entidades futuras de negocio: User, UserAccount, UserDevice, OtpLog.
 """
+from app.db.models.base import BaseModel
+
+__all__ = ["BaseModel"]
