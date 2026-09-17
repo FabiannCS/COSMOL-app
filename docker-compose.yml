@@ -98,7 +98,7 @@ services:
 
 volumes:
   postgres_data:
-    name: cosmol_postgres_data
+    name: cosmol_app_postgres_data
   redis_data:
     name: cosmol_redis_data
   minio_data:
