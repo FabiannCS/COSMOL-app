@@ -5,6 +5,7 @@ from app.api.v1.health import router as health_router
 api_router = APIRouter()
 
 from app.api.v1.autenticacion import router as autenticacion_router
+from app.api.v1.deuda import router as deuda_router
 
 # 1. Endpoint de verificación y salud
 api_router.include_router(health_router, prefix="", tags=["Salud del Sistema"])
@@ -14,6 +15,13 @@ api_router.include_router(
     autenticacion_router,
     prefix="/autenticacion",
     tags=["Identidad, Onboarding OTP y Multicuenta"]
+)
+
+# 3. Módulo de Consulta de Deuda y Dashboard (DEV 2)
+api_router.include_router(
+    deuda_router,
+    prefix="/deuda",
+    tags=["Consulta de Deuda y Dashboard"]
 )
 
 # ------------------------------------------------------------------------------

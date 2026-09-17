@@ -6,6 +6,7 @@ Capa de lógica de negocio desacoplada:
 """
 from app.services.servicio_autenticacion import ServicioAutenticacion
 from app.services.servicio_suministros import ServicioSuministros
+from app.services.servicio_deuda import ServicioDeuda
 from app.services.servicio_cache_deuda import (
     guardar_deuda_cache,
     obtener_deuda_cache,
@@ -16,6 +17,7 @@ from app.services.servicio_cache_deuda import (
 __all__ = [
     "ServicioAutenticacion",
     "ServicioSuministros",
+    "ServicioDeuda",
     "guardar_deuda_cache",
     "obtener_deuda_cache",
     "invalidar_deuda_cache",
