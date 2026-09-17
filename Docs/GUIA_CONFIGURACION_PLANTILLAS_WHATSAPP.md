@@ -84,23 +84,122 @@ Meta bloquea la edición arbitraria de texto en plantillas de autenticación par
 
 ---
 
-## 4. Activación en el Backend (Paso a Producción)
+## 4. Activación en el Backend (Paso a Producción o Demo en Vivo)
 
-Una vez aprobada la plantilla en Meta, el cambio en nuestro backend es inmediato y sin tocar código:
+Una vez aprobada la plantilla en Meta (o durante una demo en vivo para los jefes), el cambio en nuestro backend es inmediato y sin tocar código:
 
 1. Abrir el archivo `.env`:
    ```env
-   # Desactivar simulación para envíos reales
+   # Desactivar simulación para envíos reales por Meta
    MOCK_MESSAGING=false
 
-   # Credenciales de Meta WhatsApp Cloud API (reutilizadas del Chatbot)
+   # Credenciales de Meta WhatsApp Cloud API (reutilizadas del proyecto Cosmol-Chatbot)
    WHATSAPP_API_URL=https://graph.facebook.com/v21.0
-   WHATSAPP_PHONE_NUMBER_ID=109283746501928
-   WHATSAPP_ACCESS_TOKEN=EAAX...tu_token_permanente_de_meta...
+   WHATSAPP_PHONE_NUMBER_ID=PONER_AQUI_PHONE_NUMBER_ID
+   WHATSAPP_ACCESS_TOKEN=EAAMraP8f6tABSUMN8YFBY...
    WHATSAPP_OTP_TEMPLATE_NAME=codigo_autenticacion_cosmol
    ```
+   > **Tip para la Demo:** El `WHATSAPP_ACCESS_TOKEN` se puede copiar directamente de la variable `WHATSAPP_TOKEN` del archivo `D:\Cosmol-Chatbot\.env`.
 2. Reiniciar el contenedor:
    ```bash
    docker compose restart backend-api
    ```
 3. A partir de ese momento, cualquier solicitud de OTP saldrá directamente al WhatsApp del socio desde la línea oficial de COSMOL.
+
+---
+
+## 5. Arquitectura Técnica e Integración en Código (`whatsapp_client.py`)
+
+A nivel de software, la integración con la API real de Meta está implementada de forma desacoplada y asíncrona en el backend. A continuación se detalla su estructura interna:
+
+### 5.1 Ubicación y Clase Adaptadora
+El cliente reside en [backend/app/integrations/whatsapp_client.py](file:///d:/COSMOL-app/backend/app/integrations/whatsapp_client.py) y hereda de `BaseApiClient` (cliente HTTP basado en `httpx.AsyncClient` no bloqueante):
+
+```python
+class WhatsAppClient(BaseApiClient):
+    """
+    Cliente especializado para interactuar con Meta WhatsApp Cloud API (v21.0).
+    Reutiliza la WABA y el número telefónico oficial de COSMOL R.L.
+    """
+    def __init__(self):
+        default_headers = {}
+        if settings.WHATSAPP_ACCESS_TOKEN:
+            default_headers["Authorization"] = f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"
+
+        super().__init__(
+            base_url=settings.WHATSAPP_API_URL,
+            timeout_seconds=8.0,
+            default_headers=default_headers
+        )
+```
+
+### 5.2 Normalización de Números Telefónicos Bolivianos
+Meta rechaza números con formato local o caracteres especiales (ej: `71029384` o `+591 71029384`). El método `_normalizar_telefono()` procesa la cadena automáticamente:
+
+```python
+def _normalizar_telefono(self, telefono: str) -> str:
+    # Elimina espacios, guiones y signos '+'
+    limpio = "".join(filter(str.isdigit, telefono))
+    # Si viene con formato local de 8 dígitos de Bolivia, antepone '591'
+    if len(limpio) == 8:
+        limpio = f"591{limpio}"
+    return limpio  # Retorna '59171029384'
+```
+
+### 5.3 Estructura del Payload JSON enviado a Meta
+Cuando `MOCK_MESSAGING=false`, el método `enviar_otp(telefono, codigo)` despacha un `POST` al endpoint:
+`https://graph.facebook.com/v21.0/{WHATSAPP_PHONE_NUMBER_ID}/messages`
+
+El payload JSON estructurado requerido por Meta para plantillas de autenticación con botón de copiado es:
+
+```json
+{
+  "messaging_product": "whatsapp",
+  "recipient_type": "individual",
+  "to": "59171029384",
+  "type": "template",
+  "template": {
+    "name": "codigo_autenticacion_cosmol",
+    "language": {
+      "code": "es"
+    },
+    "components": [
+      {
+        "type": "body",
+        "parameters": [
+          {
+            "type": "text",
+            "text": "849201"
+          }
+        ]
+      },
+      {
+        "type": "button",
+        "sub_type": "url",
+        "index": "0",
+        "parameters": [
+          {
+            "type": "text",
+            "text": "849201"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### 5.4 Parámetros Clave del Payload:
+* **`messaging_product: "whatsapp"`:** Identificador del producto en Meta Graph API.
+* **`to`:** Teléfono del socio en formato internacional limpio (sin `+`).
+* **`template.name`:** Nombre exacto de la plantilla aprobada (`codigo_autenticacion_cosmol`).
+* **`template.language.code`:** Código ISO del idioma aprobado (`es`).
+* **`components[body]`:** Inyecta el código OTP de 6 dígitos en la variable `{{1}}` del texto del mensaje.
+* **`components[button]`:** Inyecta el código en el botón de copiado rápido del mensaje para que el socio lo pegue con un solo toque en la app móvil.
+
+### 5.5 Manejo de Respuestas y Códigos HTTP de Meta
+* **`200 OK` / `201 Created`:** Meta aceptó el mensaje para entrega inmediata. El método retorna `True`.
+* **`400 Bad Request`:** Plantilla no aprobada, nombre de plantilla inexistente o parámetros incompatibles.
+* **`401 Unauthorized`:** Token de Meta (`WHATSAPP_ACCESS_TOKEN`) expirado o revocado.
+* **`404 Not Found`:** `WHATSAPP_PHONE_NUMBER_ID` incorrecto o no asociado a la WABA.
+* **Timeout / Error de Red:** Si Meta no responde en 8 segundos, `BaseApiClient` captura la excepción sin congelar el backend y registra el error en el log de auditoría.
