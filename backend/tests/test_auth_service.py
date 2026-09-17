@@ -46,6 +46,14 @@ async def test_flujo_completo_onboarding(auth_service, redis_conn):
     telefono = "+59171029384"
     pin = "4455"
 
+    USUARIOS_REGISTRADOS_DB.pop(cod_socio, None)
+    await redis_conn.delete(
+        f"rate_otp:{telefono}",
+        f"otp:{telefono}",
+        f"intentos_fallidos:{cod_socio}",
+        f"bloqueado:{cod_socio}"
+    )
+
     # 1. Verificar socio en sistema legado
     verif = await auth_service.verificar_primer_acceso(cod_socio, ci)
     assert verif["cod_socio"] == cod_socio
@@ -96,8 +104,12 @@ async def test_bloqueo_por_tres_intentos_fallidos(auth_service, redis_conn):
 
     # Preparar cuenta activa
     USUARIOS_REGISTRADOS_DB.pop(cod_socio, None)
-    await redis_conn.delete(f"intentos_fallidos:{cod_socio}")
-    await redis_conn.delete(f"bloqueado:{cod_socio}")
+    await redis_conn.delete(
+        f"rate_otp:{telefono}",
+        f"otp:{telefono}",
+        f"intentos_fallidos:{cod_socio}",
+        f"bloqueado:{cod_socio}"
+    )
 
     solicitud = await auth_service.solicitar_otp(cod_socio, telefono, "SMS")
     verif = await auth_service.verificar_otp(telefono, solicitud["debug_codigo_otp"])

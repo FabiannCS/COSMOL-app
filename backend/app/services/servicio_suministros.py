@@ -6,8 +6,11 @@ import logging
 import uuid
 from typing import List, Optional
 import redis.asyncio as aioredis
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestException, NotFoundException
+from app.db.models import Suministro, Usuario
 from app.schemas.suministro import SuministroResponse, VincularSuministroRequest
 from app.services.servicio_autenticacion import (
     SOCIOS_MOCK_LEGADO,
@@ -20,10 +23,12 @@ logger = logging.getLogger(__name__)
 class ServicioSuministros:
     """
     Controlador para vinculación y consulta de suministros multicuenta.
+    Integrado con PostgreSQL (AsyncSession) y modelos ORM.
     """
 
-    def __init__(self, redis_client: aioredis.Redis):
+    def __init__(self, redis_client: aioredis.Redis, db: Optional[AsyncSession] = None):
         self.redis = redis_client
+        self.db = db
 
     async def vincular_suministro(
         self,
@@ -55,9 +60,54 @@ class ServicioSuministros:
             else:
                 logger.info(f"CI/Medidor no coincidió para '{cod_socio}'. Asignando modo CONSULTA_PAGO.")
 
-        # 3. Registrar en los suministros del usuario
-        nuevo_suministro = {
-            "id": uuid.uuid4(),
+        # 3. Registrar en PostgreSQL si hay sesión activa
+        suministro_id = uuid.uuid4()
+        if self.db:
+            stmt = select(Suministro).where(Suministro.cod_socio == cod_socio_principal)
+            res = await self.db.execute(stmt)
+            sum_principal = res.scalars().first()
+            usuario_id = None
+
+            if sum_principal:
+                usuario_id = sum_principal.usuario_id
+            else:
+                try:
+                    u_uuid = uuid.UUID(cod_socio_principal)
+                    stmt_u = select(Usuario).where(Usuario.id == u_uuid)
+                    res_u = await self.db.execute(stmt_u)
+                    user = res_u.scalars().first()
+                    if user:
+                        usuario_id = user.id
+                except Exception:
+                    usuario_id = None
+
+            if usuario_id:
+                stmt_dup = select(Suministro).where(
+                    Suministro.usuario_id == usuario_id,
+                    Suministro.cod_socio == cod_socio
+                )
+                res_dup = await self.db.execute(stmt_dup)
+                if res_dup.scalars().first():
+                    raise BadRequestException(
+                        message=f"El suministro '{cod_socio}' ya se encuentra vinculado a su perfil.",
+                        error_code="SUMINISTRO_ALREADY_LINKED"
+                    )
+
+                nuevo_sum_db = Suministro(
+                    usuario_id=usuario_id,
+                    cod_socio=cod_socio,
+                    alias=datos.alias,
+                    rol=rol,
+                    es_suministro_principal=False
+                )
+                self.db.add(nuevo_sum_db)
+                await self.db.commit()
+                await self.db.refresh(nuevo_sum_db)
+                suministro_id = nuevo_sum_db.id
+
+        # 4. Mantener sincronizado en memoria para pruebas y retrocompatibilidad
+        nuevo_suministro_dict = {
+            "id": suministro_id,
             "cod_socio": cod_socio,
             "alias": datos.alias,
             "rol": rol,
@@ -66,27 +116,65 @@ class ServicioSuministros:
 
         usuario = USUARIOS_REGISTRADOS_DB.get(cod_socio_principal)
         if usuario:
-            # Evitar vincular duplicados
             ya_existe = any(s["cod_socio"] == cod_socio for s in usuario.get("suministros", []))
             if ya_existe:
                 raise BadRequestException(
                     message=f"El suministro '{cod_socio}' ya se encuentra vinculado a su perfil.",
                     error_code="SUMINISTRO_ALREADY_LINKED"
                 )
-            usuario["suministros"].append(nuevo_suministro)
+            usuario["suministros"].append(nuevo_suministro_dict)
 
         return SuministroResponse(
-            id=nuevo_suministro["id"],
-            cod_socio=nuevo_suministro["cod_socio"],
-            alias=nuevo_suministro["alias"],
-            rol=nuevo_suministro["rol"],
-            es_suministro_principal=nuevo_suministro["es_suministro_principal"]
+            id=suministro_id,
+            cod_socio=cod_socio,
+            alias=datos.alias,
+            rol=rol,
+            es_suministro_principal=False
         )
 
     async def listar_suministros(self, cod_socio_principal: str) -> List[SuministroResponse]:
         """
         Retorna todos los contratos vinculados al socio actual.
         """
+        if self.db:
+            stmt = select(Suministro).where(Suministro.cod_socio == cod_socio_principal)
+            res = await self.db.execute(stmt)
+            sum_principal = res.scalars().first()
+            usuario_id = None
+
+            if sum_principal:
+                usuario_id = sum_principal.usuario_id
+            else:
+                try:
+                    u_uuid = uuid.UUID(cod_socio_principal)
+                    stmt_u = select(Usuario).where(Usuario.id == u_uuid)
+                    res_u = await self.db.execute(stmt_u)
+                    user = res_u.scalars().first()
+                    if user:
+                        usuario_id = user.id
+                except Exception:
+                    usuario_id = None
+
+            if usuario_id:
+                stmt_all = (
+                    select(Suministro)
+                    .where(Suministro.usuario_id == usuario_id)
+                    .order_by(Suministro.es_suministro_principal.desc(), Suministro.created_at.asc())
+                )
+                res_all = await self.db.execute(stmt_all)
+                suministros_db = res_all.scalars().all()
+                if suministros_db:
+                    return [
+                        SuministroResponse(
+                            id=s.id,
+                            cod_socio=s.cod_socio,
+                            alias=s.alias,
+                            rol=s.rol,
+                            es_suministro_principal=s.es_suministro_principal
+                        )
+                        for s in suministros_db
+                    ]
+
         usuario = USUARIOS_REGISTRADOS_DB.get(cod_socio_principal)
         if not usuario:
             return []

@@ -7,16 +7,28 @@ from app.services.servicio_autenticacion import USUARIOS_REGISTRADOS_DB
 
 
 @pytest.mark.asyncio
-async def test_endpoint_flujo_onboarding_completo(client: AsyncClient, redis_override):
+async def test_endpoint_flujo_onboarding_completo(client: AsyncClient, redis_override, db_session):
+    from sqlalchemy import delete
+    from app.db.models import Suministro, Usuario
+
     cod_socio = "301144"
     ci = "6102938"
     telefono = "71029384"
     pin = "9988"
 
     USUARIOS_REGISTRADOS_DB.pop(cod_socio, None)
-    # Limpiar rate-limit en Redis para este teléfono
-    await redis_override.delete(f"rate_otp:+591{telefono}")
+    # Limpiar rate-limit y claves en Redis para este teléfono
+    await redis_override.delete(
+        f"rate_otp:+591{telefono}",
+        f"otp:+591{telefono}",
+        f"intentos_fallidos:{cod_socio}",
+        f"bloqueado:{cod_socio}"
+    )
 
+    # Limpiar registros previos en PostgreSQL para garantizar idempotencia total
+    await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_socio, "104523"])))
+    await db_session.execute(delete(Usuario).where(Usuario.telefono == f"+591{telefono}"))
+    await db_session.commit()
 
     # 1. Paso 1: Verificar socio
     res1 = await client.post(

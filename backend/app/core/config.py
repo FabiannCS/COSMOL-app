@@ -42,6 +42,22 @@ class Settings(BaseSettings):
     MINIO_ROOT_PASSWORD: str = "cosmol_minio_secret_pass"
     MINIO_BUCKET_NAME: str = "cosmol-docs"
 
+    # Mensajería y OTP (WhatsApp Cloud API y Gateway SMS)
+    MOCK_MESSAGING: bool = True
+    OTP_EXPIRE_SECONDS: int = 300  # 5 minutos
+    OTP_MAX_REQUESTS_PER_HOUR: int = 3
+    OTP_CODE_LENGTH: int = 6
+
+    # Meta WhatsApp Cloud API
+    WHATSAPP_API_URL: str = "https://graph.facebook.com/v21.0"
+    WHATSAPP_PHONE_NUMBER_ID: str = ""
+    WHATSAPP_ACCESS_TOKEN: str = ""
+    WHATSAPP_OTP_TEMPLATE_NAME: str = "codigo_autenticacion_cosmol"
+
+    # Gateway SMS (Canal alternativo de respaldo)
+    SMS_GATEWAY_URL: str = ""
+    SMS_GATEWAY_API_KEY: str = ""
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

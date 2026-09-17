@@ -7,6 +7,9 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import redis.asyncio as aioredis
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.exceptions import (
@@ -23,6 +26,9 @@ from app.core.security import (
     get_password_hash,
     verify_password,
 )
+from app.db.models import Dispositivo, Suministro, Usuario
+from app.integrations.sms_client import sms_client
+from app.integrations.whatsapp_client import whatsapp_client
 from app.schemas.suministro import SuministroResponse
 from app.schemas.usuario import TokenResponse
 
@@ -36,17 +42,19 @@ SOCIOS_MOCK_LEGADO: Dict[str, Dict[str, str]] = {
     "301144": {"ci": "6102938", "nombre": "JUAN PABLO SUAREZ", "medidor": "M-12490"},
 }
 
-# Base de datos simulada en memoria para usuarios registrados (hasta que Dev 1 aplique migraciones)
+# Base de datos simulada en memoria para usuarios registrados (modo fallback)
 USUARIOS_REGISTRADOS_DB: Dict[str, Dict[str, Any]] = {}
 
 
 class ServicioAutenticacion:
     """
     Controlador de negocio para el flujo completo de autenticación y seguridad.
+    Integrado con PostgreSQL (AsyncSession), Redis y Gateways de Mensajería (WhatsApp / SMS).
     """
 
-    def __init__(self, redis_client: aioredis.Redis):
+    def __init__(self, redis_client: aioredis.Redis, db: Optional[AsyncSession] = None):
         self.redis = redis_client
+        self.db = db
 
     # --------------------------------------------------------------------------
     # PASO 1: VERIFICACIÓN INICIAL EN SISTEMA LEGADO
@@ -59,8 +67,17 @@ class ServicioAutenticacion:
         cod_socio = cod_socio.strip()
         ci = ci.strip()
 
-        # 1. Verificar si el usuario ya completó el onboarding previamente
-        if cod_socio in USUARIOS_REGISTRADOS_DB:
+        # 1. Verificar si el usuario ya completó el onboarding previamente en BD o memoria
+        if self.db:
+            stmt = select(Suministro).where(Suministro.cod_socio == cod_socio)
+            res = await self.db.execute(stmt)
+            suministro_existente = res.scalars().first()
+            if suministro_existente:
+                raise BadRequestException(
+                    message="Este código de socio ya tiene una cuenta activa y un PIN configurado. Inicie sesión directamente.",
+                    error_code="ACCOUNT_ALREADY_EXISTS"
+                )
+        elif cod_socio in USUARIOS_REGISTRADOS_DB:
             raise BadRequestException(
                 message="Este código de socio ya tiene una cuenta activa y un PIN configurado. Inicie sesión directamente.",
                 error_code="ACCOUNT_ALREADY_EXISTS"
@@ -114,8 +131,14 @@ class ServicioAutenticacion:
         tel_len = len(telefono)
         tel_enmascarado = f"{telefono[:4]} {'*' * (tel_len - 8)} {telefono[-4:]}" if tel_len >= 8 else telefono
 
-        # Simulación de despacho por canal
-        logger.info(f"[DESPACHO OTP] Canal: {canal} | Teléfono: {telefono} | Código: {codigo_otp} | Expira: 300s")
+        # Despacho por canal oficial (Meta WhatsApp Cloud API o SMS Gateway)
+        canal_upper = canal.upper()
+        if canal_upper == "WHATSAPP":
+            await whatsapp_client.enviar_otp(telefono, codigo_otp)
+        elif canal_upper == "SMS":
+            await sms_client.enviar_sms_otp(telefono, codigo_otp)
+
+        logger.info(f"[DESPACHO OTP] Canal: {canal_upper} | Teléfono: {telefono} | Código: {codigo_otp} | Expira: 300s")
 
         return {
             "mensaje": f"Código de seguridad enviado exitosamente vía {canal}.",
@@ -209,14 +232,54 @@ class ServicioAutenticacion:
         # Generar hash seguro con bcrypt
         password_hash = get_password_hash(nuevo_pin)
 
-        # Registrar usuario y primer suministro
-        user_id = str(uuid.uuid4())
+        # Persistir en PostgreSQL si se dispone de sesión
+        user_id_str = str(uuid.uuid4())
         suministro_id = uuid.uuid4()
 
-        datos_socio = SOCIOS_MOCK_LEGADO.get(cod_socio, {"nombre": "SOCIO COSMOL"})
+        if self.db:
+            stmt_user = select(Usuario).where(Usuario.telefono == telefono)
+            res_user = await self.db.execute(stmt_user)
+            usuario_db = res_user.scalars().first()
+            if not usuario_db:
+                usuario_db = Usuario(
+                    telefono=telefono,
+                    password_hash=password_hash,
+                    esta_activo=True,
+                    intentos_fallidos=0
+                )
+                self.db.add(usuario_db)
+                await self.db.flush()
+            else:
+                usuario_db.password_hash = password_hash
+                usuario_db.esta_activo = True
+                usuario_db.intentos_fallidos = 0
+                usuario_db.bloqueado_hasta = None
 
+            user_id_str = str(usuario_db.id)
+
+            stmt_sum = select(Suministro).where(
+                Suministro.usuario_id == usuario_db.id,
+                Suministro.cod_socio == cod_socio
+            )
+            res_sum = await self.db.execute(stmt_sum)
+            suministro_db = res_sum.scalars().first()
+            if not suministro_db:
+                suministro_db = Suministro(
+                    usuario_id=usuario_db.id,
+                    cod_socio=cod_socio,
+                    alias="Mi Casa",
+                    rol="TITULAR",
+                    es_suministro_principal=True
+                )
+                self.db.add(suministro_db)
+                await self.db.flush()
+            suministro_id = suministro_db.id
+            await self.db.commit()
+
+        # Mantener réplica en memoria para pruebas y compatibilidad
+        datos_socio = SOCIOS_MOCK_LEGADO.get(cod_socio, {"nombre": "SOCIO COSMOL"})
         USUARIOS_REGISTRADOS_DB[cod_socio] = {
-            "user_id": user_id,
+            "user_id": user_id_str,
             "telefono": telefono,
             "password_hash": password_hash,
             "nombre": datos_socio["nombre"],
@@ -269,31 +332,80 @@ class ServicioAutenticacion:
                 details={"bloqueado_segundos_restantes": tiempo_restante}
             )
 
-        # 2. Buscar usuario registrado
-        usuario = USUARIOS_REGISTRADOS_DB.get(cod_socio)
+        # 2. Buscar usuario registrado en PostgreSQL o memoria
+        usuario_db = None
+        suministro_db = None
+        password_hash = None
+        user_id = None
+        nombre_socio = "SOCIO COSMOL"
+        suministros_lista: List[SuministroResponse] = []
+
+        if self.db:
+            stmt_sum = select(Suministro).where(Suministro.cod_socio == cod_socio)
+            res_sum = await self.db.execute(stmt_sum)
+            suministro_db = res_sum.scalars().first()
+
+            if suministro_db:
+                stmt_user = (
+                    select(Usuario)
+                    .options(selectinload(Usuario.suministros), selectinload(Usuario.dispositivos))
+                    .where(Usuario.id == suministro_db.usuario_id)
+                )
+                res_user = await self.db.execute(stmt_user)
+                usuario_db = res_user.scalars().first()
+
+                if not usuario_db or not usuario_db.esta_activo:
+                    raise UnauthorizedException(
+                        message="La cuenta de socio se encuentra inactiva o deshabilitada.",
+                        error_code="ACCOUNT_DISABLED"
+                    )
+
+                password_hash = usuario_db.password_hash
+                user_id = str(usuario_db.id)
+                datos_legado = SOCIOS_MOCK_LEGADO.get(cod_socio, {"nombre": "SOCIO COSMOL"})
+                nombre_socio = datos_legado.get("nombre", "SOCIO COSMOL")
+                suministros_lista = [
+                    SuministroResponse(
+                        id=s.id,
+                        cod_socio=s.cod_socio,
+                        alias=s.alias,
+                        rol=s.rol,
+                        es_suministro_principal=s.es_suministro_principal
+                    )
+                    for s in usuario_db.suministros
+                ]
+
+        if not password_hash:
+            usuario_mem = USUARIOS_REGISTRADOS_DB.get(cod_socio)
+            if not usuario_mem:
+                raise UnauthorizedException(
+                    message="El socio no tiene un PIN configurado. Realice el proceso de primer ingreso para activar su cuenta.",
+                    error_code="ONBOARDING_REQUIRED"
+                )
+            password_hash = usuario_mem["password_hash"]
+            user_id = usuario_mem["user_id"]
+            nombre_socio = usuario_mem.get("nombre", "SOCIO COSMOL")
+            suministros_lista = [
+                SuministroResponse(
+                    id=s["id"],
+                    cod_socio=s["cod_socio"],
+                    alias=s["alias"],
+                    rol=s["rol"],
+                    es_suministro_principal=s["es_suministro_principal"]
+                )
+                for s in usuario_mem["suministros"]
+            ]
+
         fallos_key = f"intentos_fallidos:{cod_socio}"
 
-        if not usuario:
-            # Si aún no hizo onboarding con PIN
-            raise UnauthorizedException(
-                message="El socio no tiene un PIN configurado. Realice el proceso de primer ingreso para activar su cuenta.",
-                error_code="ONBOARDING_REQUIRED"
-            )
-
         # 3. Validar PIN con bcrypt
-        es_valido = verify_password(pin_password, usuario["password_hash"])
+        es_valido = verify_password(pin_password, password_hash)
 
         if not es_valido:
-            # Incrementar contador de fallos
             intentos = await self.redis.incr(fallos_key)
             logger.warning(f"Contraseña incorrecta para socio '{cod_socio}'. Fallo #{intentos}")
 
             if intentos >= 3:
-                # Escala de bloqueo progresivo:
-                # Intento 3 = 1 min (60s)
-                # Intento 4 = 5 min (300s)
-                # Intento 5 = 15 min (900s)
-                # Intento 6+ = 1 hora (3600s)
                 escalas = {3: 60, 4: 300, 5: 900}
                 bloqueo_segundos = escalas.get(intentos, 3600)
 
@@ -316,40 +428,48 @@ class ServicioAutenticacion:
         await self.redis.delete(fallos_key)
         await self.redis.delete(bloqueo_key)
 
-        # 5. Sesión única por dispositivo: registrar device_id activo en Redis
-        # Al loguearse en un nuevo equipo, cualquier petición con el device_id viejo quedará invalidada
-        sesion_dispositivo_key = f"sesion_activa:{usuario['user_id']}"
+        # 5. Persistir o actualizar Dispositivo si hay conexión DB
+        if self.db and usuario_db:
+            stmt_disp = select(Dispositivo).where(
+                Dispositivo.usuario_id == usuario_db.id,
+                Dispositivo.device_id == device_id
+            )
+            res_disp = await self.db.execute(stmt_disp)
+            disp_existente = res_disp.scalars().first()
+            if disp_existente:
+                if modelo_dispositivo:
+                    disp_existente.modelo_dispositivo = modelo_dispositivo
+                disp_existente.ultimo_acceso = datetime.now(timezone.utc)
+            else:
+                disp_nuevo = Dispositivo(
+                    usuario_id=usuario_db.id,
+                    device_id=device_id,
+                    modelo_dispositivo=modelo_dispositivo,
+                    ultimo_acceso=datetime.now(timezone.utc)
+                )
+                self.db.add(disp_nuevo)
+            await self.db.commit()
+
+        # 6. Sesión única por hardware (device_id) en Redis
+        sesion_dispositivo_key = f"sesion_activa:{user_id}"
         await self.redis.set(sesion_dispositivo_key, device_id)
 
-        # 6. Emitir JWT Access Token y Refresh Token
-        user_id = usuario["user_id"]
+        # 7. Emitir JWT Access Token y Refresh Token
         extra_claims = {
             "cod_socio": cod_socio,
             "device_id": device_id,
-            "nombre": usuario["nombre"]
+            "nombre": nombre_socio
         }
 
         access_token = create_access_token(subject=user_id, extra_claims=extra_claims)
         refresh_token = create_refresh_token(subject=user_id)
-
-        # Convertir lista de suministros a esquemas de respuesta
-        suministros_resp = [
-            SuministroResponse(
-                id=s["id"],
-                cod_socio=s["cod_socio"],
-                alias=s["alias"],
-                rol=s["rol"],
-                es_suministro_principal=s["es_suministro_principal"]
-            )
-            for s in usuario["suministros"]
-        ]
 
         logger.info(f"Socio '{cod_socio}' autenticado exitosamente desde dispositivo '{device_id}' ({modelo_dispositivo})")
         return TokenResponse(
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            suministros=suministros_resp
+            suministros=suministros_lista
         )
 
     # --------------------------------------------------------------------------

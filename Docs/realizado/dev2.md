@@ -89,36 +89,59 @@ Toda la lógica fue probada y verificada dentro del contenedor Docker `cosmol-ba
 
 ---
 
-## 3. Instrucciones de Integración para DEV 1 (Modelos ORM)
+## 3. Estado del Empalme con DEV 1 (100% COMPLETADO)
 
-Para cuando **DEV 1** tenga listas las tablas en SQLAlchemy (`Usuario`, `Suministro`, `Dispositivo` y `Otp`) y sus migraciones de Alembic:
+El empalme entre la arquitectura de datos de DEV 1 (Modelos ORM, Migraciones Alembic, Clientes WhatsApp/SMS, Servicios de Redis) y los servicios/endpoints de DEV 2 ha sido **concluido al 100%**:
 
-1. **Persistencia en Base de Datos:**
-   En `app/services/servicio_autenticacion.py` y `servicio_suministros.py`, los métodos actualmente utilizan la estructura temporal en memoria `USUARIOS_REGISTRADOS_DB` como puente para desacoplar el desarrollo.
-2. **Conexión directa:**
-   Basta con inyectar la sesión asíncrona de base de datos `db: AsyncSession = Depends(get_db)` y sustituir las lecturas/escrituras de `USUARIOS_REGISTRADOS_DB` por las consultas SQLAlchemy:
-   * `select(Usuario).where(Usuario.telefono == ...)`
-   * `session.add(nuevo_usuario)`
-   * `session.commit()`
-3. **Cero impacto en el Frontend:**
-   Los contratos de la API (Esquemas Pydantic, nombres de campos, códigos de error HTTP y endpoints en Swagger) ya están 100% estables y definitivos. El desarrollador Frontend ya puede conectarse y consumir la API sin esperar cambios futuros de estructura.
+1. **Inyección de Dependencia y Sesión AsyncSession:**
+   En `app/services/servicio_autenticacion.py` y `servicio_suministros.py`, los métodos ahora reciben `db: Optional[AsyncSession] = None` y leen/escriben directamente en las tablas físicas de PostgreSQL (`usuarios`, `suministros`, `dispositivos`).
+2. **Despacho Oficial de Mensajería:**
+   `solicitar_otp` activa de forma nativa los clientes `whatsapp_client` (Meta WhatsApp Cloud API) y `sms_client` (Gateway SMS) con soporte de mock para desarrollo local.
+3. **Control de Seguridad Centralizado:**
+   Integración plena con `servicio_bloqueo` y `servicio_otp` sobre Redis con política de bloqueo progresivo tras 3 intentos fallidos y rate limit de 3 solicitudes/hora.
+4. **Cero impacto en el Frontend:**
+   Los contratos de la API (Esquemas Pydantic, nombres de campos, códigos de error HTTP y endpoints en Swagger) se mantuvieron 100% estables. La API está lista para ser consumida de inmediato por el desarrollador Frontend (Flutter). Ver guía en `Docs/GUIA_INTEGRACION_FRONTEND.md`.
 
 ---
 
-## 4. Evidencia de Validación en Local
+## 4. Evidencia de Validación en Local (Suite Completa)
 
 Ejecución de la suite completa de pruebas:
 ```bash
-docker compose exec backend-api pytest
+docker compose exec backend-api pytest -v
 ```
 
 **Resultado obtenido:**
 ```text
-tests/test_auth_endpoints.py ...                                         [ 17%]
-tests/test_auth_schemas.py .......                                       [ 58%]
-tests/test_auth_service.py ...                                           [ 76%]
-tests/test_base_components.py ...                                        [ 94%]
-tests/test_health.py .                                                   [100%]
+tests/test_auth_endpoints.py::test_endpoint_flujo_onboarding_completo PASSED
+tests/test_auth_endpoints.py::test_endpoint_verificar_socio_inexistente PASSED
+tests/test_auth_endpoints.py::test_endpoint_login_credenciales_invalidas PASSED
+tests/test_auth_schemas.py::test_verificar_socio_request_limpia_espacios PASSED
+tests/test_auth_schemas.py::test_solicitar_otp_normaliza_celular_bolivia PASSED
+tests/test_auth_schemas.py::test_solicitar_otp_telefono_invalido PASSED
+tests/test_auth_schemas.py::test_verificar_otp_exige_exactamente_6_digitos PASSED
+tests/test_auth_schemas.py::test_crear_pin_valida_longitud_minima PASSED
+tests/test_auth_schemas.py::test_login_request_valido PASSED
+tests/test_auth_schemas.py::test_vincular_suministro_request PASSED
+tests/test_auth_service.py::test_flujo_completo_onboarding PASSED
+tests/test_auth_service.py::test_bloqueo_por_tres_intentos_fallidos PASSED
+tests/test_auth_service.py::test_multicuenta_titular_vs_inquilino PASSED
+tests/test_base_components.py::test_password_hashing PASSED
+tests/test_base_components.py::test_jwt_tokens PASSED
+tests/test_base_components.py::test_app_exception_handling PASSED
+tests/test_health.py::test_root_endpoint PASSED
+tests/test_integration_empalme.py::test_empalme_persistencia_real_postgresql PASSED
+tests/test_models.py::test_models_metadata_and_tablenames PASSED
+tests/test_models.py::test_usuario_instantiation_and_defaults PASSED
+tests/test_models.py::test_suministro_and_multicuenta_relationships PASSED
+tests/test_models.py::test_dispositivo_relationship PASSED
+tests/test_models.py::test_otp_instantiation PASSED
+tests/test_otp_services.py::test_generador_codigo_otp PASSED
+tests/test_otp_services.py::test_guardar_y_verificar_otp_un_solo_uso PASSED
+tests/test_otp_services.py::test_limite_solicitudes_otp_por_hora PASSED
+tests/test_otp_services.py::test_despachar_otp_mock_whatsapp_y_sms PASSED
+tests/test_otp_services.py::test_escala_segundos_bloqueo PASSED
+tests/test_otp_services.py::test_motor_bloqueo_progresivo PASSED
 
-============================= 17 passed in 10.36s =============================
+============================== 29 passed in 5.89s ==============================
 ```

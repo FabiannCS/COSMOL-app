@@ -4,8 +4,9 @@ Rutas y Endpoints REST para Autenticación, Onboarding Dual OTP y Multicuenta.
 from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, status
 from redis.asyncio import Redis
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_redis, get_token_payload
+from app.api.deps import get_db, get_redis, get_token_payload
 from app.schemas.suministro import SuministroResponse, VincularSuministroRequest
 from app.schemas.usuario import (
     CrearPinPasswordRequest,
@@ -30,9 +31,10 @@ router = APIRouter()
 )
 async def verificar_socio(
     datos: VerificarSocioRequest,
+    db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> Dict[str, Any]:
-    servicio = ServicioAutenticacion(redis)
+    servicio = ServicioAutenticacion(redis, db=db)
     return await servicio.verificar_primer_acceso(
         cod_socio=datos.cod_socio,
         ci=datos.ci
@@ -47,9 +49,10 @@ async def verificar_socio(
 )
 async def solicitar_otp(
     datos: SolicitarOtpRequest,
+    db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> Dict[str, Any]:
-    servicio = ServicioAutenticacion(redis)
+    servicio = ServicioAutenticacion(redis, db=db)
     return await servicio.solicitar_otp(
         cod_socio=datos.cod_socio,
         telefono=datos.telefono,
@@ -65,9 +68,10 @@ async def solicitar_otp(
 )
 async def verificar_otp(
     datos: VerificarOtpRequest,
+    db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> Dict[str, Any]:
-    servicio = ServicioAutenticacion(redis)
+    servicio = ServicioAutenticacion(redis, db=db)
     return await servicio.verificar_otp(
         telefono=datos.telefono,
         codigo=datos.codigo
@@ -82,9 +86,10 @@ async def verificar_otp(
 )
 async def establecer_pin(
     datos: CrearPinPasswordRequest,
+    db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> Dict[str, Any]:
-    servicio = ServicioAutenticacion(redis)
+    servicio = ServicioAutenticacion(redis, db=db)
     return await servicio.establecer_pin(
         telefono=datos.telefono,
         token_otp_valido=datos.token_otp_valido,
@@ -101,9 +106,10 @@ async def establecer_pin(
 )
 async def login(
     datos: LoginRequest,
+    db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> TokenResponse:
-    servicio = ServicioAutenticacion(redis)
+    servicio = ServicioAutenticacion(redis, db=db)
     return await servicio.autenticar_socio(
         cod_socio=datos.cod_socio,
         pin_password=datos.pin_password,
@@ -121,9 +127,10 @@ async def login(
 )
 async def renovar_token(
     datos: RenovarTokenRequest,
+    db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> TokenResponse:
-    servicio = ServicioAutenticacion(redis)
+    servicio = ServicioAutenticacion(redis, db=db)
     return await servicio.renovar_token(
         refresh_token=datos.refresh_token,
         device_id=datos.device_id
@@ -140,10 +147,11 @@ async def renovar_token(
 async def vincular_suministro(
     datos: VincularSuministroRequest,
     token_payload: Dict[str, Any] = Depends(get_token_payload),
+    db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> SuministroResponse:
     cod_socio_principal = token_payload.get("cod_socio", "")
-    servicio = ServicioSuministros(redis)
+    servicio = ServicioSuministros(redis, db=db)
     return await servicio.vincular_suministro(
         cod_socio_principal=cod_socio_principal,
         datos=datos
@@ -159,8 +167,9 @@ async def vincular_suministro(
 )
 async def listar_suministros(
     token_payload: Dict[str, Any] = Depends(get_token_payload),
+    db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> List[SuministroResponse]:
     cod_socio_principal = token_payload.get("cod_socio", "")
-    servicio = ServicioSuministros(redis)
+    servicio = ServicioSuministros(redis, db=db)
     return await servicio.listar_suministros(cod_socio_principal=cod_socio_principal)
