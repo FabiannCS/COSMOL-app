@@ -64,7 +64,7 @@ services:
   # Almacenamiento de Objetos / PDFs (MinIO S3)
   # ----------------------------------------------------------------------------
   storage-minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
     container_name: cosmol-storage-minio
     restart: unless-stopped
     ports:
@@ -78,18 +78,23 @@ services:
       - minio_data:/data
 
   # ----------------------------------------------------------------------------
-  # Gateway / Reverse Proxy (Caddy v2)
+  # Gateway / Reverse Proxy (Caddy v2) [OPCIONAL / ETAPA FINAL]
+  # Descomentar únicamente si este proyecto se despliega aislado con su propio proxy.
+  # Si convive con Cosmol-Chatbot, se utiliza el Caddy central de ese repositorio.
   # ----------------------------------------------------------------------------
-  gateway-caddy:
-    image: caddy:2-alpine
-    container_name: cosmol-gateway-caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-    volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-    depends_on:
-      - backend-api
+  # gateway-caddy:
+  #   image: caddy:2-alpine
+  #   container_name: cosmol-gateway-caddy
+  #   restart: unless-stopped
+  #   ports:
+  #     - "${CADDY_HTTP_PORT:-90}:80"
+  #     - "${CADDY_ALT_PORT:-91}:91"
+  #   volumes:
+  #     - ./caddy/Caddyfile.snippet:/etc/caddy/Caddyfile:ro
+  #   environment:
+  #     - APP_DOMAIN=${APP_DOMAIN:-localhost}
+  #   depends_on:
+  #     - backend-api
 
 volumes:
   postgres_data:

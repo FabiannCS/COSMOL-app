@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.exceptions import register_exception_handlers
 from app.core.redis import init_redis_pool, close_redis_pool
 from app.api.v1.router import api_router
 
@@ -40,6 +41,9 @@ if settings.BACKEND_CORS_ORIGINS:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+# Registro de manejadores estándar de excepciones
+register_exception_handlers(app)
 
 # Montaje de router maestro de la versión 1 (v1)
 app.include_router(api_router, prefix=settings.API_V1_STR)
