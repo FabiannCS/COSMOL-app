@@ -5,12 +5,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    gcc \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
+# Dependencias de Python (asyncpg, bcrypt, uvloop cuentan con binarios manylinux precompilados)
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
