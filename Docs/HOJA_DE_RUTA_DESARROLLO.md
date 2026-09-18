@@ -275,6 +275,7 @@ gantt
 
 ---
 
+
 ### **Fase 3: Repositorio Digital de Documentos (PDFs de Facturas y Avisos)**
 > **Meta:** Eliminar el gasto de papel permitiendo visualizar y descargar facturas con valor legal y avisos de corte.
 
