@@ -48,7 +48,7 @@ class OnboardingProgressTracker extends StatelessWidget {
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Validación de Teléfono',
+                        'Validación de Socio',
                         style: AppTextStyles.subtitle1.copyWith(
                           color: AppColors.primary,
                           fontWeight: FontWeight.bold,
@@ -105,27 +105,38 @@ class OnboardingProgressTracker extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(
-                    Icons.check_circle,
-                    size: 16,
-                    color: AppColors.primary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    'En curso',
-                    style: AppTextStyles.caption.copyWith(
+              Flexible(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.check_circle,
+                      size: 16,
                       color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'En curso',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              Text(
-                'Paso 2: Vinculación de Socio',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.textMuted,
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  'Paso 2: Teléfono y Seguridad',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textMuted,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.end,
                 ),
               ),
             ],

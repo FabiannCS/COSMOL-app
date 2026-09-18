@@ -24,7 +24,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         return isSplash || isLoggingIn || isOnboarding ? null : '/login';
       }
 
-      if (status == AuthStatus.unauthenticated) {
+      if (status == AuthStatus.unauthenticated || status == AuthStatus.locked) {
         return isLoggingIn || isOnboarding ? null : '/login';
       }
 

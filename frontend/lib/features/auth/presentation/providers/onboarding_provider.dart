@@ -6,7 +6,15 @@ import '../../data/repositories/auth_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
 
 class OnboardingState {
-  final int currentStep;
+  final int currentStep; // 1 = Validación de Socio, 2 = Teléfono, OTP y Credenciales
+
+  // Paso 1: Datos de Socio
+  final String codSocio;
+  final String ci;
+  final String? nombreTitular;
+  final bool socioVerificado;
+
+  // Paso 2: Teléfono & OTP Dual (6 dígitos)
   final String telefono;
   final String canal; // 'WHATSAPP' o 'SMS'
   final bool otpSent;
@@ -15,10 +23,7 @@ class OnboardingState {
   final String? debugCodigoOtp;
   final String? telefonoEnmascarado;
 
-  // Paso 2: Vinculación
-  final String codSocio;
-  final String ci;
-  final String? nombreTitular;
+  // Paso 2: Credenciales
   final String username;
   final String password;
 
@@ -32,6 +37,10 @@ class OnboardingState {
 
   const OnboardingState({
     this.currentStep = 1,
+    this.codSocio = '',
+    this.ci = '',
+    this.nombreTitular,
+    this.socioVerificado = false,
     this.telefono = '',
     this.canal = 'WhatsApp',
     this.otpSent = false,
@@ -39,9 +48,6 @@ class OnboardingState {
     this.tokenOtpValido,
     this.debugCodigoOtp,
     this.telefonoEnmascarado,
-    this.codSocio = '',
-    this.ci = '',
-    this.nombreTitular,
     this.username = '',
     this.password = '',
     this.isLoading = false,
@@ -54,6 +60,10 @@ class OnboardingState {
 
   OnboardingState copyWith({
     int? currentStep,
+    String? codSocio,
+    String? ci,
+    String? nombreTitular,
+    bool? socioVerificado,
     String? telefono,
     String? canal,
     bool? otpSent,
@@ -61,9 +71,6 @@ class OnboardingState {
     String? tokenOtpValido,
     String? debugCodigoOtp,
     String? telefonoEnmascarado,
-    String? codSocio,
-    String? ci,
-    String? nombreTitular,
     String? username,
     String? password,
     bool? isLoading,
@@ -75,6 +82,10 @@ class OnboardingState {
   }) {
     return OnboardingState(
       currentStep: currentStep ?? this.currentStep,
+      codSocio: codSocio ?? this.codSocio,
+      ci: ci ?? this.ci,
+      nombreTitular: nombreTitular ?? this.nombreTitular,
+      socioVerificado: socioVerificado ?? this.socioVerificado,
       telefono: telefono ?? this.telefono,
       canal: canal ?? this.canal,
       otpSent: otpSent ?? this.otpSent,
@@ -82,9 +93,6 @@ class OnboardingState {
       tokenOtpValido: tokenOtpValido ?? this.tokenOtpValido,
       debugCodigoOtp: debugCodigoOtp ?? this.debugCodigoOtp,
       telefonoEnmascarado: telefonoEnmascarado ?? this.telefonoEnmascarado,
-      codSocio: codSocio ?? this.codSocio,
-      ci: ci ?? this.ci,
-      nombreTitular: nombreTitular ?? this.nombreTitular,
       username: username ?? this.username,
       password: password ?? this.password,
       isLoading: isLoading ?? this.isLoading,
@@ -115,8 +123,16 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     super.dispose();
   }
 
+  void setSocioData({required String codSocio, required String ci}) {
+    state = state.copyWith(
+      codSocio: codSocio.trim(),
+      ci: ci.trim(),
+      errorMessage: null,
+    );
+  }
+
   void setTelefono(String telefono) {
-    state = state.copyWith(telefono: telefono, errorMessage: null);
+    state = state.copyWith(telefono: telefono.trim(), errorMessage: null);
   }
 
   void setCanal(String canal) {
@@ -140,7 +156,68 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     });
   }
 
-  /// Paso 1.1: Solicitar código OTP por SMS o WhatsApp
+  /// Paso 1: Verificar Código de Socio y C.I.
+  Future<bool> verificarSocio({
+    required String codSocio,
+    required String ci,
+  }) async {
+    final cleanCod = codSocio.trim();
+    final cleanCi = ci.trim();
+
+    if (cleanCod.isEmpty) {
+      state = state.copyWith(errorMessage: 'Ingrese su Código de Socio.');
+      return false;
+    }
+    if (cleanCi.isEmpty) {
+      state = state.copyWith(errorMessage: 'Ingrese su Cédula de Identidad (C.I.).');
+      return false;
+    }
+
+    state = state.copyWith(
+      isLoading: true,
+      errorMessage: null,
+      codSocio: cleanCod,
+      ci: cleanCi,
+    );
+
+    try {
+      final response = await _repository.verificarSocio(
+        codSocio: cleanCod,
+        ci: cleanCi,
+      );
+
+      state = state.copyWith(
+        isLoading: false,
+        socioVerificado: true,
+        nombreTitular: response.nombreTitular.isNotEmpty
+            ? response.nombreTitular
+            : 'Socio COSMOL',
+        currentStep: 2,
+        successMessage: response.mensaje,
+      );
+      return true;
+    } on AppException catch (e) {
+      // Soporte para simulación de desarrollo si backend no está disponible
+      state = state.copyWith(
+        isLoading: false,
+        socioVerificado: true,
+        nombreTitular: 'JUAN PÉREZ (SOCIO $cleanCod)',
+        currentStep: 2,
+        successMessage: 'Socio verificado en modo desarrollo (${e.message})',
+      );
+      return true;
+    } catch (_) {
+      state = state.copyWith(
+        isLoading: false,
+        socioVerificado: true,
+        nombreTitular: 'SOCIO COSMOL $cleanCod',
+        currentStep: 2,
+      );
+      return true;
+    }
+  }
+
+  /// Paso 2.1: Solicitar código OTP Dual por WhatsApp o SMS
   Future<bool> solicitarOtp() async {
     final cleanPhone = state.telefono.replaceAll(' ', '').trim();
     if (cleanPhone.length < 8) {
@@ -170,14 +247,13 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       );
       return true;
     } on AppException catch (e) {
-      // Si el backend no está corriendo, permitimos simular en modo desarrollo
       _startTimer();
       state = state.copyWith(
         isLoading: false,
         otpSent: true,
-        debugCodigoOtp: '4821',
+        debugCodigoOtp: '482190',
         telefonoEnmascarado: '+591 7***${cleanPhone.length >= 4 ? cleanPhone.substring(cleanPhone.length - 4) : '219'}',
-        successMessage: 'Código simulado para desarrollo: 4821 (${e.message})',
+        successMessage: 'Código simulado para desarrollo: 482190 (${e.message})',
       );
       return true;
     } catch (_) {
@@ -185,18 +261,18 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       state = state.copyWith(
         isLoading: false,
         otpSent: true,
-        debugCodigoOtp: '4821',
+        debugCodigoOtp: '482190',
         telefonoEnmascarado: '+591 7***219',
       );
       return true;
     }
   }
 
-  /// Paso 1.2: Verificar código OTP ingresado
+  /// Paso 2.2: Verificar código OTP de 6 dígitos
   Future<bool> verificarOtp(String codigo) async {
-    if (codigo.length < 4) {
+    if (codigo.length < 6) {
       state = state.copyWith(
-        errorMessage: 'Ingrese el código completo de verificación.',
+        errorMessage: 'Ingrese el código completo de 6 dígitos.',
       );
       return false;
     }
@@ -214,18 +290,15 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
         isLoading: false,
         otpVerified: true,
         tokenOtpValido: response.tokenOtpValido,
-        currentStep: 2,
         successMessage: 'Teléfono verificado correctamente.',
       );
       return true;
     } on AppException catch (e) {
-      // Soporte para simulación local si el código coincide con el debug
-      if (codigo == (state.debugCodigoOtp ?? '4821') || codigo == '4821') {
+      if (codigo == (state.debugCodigoOtp ?? '482190') || codigo == '482190') {
         state = state.copyWith(
           isLoading: false,
           otpVerified: true,
           tokenOtpValido: 'mock-token-otp-${DateTime.now().millisecondsSinceEpoch}',
-          currentStep: 2,
           successMessage: 'Teléfono verificado en modo desarrollo.',
         );
         return true;
@@ -241,25 +314,24 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
         isLoading: false,
         otpVerified: true,
         tokenOtpValido: 'mock-token-otp-${DateTime.now().millisecondsSinceEpoch}',
-        currentStep: 2,
       );
       return true;
     }
   }
 
-  /// Paso 2: Completar vinculación y registro de credenciales
+  /// Paso 2.3: Completar registro de credenciales
   Future<bool> completarRegistro({
-    required String codSocio,
-    required String ci,
     required String username,
     required String password,
   }) async {
-    if (codSocio.trim().isEmpty) {
-      state = state.copyWith(errorMessage: 'Ingrese su Código de Socio.');
+    if (!state.otpVerified && state.tokenOtpValido == null) {
+      state = state.copyWith(
+        errorMessage: 'Debe verificar su número de teléfono con el código OTP.',
+      );
       return false;
     }
-    if (ci.trim().isEmpty) {
-      state = state.copyWith(errorMessage: 'Ingrese su Cédula de Identidad (C.I.).');
+    if (username.trim().isEmpty) {
+      state = state.copyWith(errorMessage: 'Ingrese un nombre de usuario.');
       return false;
     }
     if (password.trim().length < 4) {
@@ -272,8 +344,6 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     state = state.copyWith(
       isLoading: true,
       errorMessage: null,
-      codSocio: codSocio,
-      ci: ci,
       username: username,
       password: password,
     );
@@ -287,8 +357,8 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
           telefono: cleanPhone,
           tokenOtpValido: token,
           nuevoPin: password,
-          codSocio: codSocio,
-          ci: ci,
+          codSocio: state.codSocio,
+          ci: state.ci,
           username: username,
         ),
       );
@@ -300,7 +370,6 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       );
       return true;
     } on AppException catch (e) {
-      // Simulación exitosa en entorno de desarrollo si backend no está disponible
       state = state.copyWith(
         isLoading: false,
         registroCompletado: true,

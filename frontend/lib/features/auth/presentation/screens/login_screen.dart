@@ -1,27 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
+import '../../../../core/services/storage_service.dart';
+import '../../../../core/widgets/account_locked_dialog.dart';
 import '../../../../core/widgets/cosmol_button.dart';
 import '../../../../core/widgets/cosmol_card.dart';
 import '../../../../core/widgets/cosmol_text_field.dart';
+import '../providers/auth_provider.dart';
 
 /// Pantalla de Inicio de Sesión de Socios COSMOL R.L.
 /// Basada exactamente en la guía visual de vista_login_cosmol.txt
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _socioCodeController = TextEditingController();
   final _passwordController = TextEditingController();
 
-  bool _isLoading = false;
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final savedSocio =
+          await ref.read(storageServiceProvider).getActiveCodSocio();
+      if (savedSocio != null && savedSocio.isNotEmpty && mounted) {
+        _socioCodeController.text = savedSocio;
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -32,18 +46,15 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
+    FocusScope.of(context).unfocus();
 
-    setState(() {
-      _isLoading = true;
-    });
+    final success = await ref.read(authProvider.notifier).login(
+          codSocio: _socioCodeController.text.trim(),
+          password: _passwordController.text.trim(),
+        );
 
-    // Simulación del flujo de verificación o integración con authProvider
-    await Future.delayed(const Duration(milliseconds: 1600));
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
+    if (mounted && success) {
+      context.go('/dashboard');
     }
   }
 
@@ -58,6 +69,38 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authProvider);
+
+    ref.listen<AuthState>(authProvider, (previous, next) {
+      if (next.status == AuthStatus.locked) {
+        AccountLockedDialog.show(
+          context,
+          segundosRestantes: next.bloqueadoSegundosRestantes,
+          onUnlockViaOtp: () {
+            context.push('/onboarding');
+          },
+        );
+      } else if (next.status == AuthStatus.onboardingRequired) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              next.errorMessage ?? 'Debe completar el registro de su cuenta.',
+            ),
+            backgroundColor: AppColors.secondary,
+          ),
+        );
+        context.push('/onboarding');
+      } else if (next.errorMessage != null &&
+          next.errorMessage != previous?.errorMessage &&
+          next.status != AuthStatus.locked) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(next.errorMessage!),
+            backgroundColor: AppColors.errorRed,
+          ),
+        );
+      }
+    });
     return Scaffold(
       backgroundColor: AppColors.lightBackground,
       body: SafeArea(
@@ -164,7 +207,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             text: 'Ingresar a mi Cuenta',
                             loadingText: 'Verificando Credenciales...',
                             suffixIcon: Icons.arrow_forward,
-                            isLoading: _isLoading,
+                            isLoading: authState.isLoading,
                             onPressed: _handleLogin,
                           ),
                           const SizedBox(height: 16),

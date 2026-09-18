@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../config/theme/app_colors.dart';
 import '../config/theme/app_text_styles.dart';
 import 'cosmol_button.dart';
@@ -139,7 +138,7 @@ class _AccountLockedDialogState extends State<AccountLockedDialog> {
                 text: widget.onUnlockViaOtp != null
                     ? 'Desbloquear de inmediato vía OTP'
                     : 'Entendido',
-                icon: FontAwesomeIcons.whatsapp,
+                icon: Icons.lock_reset,
                 type: CosmolButtonType.primary,
                 onPressed: () {
                   Navigator.of(context).pop();
