@@ -1,8 +1,8 @@
 # Tarea 03: Repositorio Digital de Documentos (PDFs de Facturas y Avisos)
 
-> **Estado:** PENDIENTE  
+> **Estado:** COMPLETADO  
 > **Fase:** Fase 3 — Repositorio Digital de Documentos (PDFs de Facturas y Avisos)  
-> **Fecha de creación:** Septiembre 2026  
+> **Fecha de conclusión:** Septiembre 2026  
 > **Documentos de referencia:** `AGENTS.md` (Secciones 4.4, 7.4, 10.4, 12.3, 12.7.1) y `Docs/HOJA_DE_RUTA_DESARROLLO.md` (Fase 3)  
 > **Entorno de ejecución:** Backend FastAPI en Docker (`cosmol-backend-api`, `cosmol-storage-minio`, `cosmol-db-postgres`)
 

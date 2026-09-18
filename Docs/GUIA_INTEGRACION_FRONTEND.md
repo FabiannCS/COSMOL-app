@@ -421,3 +421,151 @@ Alimenta la pantalla de inicio cuando el socio administra varios predios (casa, 
 }
 ```
 
+---
+
+## 9. Módulo de Documentos y Facturas Digitales en PDF (Fase 3)
+
+Permite consultar el historial de documentos y descargar archivos PDF generados on-demand o recuperados desde el almacenamiento de objetos MinIO S3 (`cosmol-docs`).
+
+### 9.1 Listar Documentos de un Suministro por Pestañas
+* **Endpoint:** `GET /api/v1/documentos/{cod_socio}`
+* **Parámetros Query (Opcionales):**
+  * `tipo`: Filtrar por categoría (`FACTURA`, `AVISO_COBRANZA`, `AVISO_CORTE`).
+* **Cabecera:** `Authorization: Bearer <access_token>`
+
+#### Respuesta Exitosa (`200 OK`) — Perfil TITULAR:
+```json
+{
+  "cod_socio": "540",
+  "rol_acceso": "TITULAR",
+  "total_documentos": 3,
+  "facturas": [
+    {
+      "id": "e8499bf2-72c6-43bf-895c-19602e1bdfc0",
+      "cod_socio": "540",
+      "tipo_documento": "FACTURA",
+      "nro_factura": "7444051",
+      "nro_facip": null,
+      "cod_autorizacion": "465C3D0702C232069B9F771B83440D4217AF35B442086180BD081BF74",
+      "periodo": "08/2026",
+      "anio": 2026,
+      "mes": 8,
+      "monto_bs": 70.92,
+      "fecha_emision": "2026-09-18",
+      "fecha_vencimiento": null,
+      "estado_pago": "PENDIENTE",
+      "s3_key": "facturas/540/08_2026_7444051.pdf",
+      "permite_descarga": true,
+      "url_descarga": "/api/v1/documentos/e8499bf2-72c6-43bf-895c-19602e1bdfc0/descargar"
+    }
+  ],
+  "avisos_cobranza": [
+    {
+      "id": "b3e020fa-0e7d-41a3-9ea9-b2c32cf961d1",
+      "cod_socio": "540",
+      "tipo_documento": "AVISO_COBRANZA",
+      "nro_factura": null,
+      "nro_facip": "1160026",
+      "cod_autorizacion": null,
+      "periodo": "08/2026",
+      "anio": 2026,
+      "mes": 8,
+      "monto_bs": 70.92,
+      "fecha_emision": "2026-09-18",
+      "fecha_vencimiento": null,
+      "estado_pago": "PENDIENTE",
+      "s3_key": "avisos_cobranza/540/08_2026_1160026.pdf",
+      "permite_descarga": true,
+      "url_descarga": "/api/v1/documentos/b3e020fa-0e7d-41a3-9ea9-b2c32cf961d1/descargar"
+    }
+  ],
+  "avisos_corte": [
+    {
+      "id": "c1f7b11d-2b4a-4632-a56e-82199b538e12",
+      "cod_socio": "540",
+      "tipo_documento": "AVISO_CORTE",
+      "nro_factura": null,
+      "nro_facip": null,
+      "cod_autorizacion": null,
+      "periodo": "09/2026",
+      "anio": 2026,
+      "mes": 9,
+      "monto_bs": 132.34,
+      "fecha_emision": "2026-09-18",
+      "fecha_vencimiento": null,
+      "estado_pago": "PENDIENTE",
+      "s3_key": "avisos_corte/540/09_2026_corte_inminente.pdf",
+      "permite_descarga": true,
+      "url_descarga": "/api/v1/documentos/c1f7b11d-2b4a-4632-a56e-82199b538e12/descargar"
+    }
+  ],
+  "documentos": ["..."]
+}
+```
+
+#### Respuesta Exitosa (`200 OK`) — Perfil Inquilino (`CONSULTA_PAGO`):
+El backend oculta automáticamente las listas fiscales y sensibles:
+```json
+{
+  "cod_socio": "540",
+  "rol_acceso": "CONSULTA_PAGO",
+  "total_documentos": 1,
+  "facturas": [],
+  "avisos_cobranza": [
+    {
+      "id": "b3e020fa-0e7d-41a3-9ea9-b2c32cf961d1",
+      "cod_socio": "540",
+      "tipo_documento": "AVISO_COBRANZA",
+      "nro_facip": "1160026",
+      "periodo": "08/2026",
+      "monto_bs": 70.92,
+      "permite_descarga": true,
+      "url_descarga": "/api/v1/documentos/b3e020fa-0e7d-41a3-9ea9-b2c32cf961d1/descargar"
+    }
+  ],
+  "avisos_corte": [],
+  "documentos": ["..."]
+}
+```
+
+---
+
+### 9.2 Descargar Archivo PDF por Streaming
+* **Endpoint:** `GET /api/v1/documentos/{doc_id}/descargar`
+* **Cabecera requerida:** `Authorization: Bearer <access_token>`
+* **Cabeceras de Respuesta HTTP:**
+  * `Content-Type: application/pdf`
+  * `Content-Disposition: attachment; filename="Factura_Oficial_COSMOL_540_08-2026.pdf"`
+* **Cuerpo de Respuesta:** Flujo binario con el archivo PDF compilado.
+
+#### Respuestas de Error:
+* **`403 Forbidden` (`DOCUMENT_ACCESS_DENIED`):**
+  Ocurre si un usuario con rol `CONSULTA_PAGO` intenta descargar una factura fiscal o un aviso de corte:
+  ```json
+  {
+    "success": false,
+    "error": {
+      "code": "DOCUMENT_ACCESS_DENIED",
+      "message": "Acceso denegado: solo el titular registrado puede descargar facturas fiscales y avisos de corte.",
+      "details": null
+    }
+  }
+  ```
+* **`403 Forbidden` (`SUMINISTRO_ACCESS_DENIED`):**
+  Ocurre si el documento pertenece a un suministro que el usuario no tiene en su cartera.
+* **`404 Not Found` (`DOCUMENT_NOT_FOUND`):**
+  Ocurre si el `doc_id` especificado no existe en la base de datos.
+
+---
+
+### 9.3 Recomendación de Implementación en Flutter
+
+1. **Diseño de Pestañas (`TabBar`):**
+   * Configurar un `TabBar` con 3 pestañas: **Facturas**, **Avisos de Cobranza**, **Avisos de Corte**.
+   * Si `rol_acceso == "CONSULTA_PAGO"`, ocultar o deshabilitar las pestañas de *Facturas* y *Avisos de Corte*, mostrando únicamente *Avisos de Cobranza* con un badge informativo: *"Vista de Inquilino: solo avisos de cobranza disponibles para pago"*.
+2. **Descarga y Visualización:**
+   * Utilizar `Dio` con `responseType: ResponseType.bytes`.
+   * Almacenar temporalmente el buffer de bytes en `getApplicationDocumentsDirectory()` (`path_provider`).
+   * Abrir el archivo de inmediato con `open_filex` o integrarlo en pantalla con `flutter_pdfview`.
+   * Proveer botón de *"Compartir"* mediante el plugin `share_plus` para enviar el aviso de cobranza por WhatsApp.
+

@@ -188,7 +188,7 @@ gantt
     [x] Caché Redis (<20ms) & Dashboard API     :done, f2_2, after f2_1, 2d
     [ ] Dashboard Flutter & Semáforo Vencimiento:f2_3, after f1_4, 4d
     section Fase 3: Documentos PDF
-    [ ] Storage MinIO & Servido Seguro de PDFs  :f3_1, after f2_2, 3d
+    [x] Storage MinIO & Servido Seguro de PDFs  :done, f3_1, after f2_2, 3d
     [ ] Visor & Descarga Flutter PDF            :f3_2, after f3_1, 3d
     section Fase 4: Analítica de Consumo
     [ ] Endpoint Historial Consumo (6+ meses)   :f4_1, after f2_2, 2d
@@ -279,10 +279,11 @@ gantt
 ### **Fase 3: Repositorio Digital de Documentos (PDFs de Facturas y Avisos)**
 > **Meta:** Eliminar el gasto de papel permitiendo visualizar y descargar facturas con valor legal y avisos de corte.
 
-- [ ] **3.1 Almacenamiento de Objetos en MinIO:**
+- [x] **3.1 Almacenamiento de Objetos en MinIO y Servido Seguro:**
   - Configurar bucket privado `cosmol-docs`.
-  - Endpoint `GET /api/v1/documents/list?cod_socio=...`: Lista de facturas, avisos de cobranza y avisos de corte disponibles.
-  - Endpoint `GET /api/v1/documents/{doc_id}/download`: Valida permisos del usuario (Titular) y genera URL prefirmada temporal S3 (TTL 10 min) o transmite el flujo binario.
+  - Endpoint `GET /api/v1/documentos/{cod_socio}`: Lista de facturas, avisos de cobranza y avisos de corte disponibles por pestañas con privacidad multicuenta.
+  - Endpoint `GET /api/v1/documentos/{doc_id}/descargar`: Valida permisos del usuario (Titular vs Inquilino con bloqueo 403 `DOCUMENT_ACCESS_DENIED`) y transmite el flujo binario PDF por streaming (`StreamingResponse`).
+  - Motor institucional ReportLab (`GeneradorPdfDocumento`) y persistencia sincronizada con PostgreSQL (`Documento`).
 - [ ] **3.2 Visor y Descarga en Flutter:**
   - Pantalla con pestañas: *Facturas*, *Avisos de Cobranza*, *Avisos de Corte*.
   - Integración de `flutter_pdfview` para previsualización inmediata dentro de la app.
