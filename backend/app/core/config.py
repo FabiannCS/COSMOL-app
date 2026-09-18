@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     SMS_GATEWAY_URL: str = ""
     SMS_GATEWAY_API_KEY: str = ""
 
+    # Integración con Sistema Comercial Legado de COSMOL
+    COSMOL_LEGACY_URL: str = "http://api.cosmol.com.bo/api-consultas"
+    COSMOL_LEGACY_TIMEOUT_SECONDS: float = 4.0
+    MOCK_COSMOL_LEGACY: bool = False
+    DEBT_CACHE_TTL_SECONDS: int = 600  # 10 minutos (600 segundos)
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

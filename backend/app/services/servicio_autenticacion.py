@@ -40,6 +40,8 @@ SOCIOS_MOCK_LEGADO: Dict[str, Dict[str, str]] = {
     "104523": {"ci": "8392019", "nombre": "CARLOS EDUARDO PEREZ", "medidor": "M-50211"},
     "205566": {"ci": "4920192", "nombre": "MARIA ELENA ROJAS", "medidor": "M-88902"},
     "301144": {"ci": "6102938", "nombre": "JUAN PABLO SUAREZ", "medidor": "M-12490"},
+    "556": {"ci": "4638847", "nombre": "SUAREZ BALTAZAR VICTOR HUGO,CAROLINA", "medidor": "M-00556"},
+    "540": {"ci": "2823231", "nombre": "DURAN ELOISA RIVERA DE", "medidor": "M-00540"},
 }
 
 # Base de datos simulada en memoria para usuarios registrados (modo fallback)

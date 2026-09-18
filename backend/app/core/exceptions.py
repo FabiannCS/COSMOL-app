@@ -73,6 +73,16 @@ class ConflictException(AppException):
         )
 
 
+class ServiceUnavailableException(AppException):
+    def __init__(self, message: str = "Servicio externo no disponible temporalmente", error_code: str = "SERVICE_UNAVAILABLE", details: Optional[Any] = None):
+        super().__init__(
+            message=message,
+            error_code=error_code,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            details=details
+        )
+
+
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
     """
     Captura y formatea las excepciones de negocio AppException.
