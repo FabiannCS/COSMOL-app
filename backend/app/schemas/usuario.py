@@ -2,8 +2,8 @@
 Esquemas Pydantic v2 para la identidad, onboarding dual OTP y autenticación de socios.
 """
 import re
-from typing import List, Literal, Optional
-from pydantic import BaseModel, Field, field_validator
+from typing import Any, List, Literal, Optional
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from app.schemas.suministro import SuministroResponse
 
 
@@ -51,6 +51,13 @@ class SolicitarOtpRequest(BaseModel):
         description="Canal de entrega seleccionado: 'WHATSAPP' (Cloud API) o 'SMS' (nacional)."
     )
 
+    @field_validator("canal", mode="before")
+    @classmethod
+    def normalizar_canal(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip().upper()
+        return v
+
     @field_validator("telefono")
     @classmethod
     def normalizar_telefono(cls, v: str) -> str:
@@ -90,6 +97,8 @@ class CrearPinPasswordRequest(BaseModel):
     Paso 4 del Onboarding: Una vez verificado el OTP, el socio define su nuevo PIN personal.
     A partir de este momento, la CI queda invalidada permanentemente como contraseña.
     """
+    model_config = ConfigDict(extra="ignore")
+
     telefono: str = Field(..., description="Número de teléfono celular verificado.")
     token_otp_valido: str = Field(
         ...,
@@ -102,6 +111,8 @@ class CrearPinPasswordRequest(BaseModel):
         description="Nuevo PIN o contraseña secreta (mínimo 4 caracteres).",
         examples=["1234"]
     )
+    cod_socio: Optional[str] = Field(None, description="Código de socio contextual")
+    ci: Optional[str] = Field(None, description="CI contextual")
 
     @field_validator("nuevo_pin")
     @classmethod
