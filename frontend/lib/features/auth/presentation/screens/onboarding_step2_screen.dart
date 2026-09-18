@@ -23,7 +23,6 @@ class OnboardingStep2Screen extends ConsumerStatefulWidget {
 class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
-  final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   String _enteredOtp = '';
 
@@ -40,7 +39,6 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
   @override
   void dispose() {
     _phoneController.dispose();
-    _usernameController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -78,7 +76,6 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
     }
 
     final success = await notifier.completarRegistro(
-      username: _usernameController.text.trim(),
       password: _passwordController.text.trim(),
     );
 
@@ -121,7 +118,7 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Tu C.I. ha sido deshabilitada como clave. A partir de ahora ingresa con tu usuario o Código de Socio y tu contraseña personal.',
+                'Tu C.I. ha sido deshabilitada como clave. A partir de ahora ingresa con tu Código de Socio y tu nuevo PIN personal.',
                 style: AppTextStyles.caption.copyWith(
                   color: AppColors.primary,
                   fontWeight: FontWeight.w600,
@@ -301,10 +298,139 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
             PhoneInputField(
               controller: _phoneController,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
 
-            ElevatedButton(
+            // Selector de Canal Dual (WhatsApp / SMS)
+            Text(
+              'Canal de Entrega del Código',
+              style: AppTextStyles.subtitle2.copyWith(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: state.isLoading
+                        ? null
+                        : () {
+                            ref
+                                .read(onboardingProvider.notifier)
+                                .setCanal('WHATSAPP');
+                          },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: (state.canal.toUpperCase().contains('WHATSAPP') ||
+                                state.canal == 'WhatsApp')
+                            ? const Color(0xFFE8F5E9)
+                            : AppColors.lightBackground,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: (state.canal.toUpperCase().contains('WHATSAPP') ||
+                                  state.canal == 'WhatsApp')
+                              ? const Color(0xFF25D366)
+                              : AppColors.surfaceContainerHigh,
+                          width: (state.canal.toUpperCase().contains('WHATSAPP') ||
+                                  state.canal == 'WhatsApp')
+                              ? 2
+                              : 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.chat_bubble_outline,
+                              color: Color(0xFF25D366), size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            'WhatsApp',
+                            style: AppTextStyles.subtitle2.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: (state.canal
+                                          .toUpperCase()
+                                          .contains('WHATSAPP') ||
+                                      state.canal == 'WhatsApp')
+                                  ? const Color(0xFF1B5E20)
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: InkWell(
+                    onTap: state.isLoading
+                        ? null
+                        : () {
+                            ref
+                                .read(onboardingProvider.notifier)
+                                .setCanal('SMS');
+                          },
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: state.canal.toUpperCase() == 'SMS'
+                            ? const Color(0xFFE1F5FE)
+                            : AppColors.lightBackground,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: state.canal.toUpperCase() == 'SMS'
+                              ? AppColors.primary
+                              : AppColors.surfaceContainerHigh,
+                          width: state.canal.toUpperCase() == 'SMS' ? 2 : 1,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.sms_outlined,
+                              color: AppColors.primary, size: 18),
+                          const SizedBox(width: 6),
+                          Text(
+                            'SMS',
+                            style: AppTextStyles.subtitle2.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: state.canal.toUpperCase() == 'SMS'
+                                  ? AppColors.primary
+                                  : AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            ElevatedButton.icon(
               onPressed: state.isLoading ? null : _handleSendCode,
+              icon: Icon(
+                state.canal.toUpperCase() == 'SMS'
+                    ? Icons.sms_outlined
+                    : Icons.chat_bubble_outline,
+                size: 20,
+              ),
+              label: Text(
+                state.otpSent
+                    ? 'Código Enviado por ${state.canal}'
+                    : 'Enviar Código de Verificación',
+                style: AppTextStyles.button.copyWith(
+                  color: AppColors.onSurface,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF5DC6FE),
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -312,15 +438,6 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 elevation: 0,
-              ),
-              child: Text(
-                state.otpSent
-                    ? 'Código Enviado por ${state.canal}'
-                    : 'Enviar Código por SMS / WhatsApp',
-                style: AppTextStyles.button.copyWith(
-                  color: AppColors.onSurface,
-                  fontWeight: FontWeight.bold,
-                ),
               ),
             ),
 
@@ -345,38 +462,23 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
 
             // Sección 2: Creación de Credenciales
             Text(
-              'Credenciales de Acceso',
+              'Crear PIN / Contraseña de Acceso',
               style: AppTextStyles.h3.copyWith(
                 fontWeight: FontWeight.bold,
               ),
             ),
+            const SizedBox(height: 6),
             const SizedBox(height: 14),
 
-            // Campo 1: Nombre de Usuario
+            // Campo: PIN o Contraseña de Acceso
             CosmolTextField(
-              label: 'Crear Nombre de Usuario',
-              controller: _usernameController,
-              keyboardType: TextInputType.text,
-              prefixIcon: Icons.alternate_email,
-              validator: (val) {
-                if (val == null || val.trim().isEmpty) {
-                  return 'Ingrese un nombre de usuario';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-
-            // Campo 2: Contraseña de Acceso
-            CosmolTextField(
-              label: 'Crear Contraseña de Acceso',
-              hint: 'Mínimo 4 caracteres',
+              label: 'Nuevo PIN / Contraseña Personal',
               controller: _passwordController,
               isPassword: true,
               prefixIcon: Icons.lock_outline,
               validator: (val) {
                 if (val == null || val.trim().length < 4) {
-                  return 'La contraseña debe tener al menos 4 caracteres';
+                  return 'El PIN o contraseña debe tener al menos 4 caracteres';
                 }
                 return null;
               },
@@ -400,7 +502,7 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Por seguridad, tu C.I. quedará invalidada como contraseña. En el día a día ingresarás con tu usuario o Código de Socio y tu contraseña.',
+                      'Por seguridad, tu C.I. quedará invalidada como contraseña. En el día a día ingresarás con tu Código de Socio y tu nuevo PIN personal.',
                       style: AppTextStyles.body2.copyWith(
                         fontSize: 12,
                         color: AppColors.onSurfaceVariant,

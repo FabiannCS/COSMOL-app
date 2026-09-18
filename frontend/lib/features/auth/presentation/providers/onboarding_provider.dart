@@ -226,14 +226,21 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       );
       return false;
     }
+    if (state.codSocio.isEmpty) {
+      state = state.copyWith(
+        errorMessage: 'Debe validar su Código de Socio primero.',
+      );
+      return false;
+    }
 
     state = state.copyWith(isLoading: true, errorMessage: null);
 
     try {
+      final canalNormalizado = state.canal.toUpperCase().contains('SMS') ? 'SMS' : 'WHATSAPP';
       final response = await _repository.solicitarOtp(
-        codSocio: state.codSocio.isNotEmpty ? state.codSocio : '104523',
+        codSocio: state.codSocio,
         telefono: cleanPhone,
-        canal: state.canal,
+        canal: canalNormalizado,
       );
 
       _startTimer();
@@ -321,8 +328,8 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
 
   /// Paso 2.3: Completar registro de credenciales
   Future<bool> completarRegistro({
-    required String username,
     required String password,
+    String? username,
   }) async {
     if (!state.otpVerified && state.tokenOtpValido == null) {
       state = state.copyWith(
@@ -330,22 +337,22 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       );
       return false;
     }
-    if (username.trim().isEmpty) {
-      state = state.copyWith(errorMessage: 'Ingrese un nombre de usuario.');
-      return false;
-    }
     if (password.trim().length < 4) {
       state = state.copyWith(
-        errorMessage: 'La contraseña debe tener al menos 4 caracteres.',
+        errorMessage: 'La contraseña o PIN debe tener al menos 4 caracteres.',
       );
       return false;
     }
 
+    final finalUsername = (username != null && username.trim().isNotEmpty)
+        ? username.trim()
+        : state.codSocio;
+
     state = state.copyWith(
       isLoading: true,
       errorMessage: null,
-      username: username,
-      password: password,
+      username: finalUsername,
+      password: password.trim(),
     );
 
     final cleanPhone = state.telefono.replaceAll(' ', '').trim();
@@ -356,10 +363,10 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
         request: RegisterCredentialsRequestModel(
           telefono: cleanPhone,
           tokenOtpValido: token,
-          nuevoPin: password,
+          nuevoPin: password.trim(),
           codSocio: state.codSocio,
           ci: state.ci,
-          username: username,
+          username: finalUsername,
         ),
       );
 

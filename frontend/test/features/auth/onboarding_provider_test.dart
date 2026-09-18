@@ -140,7 +140,6 @@ void main() {
       await notifier.verificarOtp('482190');
 
       final success = await notifier.completarRegistro(
-        username: 'carlos.socio',
         password: 'pin12345password',
       );
 

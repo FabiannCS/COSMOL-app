@@ -50,7 +50,7 @@ class VerifiedSocioCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'SOCIO VERIFICADO • CÓD. $codSocio',
+                  'SOCIO VERIFICADO',
                   style: AppTextStyles.caption.copyWith(
                     color: AppColors.textSecondary,
                     fontWeight: FontWeight.bold,
@@ -73,11 +73,6 @@ class VerifiedSocioCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          const Icon(
-            Icons.verified,
-            color: AppColors.successGreen,
-            size: 22,
-          ),
         ],
       ),
     );

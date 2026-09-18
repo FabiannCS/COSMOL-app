@@ -124,16 +124,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Campo 1: Usuario / Código de Socio
+                          // Campo 1: Código de Socio
                           CosmolTextField(
-                            label: 'Usuario',
-                            hint: 'Ingrese su Usuario',
+                            label: 'Código de Socio',
+                            hint: 'Ej: 540, 104523',
                             controller: _socioCodeController,
-                            keyboardType: TextInputType.text,
+                            keyboardType: TextInputType.number,
                             prefixIcon: Icons.badge_outlined,
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) {
-                                return 'Ingrese su Usuario o Código de Socio';
+                                return 'Ingrese su Código de Socio';
                               }
                               return null;
                             },
