@@ -70,32 +70,32 @@ El sistema debe:
 
 ## 4. Detalle de Entregables Técnicos
 
-### 4.1 Entregables de DEV 1: Infraestructura, Storage S3, Generador PDF y BD (EN CURSO)
+### 4.1 Entregables de DEV 1: Infraestructura, Storage S3, Generador PDF y BD (COMPLETADO POR DEV 1)
 
 #### A. Dependencias y Configuración:
-* [ ] Agregar `minio>=7.2.0` y `reportlab>=4.2.0` a `backend/requirements.txt`.
-* [ ] Instalar paquetes en el contenedor `cosmol-backend-api`.
-* [ ] Validar variables en `app/core/config.py`: `MINIO_ENDPOINT`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET_NAME`.
+* [x] Agregar `minio>=7.2.0` y `reportlab>=4.2.0` a `backend/requirements.txt`.
+* [x] Instalar paquetes en el contenedor `cosmol-backend-api`.
+* [x] Validar variables en `app/core/config.py`: `MINIO_ENDPOINT`, `MINIO_ROOT_USER`, `MINIO_ROOT_PASSWORD`, `MINIO_BUCKET_NAME`.
 
 #### B. Cliente de Integración MinIO S3 (`backend/app/integrations/minio_client.py`):
-* [ ] Implementar clase `CosmolMinioClient`:
+* [x] Implementar clase `CosmolMinioClient`:
   * Conexión asíncrona / cliente con `minio.Minio`.
   * Método `asegurar_bucket_existe(bucket_name: str)`.
   * Método `subir_archivo_bytes(bucket_name: str, object_name: str, data_bytes: bytes, content_type: str = "application/pdf") -> str`.
   * Método `obtener_archivo_stream(bucket_name: str, object_name: str) -> BinaryIO`.
   * Método `existe_archivo(bucket_name: str, object_name: str) -> bool`.
   * Método `generar_url_prefirmada(bucket_name: str, object_name: str, expires_seconds: int = 600) -> str`.
-* [ ] Singleton `minio_client` para uso global en la aplicación.
+* [x] Singleton `minio_client` para uso global en la aplicación.
 
 #### C. Motor Generador de PDFs Institucionales (`backend/app/services/generador_pdf.py`):
-* [ ] Implementar clase `GeneradorPdfDocumento`:
+* [x] Implementar clase `GeneradorPdfDocumento`:
   * Generación de **Factura Oficial** con membrete institucional de COSMOL R.L. (NIT, Nro. Factura, Código de Autorización SIAT, Periodo, Razón Social, Detalle de Conceptos en Bs, Código QR SIAT simulado/oficial).
   * Generación de **Aviso de Cobranza** (resumen de cuenta, fecha límite, código de barras/pago).
   * Generación de **Aviso de Corte** (advertencia legal formal de suspensión del servicio para $\ge 2$ facturas impagas).
   * Retorno de flujo de bytes (`io.BytesIO`).
 
 #### D. Modelo ORM y Migración PostgreSQL (`backend/app/db/models/documento.py`):
-* [ ] Crear modelo `Documento(BaseModel)`:
+* [x] Crear modelo `Documento(BaseModel)`:
   * `id`: UUID (PK).
   * `suministro_id`: UUID (FK a `suministros.id`).
   * `cod_socio`: String(50), indexado.
@@ -111,15 +111,17 @@ El sistema debe:
   * `fecha_emision`: Date.
   * `fecha_vencimiento`: Optional[Date].
   * `estado_pago`: String(20) (`"PENDIENTE"`, `"PAGADO"`).
-* [ ] Registrar modelo en `app/db/models/__init__.py`.
-* [ ] Generar y ejecutar migración de Alembic: `add_documentos_table`.
+* [x] Registrar modelo en `app/db/models/__init__.py`.
+* [x] Generar y ejecutar migración de Alembic: `add_documentos_table`.
 
 #### E. Utilitarios de Almacenamiento (`backend/app/services/servicio_storage_documentos.py`):
-* [ ] Utilitarios para guardar en MinIO, registrar en la tabla `documentos` y asegurar que no se dupliquen archivos.
+* [x] Utilitarios para guardar en MinIO, registrar en la tabla `documentos` y asegurar que no se dupliquen archivos.
 
 #### F. Batería de Pruebas DEV 1:
-* [ ] `backend/tests/test_minio_client.py`: Verificación de bucket, upload, download y verificación de existencia.
-* [ ] `backend/tests/test_generador_pdf.py`: Verificación de generación de PDF válido (bytes no vacíos, header `%PDF-1.4`).
+* [x] `backend/tests/test_minio_client.py`: Verificación de bucket, upload, download y verificación de existencia.
+* [x] `backend/tests/test_generador_pdf.py`: Verificación de generación de PDF válido (bytes no vacíos, header `%PDF-1.4`).
+* [x] `backend/tests/test_storage_documentos.py`: Verificación de caching, obtención y generación on-demand de PDFs en MinIO.
+* [x] `backend/tests/test_models.py`: Verificación de creación y persistencia del modelo Documento en PostgreSQL.
 
 ---
 

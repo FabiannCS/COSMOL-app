@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from app.db.models import Usuario, Suministro, Dispositivo, Otp, BaseModel
+from app.db.models import Usuario, Suministro, Dispositivo, Otp, Documento, BaseModel
 
 
 def test_models_metadata_and_tablenames():
@@ -9,12 +9,15 @@ def test_models_metadata_and_tablenames():
     assert Suministro.__tablename__ == "suministros"
     assert Dispositivo.__tablename__ == "dispositivos"
     assert Otp.__tablename__ == "otps"
+    assert Documento.__tablename__ == "documentos"
 
     # Verificar herencia de BaseModel
     assert issubclass(Usuario, BaseModel)
     assert issubclass(Suministro, BaseModel)
     assert issubclass(Dispositivo, BaseModel)
     assert issubclass(Otp, BaseModel)
+    assert issubclass(Documento, BaseModel)
+
 
 
 def test_usuario_instantiation_and_defaults():
@@ -101,3 +104,27 @@ def test_otp_instantiation():
     assert otp_record.proposito == "ONBOARDING"
     assert otp_record.fue_verificado is False
     assert "<Otp" in repr(otp_record)
+
+
+def test_documento_instantiation():
+    """Valida la instanciación de Documento y sus atributos fiscales."""
+    from datetime import date
+    doc = Documento(
+        cod_socio="540",
+        tipo_documento="FACTURA",
+        nro_factura="7444051",
+        cod_autorizacion="465C3D0702C232069B9F771B83440D4217AF35B442086180BD081BF74",
+        periodo="08/2026",
+        anio=2026,
+        mes=8,
+        monto_bs=70.92,
+        s3_key="facturas/540/2026_08_7444051.pdf",
+        fecha_emision=date(2026, 8, 31),
+        estado_pago="PENDIENTE"
+    )
+    assert doc.cod_socio == "540"
+    assert doc.tipo_documento == "FACTURA"
+    assert doc.monto_bs == 70.92
+    assert doc.estado_pago == "PENDIENTE"
+    assert "<Documento" in repr(doc)
+
