@@ -14,12 +14,20 @@ from app.services.servicio_cache_deuda import (
     construir_clave_cache_deuda,
 )
 
+from app.services.servicio_documentos import (
+    ServicioDocumentos,
+    registrar_auditoria_descarga,
+)
+
 __all__ = [
     "ServicioAutenticacion",
     "ServicioSuministros",
     "ServicioDeuda",
+    "ServicioDocumentos",
+    "registrar_auditoria_descarga",
     "guardar_deuda_cache",
     "obtener_deuda_cache",
     "invalidar_deuda_cache",
     "construir_clave_cache_deuda",
 ]
+

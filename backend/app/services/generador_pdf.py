@@ -110,7 +110,9 @@ class GeneradorPdfDocumento:
         # 2. Caja de Información Fiscal
         nro_factura = str(datos_factura.get("NROFACTURA") or datos_factura.get("nro_factura") or "0000000").strip()
         cod_autorizacion = str(datos_factura.get("CODAUTORIZACION") or datos_factura.get("cod_autorizacion") or "N/A").strip()
-        periodo = str(datos_factura.get("periodo") or f"{datos_factura.get('NMES', 8):02d}/{datos_factura.get('ANIO', 2026)}").strip()
+        nmes = int(datos_factura.get('NMES') or datos_factura.get('mes') or 8)
+        anio = int(datos_factura.get('ANIO') or datos_factura.get('anio') or 2026)
+        periodo = str(datos_factura.get("periodo") or f"{nmes:02d}/{anio}").strip()
         monto_bs = float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or 0.0)
 
         tabla_fiscal_data = [
@@ -333,7 +335,9 @@ class GeneradorPdfDocumento:
         ]
         total_acumulado = 0.0
         for f in facturas_pendientes:
-            periodo = str(f.get("periodo") or f"{f.get('NMES', 0):02d}/{f.get('ANIO', 0)}")
+            nmes = int(f.get('NMES') or f.get('mes') or 0)
+            anio = int(f.get('ANIO') or f.get('anio') or 0)
+            periodo = str(f.get("periodo") or f"{nmes:02d}/{anio}")
             nro_fact = str(f.get("NROFACTURA") or f.get("nro_factura") or "")
             monto = float(f.get("MONTOTOTAL") or f.get("monto_bs") or 0.0)
             total_acumulado += monto

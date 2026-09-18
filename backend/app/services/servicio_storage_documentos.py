@@ -142,13 +142,39 @@ class ServicioStorageDocumentos:
         lo genera con ReportLab, lo almacena en MinIO y en la BD, y retorna los bytes.
         """
         nro_factura = str(datos_factura.get("NROFACTURA") or datos_factura.get("nro_factura") or "").strip()
-        periodo = str(datos_factura.get("periodo") or f"{datos_factura.get('NMES', 0):02d}/{datos_factura.get('ANIO', 0)}").strip()
+        nmes = int(datos_factura.get("NMES") or datos_factura.get("mes") or 0)
+        anio = int(datos_factura.get("ANIO") or datos_factura.get("anio") or 0)
+        periodo = str(datos_factura.get("periodo") or f"{nmes:02d}/{anio}").strip()
         s3_key = self.construir_s3_key(cod_socio, "FACTURA", periodo, nro_factura)
 
         # 1. Comprobar si ya existe en MinIO
         if self.s3.existe_archivo(s3_key):
             try:
-                return self.s3.obtener_archivo_bytes(s3_key)
+                pdf_bytes = self.s3.obtener_archivo_bytes(s3_key)
+                # Asegurar que también exista en PostgreSQL
+                stmt = select(Documento).where(
+                    Documento.cod_socio == cod_socio,
+                    Documento.tipo_documento == "FACTURA",
+                    Documento.periodo == periodo
+                )
+                res = await self.db.execute(stmt)
+                if not res.scalar_one_or_none():
+                    anio = int(datos_factura.get("ANIO") or datos_factura.get("anio") or date.today().year)
+                    mes = int(datos_factura.get("NMES") or datos_factura.get("mes") or date.today().month)
+                    monto_bs = float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or 0.0)
+                    cod_aut = str(datos_factura.get("CODAUTORIZACION") or datos_factura.get("cod_autorizacion") or "")
+                    await self.guardar_documento(
+                        cod_socio=cod_socio,
+                        tipo_documento="FACTURA",
+                        periodo=periodo,
+                        anio=anio,
+                        mes=mes,
+                        monto_bs=monto_bs,
+                        pdf_bytes=pdf_bytes,
+                        nro_factura=nro_factura,
+                        cod_autorizacion=cod_aut
+                    )
+                return pdf_bytes
             except Exception as exc:
                 logger.warning(f"[STORAGE] Error al recuperar '{s3_key}' de MinIO: {exc}. Regenerando...")
 
@@ -188,12 +214,35 @@ class ServicioStorageDocumentos:
         Recupera o genera el Aviso de Cobranza preventivo en PDF.
         """
         nro_facip = str(datos_deuda.get("NROFACIP") or datos_deuda.get("nro_facip") or "aviso").strip()
-        periodo = str(datos_deuda.get("periodo") or f"{datos_deuda.get('NMES', 0):02d}/{datos_deuda.get('ANIO', 0)}").strip()
+        nmes = int(datos_deuda.get("NMES") or datos_deuda.get("mes") or 0)
+        anio = int(datos_deuda.get("ANIO") or datos_deuda.get("anio") or 0)
+        periodo = str(datos_deuda.get("periodo") or f"{nmes:02d}/{anio}").strip()
         s3_key = self.construir_s3_key(cod_socio, "AVISO_COBRANZA", periodo, nro_facip)
 
         if self.s3.existe_archivo(s3_key):
             try:
-                return self.s3.obtener_archivo_bytes(s3_key)
+                pdf_bytes = self.s3.obtener_archivo_bytes(s3_key)
+                stmt = select(Documento).where(
+                    Documento.cod_socio == cod_socio,
+                    Documento.tipo_documento == "AVISO_COBRANZA",
+                    Documento.periodo == periodo
+                )
+                res = await self.db.execute(stmt)
+                if not res.scalar_one_or_none():
+                    anio_val = int(datos_deuda.get("ANIO") or datos_deuda.get("anio") or date.today().year)
+                    mes_val = int(datos_deuda.get("NMES") or datos_deuda.get("mes") or date.today().month)
+                    monto_val = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
+                    await self.guardar_documento(
+                        cod_socio=cod_socio,
+                        tipo_documento="AVISO_COBRANZA",
+                        periodo=periodo,
+                        anio=anio_val,
+                        mes=mes_val,
+                        monto_bs=monto_val,
+                        pdf_bytes=pdf_bytes,
+                        nro_facip=nro_facip
+                    )
+                return pdf_bytes
             except Exception as exc:
                 logger.warning(f"[STORAGE] Error al recuperar '{s3_key}': {exc}. Regenerando...")
 

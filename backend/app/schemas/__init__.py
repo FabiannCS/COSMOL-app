@@ -24,6 +24,11 @@ from app.schemas.deuda import (
     DashboardMultiSuministroResponse,
 )
 
+from app.schemas.documento import (
+    DocumentoResponse,
+    ListaDocumentosResponse,
+)
+
 __all__ = [
     "VincularSuministroRequest",
     "SuministroResponse",
@@ -38,4 +43,7 @@ __all__ = [
     "DetalleSuministroResponse",
     "ResumenDeudaResponse",
     "DashboardMultiSuministroResponse",
+    "DocumentoResponse",
+    "ListaDocumentosResponse",
 ]
+

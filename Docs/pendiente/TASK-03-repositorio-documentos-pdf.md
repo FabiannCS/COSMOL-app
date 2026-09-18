@@ -125,14 +125,14 @@ El sistema debe:
 
 ---
 
-### 4.2 Entregables de DEV 2: Esquemas, Lógica de Negocio y Endpoints (PENDIENTE PARA DEV 2)
+### 4.2 Entregables de DEV 2: Esquemas, Lógica de Negocio y Endpoints (COMPLETADO POR DEV 2)
 
 #### A. Esquemas Pydantic v2 en `backend/app/schemas/documento.py`:
-* [ ] `DocumentoResponse`: Metadatos del documento disponible para visualización.
-* [ ] `ListaDocumentosResponse`: Colección paginada o categorizada por pestañas (*Facturas*, *Avisos de Cobranza*, *Avisos de Corte*).
+* [x] `DocumentoResponse`: Metadatos del documento disponible para visualización.
+* [x] `ListaDocumentosResponse`: Colección paginada o categorizada por pestañas (*Facturas*, *Avisos de Cobranza*, *Avisos de Corte*).
 
 #### B. Lógica de Negocio en `backend/app/services/servicio_documentos.py`:
-* [ ] Clase `ServicioDocumentos`:
+* [x] Clase `ServicioDocumentos`:
   * Inyección de `db: AsyncSession`, `minio_client: CosmolMinioClient`, `cosmol_client: CosmolLegacyClient`.
   * Método `listar_documentos_socio(usuario_id: UUID, cod_socio: str, tipo: Optional[str] = None)`:
     - Validación de permisos en PostgreSQL.
@@ -144,22 +144,22 @@ El sistema debe:
     - Despacha evento de auditoría en background a `ChatbotReportes`.
 
 #### C. Endpoints REST en `backend/app/api/v1/documentos.py`:
-* [ ] `GET /api/v1/documentos/{cod_socio}`: Listado de documentos del suministro.
-* [ ] `GET /api/v1/documentos/{doc_id}/descargar`: Transmisión del archivo binario PDF (`StreamingResponse`).
-* [ ] Registrar `documentos_router` en `backend/app/api/v1/router.py`.
+* [x] `GET /api/v1/documentos/{cod_socio}`: Listado de documentos del suministro.
+* [x] `GET /api/v1/documentos/{doc_id}/descargar`: Transmisión del archivo binario PDF (`StreamingResponse`).
+* [x] Registrar `documentos_router` en `backend/app/api/v1/router.py`.
 
 ---
 
 ## 5. Criterios de Aceptación y Validación
 
-1. [ ] **Almacenamiento S3 en MinIO:**
+1. [x] **Almacenamiento S3 en MinIO:**
    * Los PDFs se persisten en el bucket `cosmol-docs` y pueden recuperarse íntegros.
-2. [ ] **Generación de PDFs Válidos:**
+2. [x] **Generación de PDFs Válidos:**
    * El generador de PDFs produce documentos con formato PDF estándar (`%PDF`) legibles por lectores de PDF y visores móviles.
-3. [ ] **Control de Privacidad y Seguridad:**
+3. [x] **Control de Privacidad y Seguridad:**
    * El rol `TITULAR` puede acceder a facturas, avisos de cobranza y avisos de corte.
    * El rol `CONSULTA_PAGO` recibe `403 Forbidden` al intentar descargar facturas fiscales o avisos de corte.
-4. [ ] **Persistencia en PostgreSQL:**
+4. [x] **Persistencia en PostgreSQL:**
    * La tabla `documentos` almacena los metadatos y la ruta `s3_key` asociada a cada suministro.
-5. [ ] **Cobertura de Pruebas Automatizadas:**
-   * Tests pasando al 100% en Docker sin alterar las 46 pruebas previas del sistema.
+5. [x] **Cobertura de Pruebas Automatizadas:**
+   * Tests pasando al 100% en Docker (67 pruebas totales, 10 específicas de DEV 2 y 12 de DEV 1) sin alterar las pruebas previas del sistema.
