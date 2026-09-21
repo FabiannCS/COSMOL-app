@@ -59,6 +59,36 @@ MOCK_SOCIOS_LEGADO: Dict[str, Dict[str, Any]] = {
         "RUTA": "8",
         "NROC": "77",
         "NROI": "0"
+    },
+    "104523": {
+        "CODIGO": "104523",
+        "NOMBRE": "CARLOS EDUARDO PEREZ",
+        "DIRECCION": "BARRIO CENTRAL",
+        "NROCIONIT": "8392019",
+        "ZONA": "1",
+        "RUTA": "1",
+        "NROC": "1",
+        "NROI": "0"
+    },
+    "205566": {
+        "CODIGO": "205566",
+        "NOMBRE": "MARIA ELENA ROJAS",
+        "DIRECCION": "BARRIO NORTE",
+        "NROCIONIT": "4920192",
+        "ZONA": "1",
+        "RUTA": "1",
+        "NROC": "2",
+        "NROI": "0"
+    },
+    "301144": {
+        "CODIGO": "301144",
+        "NOMBRE": "JUAN PABLO SUAREZ",
+        "DIRECCION": "BARRIO SUR",
+        "NROCIONIT": "6102938",
+        "ZONA": "1",
+        "RUTA": "1",
+        "NROC": "3",
+        "NROI": "0"
     }
 }
 
@@ -251,6 +281,76 @@ class CosmolLegacyClient(BaseApiClient):
             if settings.DEBUG and codigo in MOCK_SOCIOS_LEGADO:
                 logger.warning(f"Aplicando fallback mock tras error de red para socio '{codigo}'")
                 return dict(MOCK_SOCIOS_LEGADO[codigo])
+            raise ServiceUnavailableException(
+                message="No se pudo establecer conexión con el sistema comercial de COSMOL.",
+                error_code="COSMOL_API_NETWORK_ERROR"
+            )
+
+    async def validar_credenciales_socio(self, cod_socio: str, ci: str) -> Optional[Dict[str, Any]]:
+        """
+        Valida las credenciales oficiales de acceso (Código de Socio y Carnet de Identidad)
+        mediante el endpoint específico de validación de COSMOL R.L.
+        Endpoint: POST /socios/validar
+        Payload: {"codigo": "23807", "ci": "6259185"}
+        Retorna diccionario con los datos del socio si las credenciales coinciden,
+        o None si son inválidas (HTTP 401 / no coincide).
+        """
+        codigo = str(cod_socio).strip()
+        carnet = str(ci).strip()
+
+        # 1. Modo Simulación / Mock Offline
+        if settings.MOCK_COSMOL_LEGACY:
+            logger.info(f"[MOCK COSMOL] Validando credenciales para socio '{codigo}' con CI '{carnet}'")
+            if codigo in MOCK_SOCIOS_LEGADO:
+                socio_mock = MOCK_SOCIOS_LEGADO[codigo]
+                if socio_mock.get("NROCIONIT", "").strip() == carnet:
+                    return self._limpiar_campos_dict(socio_mock)
+                return None
+            if carnet == f"{codigo}01":
+                return {
+                    "CODIGO": codigo,
+                    "NOMBRE": f"SOCIO DE PRUEBA {codigo}",
+                    "NROCIONIT": carnet,
+                }
+            return None
+
+        # 2. Modo Real hacia la API de COSMOL (POST /socios/validar)
+        endpoint = "/socios/validar"
+        payload = {"codigo": codigo, "ci": carnet}
+        try:
+            response = await self.request("POST", endpoint, json=payload)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("estado") == "exito" and data.get("datos", {}).get("valido") is True:
+                    socio_data = data["datos"].get("socio", {})
+                    return self._limpiar_campos_dict(socio_data)
+                return None
+            elif response.status_code in (400, 401, 404):
+                logger.warning(
+                    f"Validación de credenciales rechazada en COSMOL para socio '{codigo}' (HTTP {response.status_code})"
+                )
+                return None
+            else:
+                logger.error(
+                    f"Error inesperado al validar credenciales de '{codigo}' (HTTP {response.status_code}): {response.text}"
+                )
+                return None
+        except httpx.TimeoutException as exc:
+            logger.error(f"Timeout al validar credenciales de '{codigo}' en COSMOL ({settings.COSMOL_LEGACY_URL}): {exc}")
+            if settings.DEBUG and codigo in MOCK_SOCIOS_LEGADO:
+                socio_mock = MOCK_SOCIOS_LEGADO[codigo]
+                if socio_mock.get("NROCIONIT", "").strip() == carnet:
+                    return self._limpiar_campos_dict(socio_mock)
+            raise ServiceUnavailableException(
+                message="El sistema comercial de COSMOL no respondió a tiempo. Intente nuevamente.",
+                error_code="COSMOL_API_TIMEOUT"
+            )
+        except httpx.RequestError as exc:
+            logger.error(f"Error de red al conectar con COSMOL para validar '{codigo}': {exc}")
+            if settings.DEBUG and codigo in MOCK_SOCIOS_LEGADO:
+                socio_mock = MOCK_SOCIOS_LEGADO[codigo]
+                if socio_mock.get("NROCIONIT", "").strip() == carnet:
+                    return self._limpiar_campos_dict(socio_mock)
             raise ServiceUnavailableException(
                 message="No se pudo establecer conexión con el sistema comercial de COSMOL.",
                 error_code="COSMOL_API_NETWORK_ERROR"

@@ -91,12 +91,12 @@ class ServicioAutenticacion:
                 error_code="ACCOUNT_ALREADY_EXISTS"
             )
 
-        # 2. Validar contra el sistema comercial oficial de COSMOL (vía cosmol_client)
-        datos_socio = await self.cosmol_client.obtener_datos_socio(cod_socio)
+        # 2. Validar contra el sistema comercial oficial de COSMOL (vía POST /socios/validar)
+        datos_socio = await self.cosmol_client.validar_credenciales_socio(cod_socio, ci)
         if not datos_socio:
             # Fallback a SOCIOS_MOCK_LEGADO para modo offline o testing local
             datos_legado = SOCIOS_MOCK_LEGADO.get(cod_socio)
-            if datos_legado:
+            if datos_legado and datos_legado.get("ci") == ci:
                 datos_socio = {
                     "CODIGO": cod_socio,
                     "NOMBRE": datos_legado["nombre"],
@@ -104,22 +104,13 @@ class ServicioAutenticacion:
                 }
 
         if not datos_socio:
-            logger.warning(f"Socio '{cod_socio}' no encontrado en COSMOL")
+            logger.warning(f"Validación de credenciales rechazada para socio '{cod_socio}' con CI provisto")
             raise UnauthorizedException(
                 message="El código de socio o carnet de identidad no coinciden con los registros oficiales de COSMOL.",
                 error_code="SOCIO_NOT_FOUND"
             )
 
-        # En la API de COSMOL, el campo del carnet es NROCIONIT (ej. '6259185        ')
-        ci_oficial = str(datos_socio.get("NROCIONIT") or datos_socio.get("ci") or "").strip()
         nombre_oficial = str(datos_socio.get("NOMBRE") or datos_socio.get("nombre") or "Socio COSMOL").strip()
-
-        if ci_oficial != ci:
-            logger.warning(f"Intento de verificación fallido para socio '{cod_socio}': CI ingresada '{ci}' no coincide con oficial '{ci_oficial}'")
-            raise UnauthorizedException(
-                message="El código de socio o carnet de identidad no coinciden con los registros oficiales de COSMOL.",
-                error_code="SOCIO_NOT_FOUND"
-            )
 
         logger.info(f"Socio verificado exitosamente en COSMOL: {cod_socio} ({nombre_oficial})")
         return {
