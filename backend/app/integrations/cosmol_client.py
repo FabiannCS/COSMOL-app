@@ -368,7 +368,8 @@ class CosmolLegacyClient(BaseApiClient):
             lectura_anterior = 0.0
 
         raw_m3 = (
-            clean.get("CONSUMO_M3")
+            clean.get("CONSUMO")
+            or clean.get("CONSUMO_M3")
             or clean.get("VOLUMEN")
             or clean.get("M3")
             or clean.get("CANTIDAD_M3")
@@ -382,7 +383,8 @@ class CosmolLegacyClient(BaseApiClient):
             consumo_m3 = max(0.0, round(lectura_actual - lectura_anterior, 2))
 
         raw_monto = (
-            clean.get("MONTOTOTAL")
+            clean.get("MONTO")
+            or clean.get("MONTOTOTAL")
             or clean.get("IMPORTE")
             or clean.get("MONTO_BS")
             or clean.get("TOTAL")
@@ -393,9 +395,17 @@ class CosmolLegacyClient(BaseApiClient):
         except (ValueError, TypeError):
             monto_bs = 0.0
 
-        estado_lectura = str(
-            clean.get("ESTADO_LECTURA") or clean.get("ESTADO") or clean.get("TIPO_LECTURA") or "NORMAL"
-        ).strip().upper()
+        raw_estado = (
+            clean.get("ESTADO_LECTURA")
+            or clean.get("ESTADO")
+            or clean.get("TIPO_LECTURA")
+            or "NORMAL"
+        )
+        estado_str = str(raw_estado).strip().upper()
+        if estado_str in ["1", "NORMAL"]:
+            estado_lectura = "NORMAL"
+        else:
+            estado_lectura = estado_str
 
         fecha_lectura = clean.get("FECHA_LECTURA") or clean.get("FECHA")
         if fecha_lectura is not None:

@@ -131,3 +131,39 @@ async def test_consumos_sinteticos_socio_no_listado():
     for c in consumos:
         assert c["consumo_m3"] > 0
         assert c["lectura_actual"] > c["lectura_anterior"]
+
+
+@pytest.mark.asyncio
+async def test_normalizador_payload_real_api_cosmol():
+    """
+    Verifica la normalización exacta del payload real retornado por la API de COSMOL (socio 23807):
+    {
+        "CODIGO": "23807",
+        "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO                            ",
+        "MES": "8",
+        "ANIO": "2026",
+        "MONTO": "58.01",
+        "ESTADO": "1",
+        "CONSUMO": "15",
+        "FECHA": "2026-08-13"
+    }
+    """
+    client = CosmolLegacyClient()
+    raw_real = {
+        "CODIGO": "23807",
+        "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO                            ",
+        "MES": "8",
+        "ANIO": "2026",
+        "MONTO": "58.01",
+        "ESTADO": "1",
+        "CONSUMO": "15",
+        "FECHA": "2026-08-13"
+    }
+    norm = client._normalizar_consumo_legado(raw_real)
+    assert norm["periodo"] == "08/2026"
+    assert norm["mes"] == 8
+    assert norm["anio"] == 2026
+    assert norm["consumo_m3"] == 15.0
+    assert norm["monto_bs"] == 58.01
+    assert norm["estado_lectura"] == "NORMAL"
+    assert norm["fecha_lectura"] == "2026-08-13"
