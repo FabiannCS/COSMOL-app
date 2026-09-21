@@ -129,12 +129,24 @@ async def test_servicio_consumo_socio_estable(
 
 @pytest.mark.asyncio
 async def test_servicio_consumo_alerta_fuga_atipica_socio_540(
-    db_session: AsyncSession, redis_override: Redis
+    db_session: AsyncSession, redis_override: Redis, monkeypatch
 ):
     """
     Verifica la detección automática de consumo atípico (+75%) en el socio 540
-    preparado especialmente por DEV 1 para validar la alerta de fuga.
+    para validar la alerta de fuga preventiva.
     """
+    dataset_fuga = [
+        {"periodo": f"{m:02d}/2025" if m >= 10 else f"{m:02d}/2026", "mes": m, "anio": 2025 if m >= 10 else 2026, "consumo_m3": 18.0, "monto_bs": 70.0, "estado_lectura": "NORMAL", "fecha_lectura": "2026-01-01"}
+        for m in [10, 11, 12, 1, 2, 3, 4, 5, 6, 7, 8]
+    ]
+    dataset_fuga.append({"periodo": "09/2026", "mes": 9, "anio": 2026, "consumo_m3": 32.0, "monto_bs": 124.8, "estado_lectura": "NORMAL", "fecha_lectura": "2026-09-20"})
+
+    from app.integrations.cosmol_client import cosmol_client
+    async def _mock_historial(cod_socio, meses=12):
+        return dataset_fuga
+
+    monkeypatch.setattr(cosmol_client, "obtener_historial_consumo", _mock_historial)
+
     user_id = uuid.uuid4()
     cod_socio = "540"
 

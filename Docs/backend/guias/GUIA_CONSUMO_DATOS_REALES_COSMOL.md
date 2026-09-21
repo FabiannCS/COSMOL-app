@@ -207,11 +207,13 @@ Para las pruebas reales iniciales, utilizaremos el socio confirmado por Aireyu:
 ### FASE 4: Analítica de Consumo y Detección de Fugas en Vivo
 
 #### Prueba 4.1: Consulta del Historial Real
-* **Objetivo:** Conectar en vivo a `GET /socios/23807/consumos` en el servidor de COSMOL.
-* **Endpoint:** `GET /api/v1/consumo/23807`
+* **Objetivo:** Conectar en vivo a `GET /socios/23807/historial-facturas` en el servidor de COSMOL.
+* **Endpoint Legado Oficial:** `GET http://api.cosmol.com.bo/api-consultas/socios/23807/historial-facturas`
+* **Campo de Consumo:** Atributo `"CONSUMO"` en cada factura (número entero o decimal medido en metros cúbicos $m^3$).
+* **Endpoint BFF de la App:** `GET /api/v1/consumo/23807`
 * **Headers:** `Authorization: Bearer <TOKEN>`
 * **Resultado Esperado:**
-  El backend extrae y normaliza las claves reales (`CONSUMO`, `MONTO`, `FECHA`) devolviendo:
+  El backend extrae y normaliza las claves reales (`CONSUMO`, `MONTO`, `FECHA`, `MES`, `ANIO`) devolviendo:
   ```json
   {
     "cod_socio": "23807",

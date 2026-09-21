@@ -18,15 +18,15 @@ async def test_empalme_persistencia_real_postgresql(redis_override, db_session: 
     Valida el flujo completo de autenticación y confirma que Usuario y Suministro
     se persistan físicamente en PostgreSQL mediante SQLAlchemy AsyncSession.
     """
-    cod_socio = "205566"
-    ci = "4920192"
+    cod_socio = "23807"
+    ci = "6259185"
     telefono = "+59178899001"
     pin = "1234"
     device_id = "hardware-empalme-device-01"
     modelo = "Samsung Galaxy S24"
 
     # 1. Limpieza de registros previos
-    await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_socio, "104523"])))
+    await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_socio, "540"])))
     await db_session.execute(delete(Usuario).where(Usuario.telefono == telefono))
     await db_session.commit()
     await redis_override.delete(
@@ -42,7 +42,7 @@ async def test_empalme_persistencia_real_postgresql(redis_override, db_session: 
     # 2. Paso 1: Verificar socio en sistema legado
     verif = await auth_service.verificar_primer_acceso(cod_socio, ci)
     assert verif["cod_socio"] == cod_socio
-    assert "MARIA ELENA" in verif["nombre_titular"]
+    assert "MISERICORDIA AGUANTA" in verif["nombre_titular"]
 
     # 3. Paso 2: Solicitar OTP por WhatsApp
     solicitud = await auth_service.solicitar_otp(cod_socio, telefono, "WHATSAPP")
@@ -97,8 +97,8 @@ async def test_empalme_persistencia_real_postgresql(redis_override, db_session: 
     # 7. Multicuenta: Vincular suministro adicional en PostgreSQL
     from app.schemas.suministro import VincularSuministroRequest
     req_vincular = VincularSuministroRequest(
-        cod_socio="104523",
-        ci_o_medidor="8392019",
+        cod_socio="540",
+        ci_o_medidor="2823231",
         alias="Casa de mis Padres"
     )
     sum_adicional = await suministro_service.vincular_suministro(cod_socio, req_vincular)
@@ -110,7 +110,7 @@ async def test_empalme_persistencia_real_postgresql(redis_override, db_session: 
     assert len(lista) == 2
     codigos = [s.cod_socio for s in lista]
     assert cod_socio in codigos
-    assert "104523" in codigos
+    assert "540" in codigos
 
 
 @pytest.mark.asyncio
@@ -139,7 +139,12 @@ async def test_empalme_e2e_fase1_y_fase2(
     await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_principal, cod_secundario])))
     await db_session.execute(delete(Usuario).where(Usuario.telefono == telefono))
     await db_session.commit()
-    await redis_override.delete(f"deuda:{cod_principal}", f"deuda:{cod_secundario}")
+    await redis_override.delete(
+        f"deuda:{cod_principal}",
+        f"deuda:{cod_secundario}",
+        f"rate_otp:{telefono}",
+        f"otp:{telefono}"
+    )
 
     auth_service = ServicioAutenticacion(redis_override, db=db_session)
     suministro_service = ServicioSuministros(redis_override, db=db_session)
@@ -234,7 +239,12 @@ async def test_empalme_e2e_fase1_fase2_y_fase3(
     await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_principal, cod_secundario])))
     await db_session.execute(delete(Usuario).where(Usuario.telefono == telefono))
     await db_session.commit()
-    await redis_override.delete(f"deuda:{cod_principal}", f"deuda:{cod_secundario}")
+    await redis_override.delete(
+        f"deuda:{cod_principal}",
+        f"deuda:{cod_secundario}",
+        f"rate_otp:{telefono}",
+        f"otp:{telefono}"
+    )
 
     auth_service = ServicioAutenticacion(redis_override, db=db_session)
     suministro_service = ServicioSuministros(redis_override, db=db_session)

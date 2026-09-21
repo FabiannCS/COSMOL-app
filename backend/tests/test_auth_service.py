@@ -41,8 +41,8 @@ def suministro_service(redis_conn):
 
 @pytest.mark.asyncio
 async def test_flujo_completo_onboarding(auth_service, redis_conn):
-    cod_socio = "104523"
-    ci = "8392019"
+    cod_socio = "23807"
+    ci = "6259185"
     telefono = "+59171029384"
     pin = "4455"
 
@@ -57,7 +57,7 @@ async def test_flujo_completo_onboarding(auth_service, redis_conn):
     # 1. Verificar socio en sistema legado
     verif = await auth_service.verificar_primer_acceso(cod_socio, ci)
     assert verif["cod_socio"] == cod_socio
-    assert "CARLOS EDUARDO" in verif["nombre_titular"]
+    assert "MISERICORDIA AGUANTA" in verif["nombre_titular"]
 
     # Socio inexistente debe fallar
     with pytest.raises(UnauthorizedException):
@@ -134,22 +134,32 @@ async def test_bloqueo_por_tres_intentos_fallidos(auth_service, redis_conn):
 
 @pytest.mark.asyncio
 async def test_multicuenta_titular_vs_inquilino(suministro_service):
-    cod_socio_principal = "104523"
+    cod_socio_principal = "23807"
+    if cod_socio_principal not in USUARIOS_REGISTRADOS_DB:
+        USUARIOS_REGISTRADOS_DB[cod_socio_principal] = {
+            "user_id": "test-uuid-23807",
+            "telefono": "+59171029384",
+            "password_hash": "hash",
+            "nombre": "MISERICORDIA AGUANTA EDDY FRANCO",
+            "suministros": [
+                {"id": "sum-1", "cod_socio": cod_socio_principal, "alias": "Mi Casa", "rol": "TITULAR", "es_suministro_principal": True}
+            ]
+        }
 
     # Vincular segundo suministro con CI (Modo TITULAR)
     req_titular = VincularSuministroRequest(
-        cod_socio="205566",
-        ci_o_medidor="4920192",
-        alias="Alquiler Bolívar"
+        cod_socio="540",
+        ci_o_medidor="2823231",
+        alias="Predio Durán"
     )
     resp_titular = await suministro_service.vincular_suministro(cod_socio_principal, req_titular)
     assert resp_titular.rol == "TITULAR"
-    assert resp_titular.alias == "Alquiler Bolívar"
+    assert resp_titular.alias == "Predio Durán"
 
     # Vincular tercer suministro sin CI (Modo CONSULTA_PAGO / Inquilino)
     req_inquilino = VincularSuministroRequest(
-        cod_socio="301144",
-        alias="Departamento Alquiler"
+        cod_socio="1001",
+        alias="Oficina Arenales"
     )
     resp_inquilino = await suministro_service.vincular_suministro(cod_socio_principal, req_inquilino)
     assert resp_inquilino.rol == "CONSULTA_PAGO"

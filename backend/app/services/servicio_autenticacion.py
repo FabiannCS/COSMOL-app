@@ -35,16 +35,7 @@ from app.schemas.usuario import TokenResponse
 
 logger = logging.getLogger(__name__)
 
-# Mock temporal de validación para el sistema comercial legado de COSMOL (fallback offline/tests)
-SOCIOS_MOCK_LEGADO: Dict[str, Dict[str, str]] = {
-    "104523": {"ci": "8392019", "nombre": "CARLOS EDUARDO PEREZ", "medidor": "M-50211"},
-    "205566": {"ci": "4920192", "nombre": "MARIA ELENA ROJAS", "medidor": "M-88902"},
-    "301144": {"ci": "6102938", "nombre": "JUAN PABLO SUAREZ", "medidor": "M-12490"},
-    "556": {"ci": "4638847", "nombre": "SUAREZ BALTAZAR VICTOR HUGO,CAROLINA", "medidor": "M-00556"},
-    "540": {"ci": "2823231", "nombre": "DURAN ELOISA RIVERA DE", "medidor": "M-00540"},
-}
-
-# Base de datos simulada en memoria para usuarios registrados (modo fallback)
+# Base de datos simulada en memoria para usuarios registrados (modo fallback testing)
 USUARIOS_REGISTRADOS_DB: Dict[str, Dict[str, Any]] = {}
 
 
@@ -93,16 +84,6 @@ class ServicioAutenticacion:
 
         # 2. Validar contra el sistema comercial oficial de COSMOL (vía POST /socios/validar)
         datos_socio = await self.cosmol_client.validar_credenciales_socio(cod_socio, ci)
-        if not datos_socio:
-            # Fallback a SOCIOS_MOCK_LEGADO para modo offline o testing local
-            datos_legado = SOCIOS_MOCK_LEGADO.get(cod_socio)
-            if datos_legado and datos_legado.get("ci") == ci:
-                datos_socio = {
-                    "CODIGO": cod_socio,
-                    "NOMBRE": datos_legado["nombre"],
-                    "NROCIONIT": datos_legado["ci"]
-                }
-
         if not datos_socio:
             logger.warning(f"Validación de credenciales rechazada para socio '{cod_socio}' con CI provisto")
             raise UnauthorizedException(
@@ -306,12 +287,13 @@ class ServicioAutenticacion:
             await self.db.commit()
 
         # Mantener réplica en memoria para pruebas y compatibilidad
-        datos_socio = SOCIOS_MOCK_LEGADO.get(cod_socio, {"nombre": "SOCIO COSMOL"})
+        datos_socio = await self.cosmol_client.obtener_datos_socio(cod_socio) or {}
+        nombre_socio = datos_socio.get("NOMBRE", "Socio COSMOL")
         USUARIOS_REGISTRADOS_DB[cod_socio] = {
             "user_id": user_id_str,
             "telefono": telefono,
             "password_hash": password_hash,
-            "nombre": datos_socio["nombre"],
+            "nombre": nombre_socio,
             "suministros": [
                 {
                     "id": suministro_id,
@@ -391,8 +373,10 @@ class ServicioAutenticacion:
 
                 password_hash = usuario_db.password_hash
                 user_id = str(usuario_db.id)
-                datos_legado = SOCIOS_MOCK_LEGADO.get(cod_socio, {"nombre": "SOCIO COSMOL"})
-                nombre_socio = datos_legado.get("nombre", "SOCIO COSMOL")
+                nombre_socio = "Socio COSMOL"
+                datos_socio_real = await self.cosmol_client.obtener_datos_socio(cod_socio)
+                if datos_socio_real and datos_socio_real.get("NOMBRE"):
+                    nombre_socio = datos_socio_real["NOMBRE"]
                 suministros_lista = [
                     SuministroResponse(
                         id=s.id,
