@@ -46,9 +46,9 @@ class AuthRemoteDataSource {
       final response = await _dio.post(
         '/autenticacion/solicitar-otp',
         data: {
-          'cod_socio': codSocio.isNotEmpty ? codSocio : '104523',
+          'cod_socio': codSocio.trim(),
           'telefono': telefono.startsWith('+591') ? telefono : '+591$telefono',
-          'canal': canal,
+          'canal': canal.trim().toUpperCase(),
         },
       );
       return OtpResponseModel.fromJson(response.data);

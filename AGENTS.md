@@ -68,7 +68,7 @@ Estas son las 5 funcionalidades principales descritas en la propuesta original. 
 ### 4.6 Gestión Multicuenta (Múltiples Códigos de Socio bajo un mismo Perfil)
 - Un único usuario digital (1 número de celular verificado) puede vincular múltiples códigos de socio (`cod_socio`) para administrar diversos suministros (casa, alquiler, negocio o familiares) sin necesidad de cerrar sesión.
 - **Roles y Niveles de Acceso por Suministro:**
-  - **Modo Titular:** Requiere validación de CI o número de medidor del titular. Permite ver histórico completo, gráficos, descargas de facturas oficiales con valor legal (PDF) y avisos de corte.
+  - **Modo Titular:** Requiere validación de codigo de Socio y CI del titular para la creacion de vinculo. Permite ver histórico completo, gráficos, descargas de facturas oficiales con valor legal (PDF) y avisos de corte.
   - **Modo Consulta y Pago (Inquilino / Pagador externo):** Solo requiere el `cod_socio`. Permite consultar el saldo adeudado, fecha de vencimiento y realizar el pago con QR. **Enmascara y oculta datos sensibles del titular** (CI, histórico confidencial, reclamos) protegiendo la confidencialidad.
 - **Experiencia en Flutter:** Selector desplegable / carrusel superior en el Dashboard que permite alternar de suministro al instante y asignar alias personalizados (*"Mi Casa"*, *"Alquiler Bolívar"*).
 
@@ -119,7 +119,7 @@ La propuesta deja el backend abierto. Puntos que el agente debe resolver o escal
 > Fuente: documento **“Requerimientos Funcionales”** entregado para el proyecto. Esta sección conserva el contenido funcional y los criterios de aceptación tal como fueron definidos en el documento fuente.
 
 ### 10.1 Autenticación
-**Necesidad del socio:** Iniciar sesión de forma segura usando **Código de Socio + CI como contraseña**.
+**Necesidad del socio:** Registro por primera vez con **Código de Socio + CI** para validar identidad contra el sistema de COSMOL, seguido de verificación de su número de celular vía OTP (WhatsApp o SMS) y creación obligatoria de una **Contraseña / PIN personal**. En el día a día, el socio inicia sesión con **Código de Socio + Contraseña / PIN personal** (o biometría).
 
 **Criterios de aceptación:**
 - El sistema debe validar los datos de acceso.

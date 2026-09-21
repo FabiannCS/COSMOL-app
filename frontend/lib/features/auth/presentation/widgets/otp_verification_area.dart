@@ -22,8 +22,8 @@ class OtpVerificationArea extends StatefulWidget {
 
 class _OtpVerificationAreaState extends State<OtpVerificationArea> {
   final List<TextEditingController> _controllers =
-      List.generate(4, (_) => TextEditingController());
-  final List<FocusNode> _focusNodes = List.generate(4, (_) => FocusNode());
+      List.generate(6, (_) => TextEditingController());
+  final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
 
   @override
   void dispose() {
@@ -80,7 +80,17 @@ class _OtpVerificationAreaState extends State<OtpVerificationArea> {
         const SizedBox(height: 12),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(4, (index) => _buildOtpBox(index)),
+          children: List.generate(
+            6,
+            (index) => Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: index < 5 ? 6.0 : 0.0,
+                ),
+                child: _buildOtpBox(index),
+              ),
+            ),
+          ),
         ),
         const SizedBox(height: 12),
         Row(
@@ -90,7 +100,7 @@ class _OtpVerificationAreaState extends State<OtpVerificationArea> {
             const SizedBox(width: 6),
             Expanded(
               child: Text(
-                'Ingresa el código de 4 dígitos enviado a tu celular.',
+                'Ingresa el código de 6 dígitos enviado a tu celular.',
                 style: AppTextStyles.caption.copyWith(
                   color: AppColors.textSecondary,
                 ),
@@ -108,28 +118,35 @@ class _OtpVerificationAreaState extends State<OtpVerificationArea> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.schedule, color: AppColors.textMuted, size: 18),
-                  const SizedBox(width: 8),
-                  Text(
-                    widget.canResend
-                        ? '¿No recibiste el código?'
-                        : 'Reenviar código en ',
-                    style: AppTextStyles.caption.copyWith(
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-                  if (!widget.canResend)
-                    Text(
-                      '$mins:$secs',
-                      style: AppTextStyles.caption.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.bold,
+              Flexible(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.schedule, color: AppColors.textMuted, size: 18),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        widget.canResend
+                            ? '¿No recibiste el código?'
+                            : 'Reenviar código en ',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                ],
+                    if (!widget.canResend)
+                      Text(
+                        '$mins:$secs',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               InkWell(
                 onTap: widget.canResend ? widget.onResend : null,
                 borderRadius: BorderRadius.circular(4),
@@ -155,8 +172,7 @@ class _OtpVerificationAreaState extends State<OtpVerificationArea> {
 
   Widget _buildOtpBox(int index) {
     return Container(
-      width: 64,
-      height: 56,
+      height: 52,
       decoration: BoxDecoration(
         color: AppColors.lightBackground,
         borderRadius: BorderRadius.circular(8),
@@ -173,7 +189,7 @@ class _OtpVerificationAreaState extends State<OtpVerificationArea> {
           keyboardType: TextInputType.number,
           textAlign: TextAlign.center,
           maxLength: 1,
-          style: AppTextStyles.h1.copyWith(
+          style: AppTextStyles.h2.copyWith(
             fontWeight: FontWeight.w900,
           ),
           decoration: const InputDecoration(
@@ -182,7 +198,7 @@ class _OtpVerificationAreaState extends State<OtpVerificationArea> {
             contentPadding: EdgeInsets.zero,
           ),
           onChanged: (val) {
-            if (val.isNotEmpty && index < 3) {
+            if (val.isNotEmpty && index < 5) {
               _focusNodes[index + 1].requestFocus();
             } else if (val.isEmpty && index > 0) {
               _focusNodes[index - 1].requestFocus();
