@@ -11,8 +11,8 @@ async def test_endpoint_flujo_onboarding_completo(client: AsyncClient, redis_ove
     from sqlalchemy import delete
     from app.db.models import Suministro, Usuario
 
-    cod_socio = "301144"
-    ci = "6102938"
+    cod_socio = "23807"
+    ci = "6259185"
     telefono = "71029384"
     pin = "9988"
 
@@ -26,7 +26,7 @@ async def test_endpoint_flujo_onboarding_completo(client: AsyncClient, redis_ove
     )
 
     # Limpiar registros previos en PostgreSQL para garantizar idempotencia total
-    await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_socio, "104523"])))
+    await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_socio, "540"])))
     await db_session.execute(delete(Usuario).where(Usuario.telefono == f"+591{telefono}"))
     await db_session.commit()
 
@@ -38,7 +38,7 @@ async def test_endpoint_flujo_onboarding_completo(client: AsyncClient, redis_ove
     assert res1.status_code == 200
     data1 = res1.json()
     assert data1["cod_socio"] == cod_socio
-    assert "JUAN PABLO" in data1["nombre_titular"]
+    assert "MISERICORDIA AGUANTA" in data1["nombre_titular"]
 
     # 2. Paso 2: Solicitar OTP
     res2 = await client.post(
@@ -93,8 +93,8 @@ async def test_endpoint_flujo_onboarding_completo(client: AsyncClient, redis_ove
         "/api/v1/autenticacion/suministros/vincular",
         headers=headers,
         json={
-            "cod_socio": "104523",
-            "ci_o_medidor": "8392019",
+            "cod_socio": "540",
+            "ci_o_medidor": "2823231",
             "alias": "Casa Centro"
         }
     )

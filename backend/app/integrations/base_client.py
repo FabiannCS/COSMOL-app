@@ -59,6 +59,7 @@ class BaseApiClient:
         *,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
+        json: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None
     ) -> httpx.Response:
         """
@@ -66,13 +67,14 @@ class BaseApiClient:
         """
         client = await self.get_client()
         url = endpoint if endpoint.startswith("http") else f"{self.base_url}/{endpoint.lstrip('/')}"
+        payload = json if json is not None else json_data
         
         try:
             response = await client.request(
                 method=method,
                 url=url,
                 params=params,
-                json=json_data,
+                json=payload,
                 headers=headers
             )
             return response

@@ -83,6 +83,16 @@ class VerificarOtpRequest(BaseModel):
         examples=["384920"]
     )
 
+    @field_validator("telefono")
+    @classmethod
+    def normalizar_telefono(cls, v: str) -> str:
+        v = v.strip().replace(" ", "").replace("-", "")
+        if len(v) == 8 and v.isdigit():
+            return f"+591{v}"
+        if not re.match(r"^\+?[0-9]{8,15}$", v):
+            raise ValueError("El formato del número telefónico no es válido.")
+        return v if v.startswith("+") else f"+{v}"
+
     @field_validator("codigo")
     @classmethod
     def validar_codigo_numerico(cls, v: str) -> str:
@@ -113,6 +123,16 @@ class CrearPinPasswordRequest(BaseModel):
     )
     cod_socio: Optional[str] = Field(None, description="Código de socio contextual")
     ci: Optional[str] = Field(None, description="CI contextual")
+
+    @field_validator("telefono")
+    @classmethod
+    def normalizar_telefono(cls, v: str) -> str:
+        v = v.strip().replace(" ", "").replace("-", "")
+        if len(v) == 8 and v.isdigit():
+            return f"+591{v}"
+        if not re.match(r"^\+?[0-9]{8,15}$", v):
+            raise ValueError("El formato del número telefónico no es válido.")
+        return v if v.startswith("+") else f"+{v}"
 
     @field_validator("nuevo_pin")
     @classmethod
