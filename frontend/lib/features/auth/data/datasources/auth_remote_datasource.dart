@@ -81,9 +81,13 @@ class AuthRemoteDataSource {
     required RegisterCredentialsRequestModel request,
   }) async {
     try {
+      final json = request.toJson();
+      if (!request.telefono.startsWith('+591')) {
+        json['telefono'] = '+591${request.telefono}';
+      }
       final response = await _dio.post(
         '/autenticacion/establecer-pin',
-        data: request.toJson(),
+        data: json,
       );
       return RegisterCredentialsResponseModel.fromJson(response.data);
     } on DioException catch (e) {

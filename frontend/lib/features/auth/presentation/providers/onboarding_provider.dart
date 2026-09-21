@@ -197,23 +197,17 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       );
       return true;
     } on AppException catch (e) {
-      // Soporte para simulación de desarrollo si backend no está disponible
       state = state.copyWith(
         isLoading: false,
-        socioVerificado: true,
-        nombreTitular: 'JUAN PÉREZ (SOCIO $cleanCod)',
-        currentStep: 2,
-        successMessage: 'Socio verificado en modo desarrollo (${e.message})',
+        errorMessage: e.message,
       );
-      return true;
-    } catch (_) {
+      return false;
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        socioVerificado: true,
-        nombreTitular: 'SOCIO COSMOL $cleanCod',
-        currentStep: 2,
+        errorMessage: 'Error al conectar con COSMOL: Verifique su conexión.',
       );
-      return true;
+      return false;
     }
   }
 
@@ -254,24 +248,17 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       );
       return true;
     } on AppException catch (e) {
-      _startTimer();
       state = state.copyWith(
         isLoading: false,
-        otpSent: true,
-        debugCodigoOtp: '482190',
-        telefonoEnmascarado: '+591 7***${cleanPhone.length >= 4 ? cleanPhone.substring(cleanPhone.length - 4) : '219'}',
-        successMessage: 'Código simulado para desarrollo: 482190 (${e.message})',
+        errorMessage: e.message,
       );
-      return true;
+      return false;
     } catch (_) {
-      _startTimer();
       state = state.copyWith(
         isLoading: false,
-        otpSent: true,
-        debugCodigoOtp: '482190',
-        telefonoEnmascarado: '+591 7***219',
+        errorMessage: 'Error al solicitar el código de verificación.',
       );
-      return true;
+      return false;
     }
   }
 
@@ -301,16 +288,6 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       );
       return true;
     } on AppException catch (e) {
-      if (codigo == (state.debugCodigoOtp ?? '482190') || codigo == '482190') {
-        state = state.copyWith(
-          isLoading: false,
-          otpVerified: true,
-          tokenOtpValido: 'mock-token-otp-${DateTime.now().millisecondsSinceEpoch}',
-          successMessage: 'Teléfono verificado en modo desarrollo.',
-        );
-        return true;
-      }
-
       state = state.copyWith(
         isLoading: false,
         errorMessage: e.message,
@@ -319,10 +296,9 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     } catch (_) {
       state = state.copyWith(
         isLoading: false,
-        otpVerified: true,
-        tokenOtpValido: 'mock-token-otp-${DateTime.now().millisecondsSinceEpoch}',
+        errorMessage: 'Error al verificar el código de seguridad.',
       );
-      return true;
+      return false;
     }
   }
 
@@ -331,7 +307,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     required String password,
     String? username,
   }) async {
-    if (!state.otpVerified && state.tokenOtpValido == null) {
+    if (!state.otpVerified || state.tokenOtpValido == null) {
       state = state.copyWith(
         errorMessage: 'Debe verificar su número de teléfono con el código OTP.',
       );
@@ -356,7 +332,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     );
 
     final cleanPhone = state.telefono.replaceAll(' ', '').trim();
-    final token = state.tokenOtpValido ?? 'mock-valid-token';
+    final token = state.tokenOtpValido!;
 
     try {
       final response = await _repository.establecerPin(
@@ -379,17 +355,15 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     } on AppException catch (e) {
       state = state.copyWith(
         isLoading: false,
-        registroCompletado: true,
-        successMessage: '¡Registro completado! (${e.message})',
+        errorMessage: e.message,
       );
-      return true;
+      return false;
     } catch (_) {
       state = state.copyWith(
         isLoading: false,
-        registroCompletado: true,
-        successMessage: '¡Registro completado exitosamente!',
+        errorMessage: 'Error al completar el registro de su cuenta.',
       );
-      return true;
+      return false;
     }
   }
 
