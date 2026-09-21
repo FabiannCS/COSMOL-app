@@ -62,7 +62,9 @@ class Settings(BaseSettings):
     COSMOL_LEGACY_URL: str = "http://api.cosmol.com.bo/api-consultas"
     COSMOL_LEGACY_TIMEOUT_SECONDS: float = 4.0
     MOCK_COSMOL_LEGACY: bool = False
+    MOCK_COSMOL_CONSUMO: bool = True  # True mientras COSMOL habilita el endpoint real en producción
     DEBT_CACHE_TTL_SECONDS: int = 600  # 10 minutos (600 segundos)
+    CONSUMO_CACHE_TTL_SECONDS: int = 900  # 15 minutos (900 segundos)
 
     model_config = SettingsConfigDict(
         env_file=".env",
