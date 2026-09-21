@@ -18,15 +18,18 @@
 
 ---
 
-## 2. Cuentas de Prueba Pre-cargadas (Sistema Comercial Legado)
+## 2. Cuentas de Prueba Certificadas (Sistema Comercial Real COSMOL)
 
-Para probar el flujo de Onboarding inicial antes de la integración Informix, se dispone de los siguientes socios habilitados:
+El backend opera conectado en vivo al servidor de COSMOL R.L. sin datos simulados. Para probar el Onboarding y autenticación, utilizar cualquiera de los siguientes socios reales validados:
 
-| Código Socio (`cod_socio`) | Carnet (`ci`) | Titular Oficial | N° Medidor |
+| Código Socio (`cod_socio`) | Carnet (`ci`) | Titular Oficial en COSMOL | Estado / Notas |
 |---|---|---|---|
-| **`104523`** | `8392019` | CARLOS EDUARDO PEREZ | `M-50211` |
-| **`205566`** | `4920192` | MARIA ELENA ROJAS | `M-88902` |
-| **`301144`** | `6102938` | JUAN PABLO SUAREZ | `M-12490` |
+| **`23807`** | `6259185` | MISERICORDIA AGUANTA EDDY FRANCO | Al día (12 periodos de historial) |
+| **`556`** | `4638847` | SUAREZ BALTAZAR VICTOR HUGO, CAROLINA | Al día |
+| **`540`** | `4638847` | SUAREZ BALTAZAR VICTOR HUGO | Con deuda (2 facturas impagas para probar alertas) |
+| **`1001`** | `6312456` | Socio Montero | Al día |
+
+> **Nota para desarrollo:** Para cualquier otro socio real de Montero que posea factura física, se puede realizar el onboarding ingresando su código de socio y el número de CI/NIT impreso en su aviso.
 
 ---
 
