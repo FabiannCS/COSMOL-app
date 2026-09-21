@@ -82,20 +82,19 @@ El sistema debe:
 
 ### 4.1 Entregables de DEV 1: Integración con Sistema Legado y Caché Redis
 
-#### A. Integración en `backend/app/integrations/cosmol_client.py`:
+#### A. Integración en `backend/app/integrations/cosmol_client.py` (Preparado para API Real):
 - [ ] Incorporar el método `obtener_historial_consumo(cod_socio: str, meses: int = 12) -> List[Dict[str, Any]]`:
-  - Consumo del endpoint legado `GET /socios/{cod_socio}/consumos`.
-  - Normalización de llaves en mayúsculas (`CONSUMO_M3`, `LECTURA_ACTUAL`, `LECTURA_ANTERIOR`, `FECHA_LECTURA`, etc.).
-  - Manejo de timeouts (3s) y errores de red con `ServiceUnavailableException`.
-- [ ] Enriquecer el dataset simulado `MOCK_CONSUMOS_LEGADO` con historiales continuos de **6 a 12 meses** para los códigos de prueba (`556`, `540`, `1001`, `1002`, `1003`):
-  - Variaciones realistas de consumo en Montero (ej. 15 $m^3$ a 28 $m^3$).
-  - Al menos un caso de prueba con pico atípico (>30% de incremento) para validar alertas.
+  - **Modo Real (`MOCK_COSMOL_LEGACY = False`):** Consumo del endpoint legado `GET /socios/{cod_socio}/consumos` con timeout estricto (4s) y fallback seguro.
+  - **Normalizador Tolerante (`_normalizar_consumo_legado`):** Mapeo defensivo de variantes de campos legados Informix (`CONSUMO_M3`/`VOLUMEN`/`M3`, `ANIO`/`GESTION`, `MES`/`NMES`, `LECTURA_ACTUAL`/`LECT_ACT`, `MONTOTOTAL`/`IMPORTE`), limpieza de espacios en blanco (`.strip()`) y redondeo.
+  - **Modo Simulación (`MOCK_COSMOL_LEGACY = True`):** Dataset determinista enriquecido `MOCK_CONSUMOS_LEGADO` con 6 a 12 meses para socios de prueba (`556`, `540`, `1001`, `1002`, `1003`):
+    - Variaciones estacionales realistas de Montero (15 $m^3$ a 28 $m^3$).
+    - Caso de prueba con pico atípico (>30% de incremento) en el socio `540` para validar alertas de fugas.
 
 #### B. Servicio de Caché en Redis:
-- [ ] Implementar funciones de caché para consumos en `backend/app/services/cache_consumo.py` (o módulo centralizado de caché):
-  - `obtener_cache_consumo(cod_socio: str) -> Optional[Dict[str, Any]]`.
-  - `guardar_cache_consumo(cod_socio: str, datos: Dict[str, Any], ttl: int = 900) -> None`.
-  - `invalidar_cache_consumo(cod_socio: str) -> None`.
+- [ ] Implementar funciones de caché para consumos en `backend/app/services/servicio_cache_consumo.py`:
+  - `obtener_consumo_cache(redis: Redis, cod_socio: str) -> Optional[Dict[str, Any]]` (<20ms).
+  - `guardar_consumo_cache(redis: Redis, cod_socio: str, datos: Dict[str, Any], ttl: int = 900) -> None` (TTL 15 min).
+  - `invalidar_consumo_cache(redis: Redis, cod_socio: str) -> None`.
 
 #### C. Batería de Pruebas DEV 1:
 - [ ] `backend/tests/test_cosmol_client_consumo.py`:
