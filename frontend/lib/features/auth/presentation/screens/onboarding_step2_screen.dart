@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
+import '../../../../core/widgets/cosmol_app_bar.dart';
 import '../../../../core/widgets/cosmol_button.dart';
 import '../../../../core/widgets/cosmol_text_field.dart';
 import '../providers/onboarding_provider.dart';
@@ -154,76 +155,17 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
       },
       child: Scaffold(
         backgroundColor: AppColors.lightBackground,
-        appBar: AppBar(
-          backgroundColor: AppColors.cardSurface.withValues(alpha: 0.9),
-          elevation: 1,
-          shadowColor: AppColors.shadowColor,
-          centerTitle: false,
-          titleSpacing: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.onSurface),
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/onboarding');
-              }
-            },
-          ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'COSMOL R.L.',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.secondary,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                'Registro De Socio',
-                style: AppTextStyles.subtitle1.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 16.0),
-              child: Container(
-                width: 38,
-                height: 38,
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: AppColors.pureWhite,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.shadowColor,
-                      blurRadius: 4,
-                      offset: Offset(0, 1),
-                    ),
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Image.asset(
-                  'assets/images/logo_cosmol.jpeg',
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Icon(
-                    Icons.water_drop_rounded,
-                    color: AppColors.primary,
-                    size: 22,
-                  ),
-                ),
-              ),
-            ),
-          ],
+        appBar: CosmolAppBar(
+          title: 'COSMOL R.L.',
+          subtitle: 'Registro De Socio',
+          showBackButton: true,
+          onBackPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/onboarding');
+            }
+          },
         ),
         body: SafeArea(
           child: SingleChildScrollView(
