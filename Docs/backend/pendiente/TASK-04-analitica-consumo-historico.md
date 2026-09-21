@@ -2,8 +2,7 @@
 
 > **Estado:** PENDIENTE  
 > **Fase:** Fase 4 — Analítica de Consumo Histórico  
-> **Fecha de creación:** Septiembre 2026  
-> **Documentos de referencia:** `AGENTS.md` (Secciones 4.5, 7.2, 10.5, 12.1, 12.2, 12.3) y `Docs/backend/guias/HOJA_DE_RUTA_DESARROLLO.md` (Fase 4)  
+> **Fecha de creación:** Septiembre 2026   
 > **Entorno de ejecución:** Backend FastAPI en Docker (`cosmol-backend-api`, `cosmol-cache-redis`, `cosmol-db-postgres`)
 
 ---
