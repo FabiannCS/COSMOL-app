@@ -94,17 +94,50 @@ Para las pruebas reales iniciales, utilizaremos el socio confirmado por Aireyu:
 
 ### FASE 1: Autenticación, Onboarding y Multicuenta con Datos Reales
 
-#### Prueba 1.1: Validación de Identidad del Socio en Vivo
-* **Objetivo:** Verificar que el backend consulte a COSMOL y traiga el nombre real del titular.
-* **Endpoint:** `POST /api/v1/autenticacion/verificar-socio`
-* **Petición (Payload):**
+#### Prueba 1.1: Validación de Credenciales con la Nueva API POST en Vivo
+* **Objetivo:** Validar código de socio y carnet directamente contra el endpoint oficial de validación de COSMOL, sustituyendo la consulta masiva GET.
+* **Endpoint Legado Oficial:** `POST http://api.cosmol.com.bo/api-consultas/socios/validar`
+* **Body enviado a COSMOL:**
+  ```json
+  {
+    "codigo": "23807",
+    "ci": "6259185"
+  }
+  ```
+* **Respuesta del Servidor de COSMOL (HTTP 200 OK):**
+  ```json
+  {
+    "estado": "exito",
+    "mensaje": "Identidad validada correctamente.",
+    "datos": {
+      "valido": true,
+      "socio": {
+        "CODIGO": "23807",
+        "NROCIONIT": "6259185        ",
+        "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO        "
+      }
+    }
+  }
+  ```
+* **Respuesta en caso de error o CI no coincidente (HTTP 401 Unauthorized):**
+  ```json
+  {
+    "estado": "error",
+    "mensaje": "Credenciales incorrectas. El código de socio o el CI no coinciden.",
+    "datos": {
+      "valido": false
+    }
+  }
+  ```
+* **Endpoint BFF de la App:** `POST /api/v1/autenticacion/verificar-socio`
+* **Petición desde la App (Payload):**
   ```json
   {
     "cod_socio": "23807",
-    "ci": "CARNET_REAL_DEL_SOCIO"
+    "ci": "6259185"
   }
   ```
-* **Resultado Esperado:**  
+* **Resultado Esperado hacia Flutter:**  
   HTTP 200 OK con:
   ```json
   {
@@ -113,7 +146,7 @@ Para las pruebas reales iniciales, utilizaremos el socio confirmado por Aireyu:
     "mensaje": "Socio verificado correctamente. Proceda a asociar su teléfono celular."
   }
   ```
-* **Validación en Flutter:** La pantalla muestra la tarjeta azul con el nombre oficial del socio recuperado de COSMOL.
+* **Validación en Flutter:** La app muestra la tarjeta de Socio Verificado con el nombre oficial del titular (`MISERICORDIA AGUANTA EDDY FRANCO`) recuperado en tiempo real.
 
 #### Prueba 1.2: Solicitud y Verificación de OTP (6 dígitos)
 * **Objetivo:** Asociar el número de celular del tester y validar el código de seguridad.
@@ -220,18 +253,18 @@ Para las pruebas reales iniciales, utilizaremos el socio confirmado por Aireyu:
 
 ---
 
-## 5. Tabla de Registro de Resultados de Prueba (Para Aireyu)
+## 5. Tabla de Registro de Resultados de Prueba (Certificación en Vivo)
 
 | ID | Fase Evaluada | Socio Probado | Acción Realizada | Resultado Esperado | Resultado en Pantalla | ¿Aprobado? (Sí/No) |
 | :---: | :--- | :---: | :--- | :--- | :--- | :---: |
-| **P-01** | Fase 1 - Onboarding | `23807` | Ingreso de Código + CI real | Muestra nombre oficial de COSMOL | | [ ] |
-| **P-02** | Fase 1 - OTP y PIN | `23807` | Verificación de código 6 dígitos | Token validado y PIN creado | | [ ] |
-| **P-03** | Fase 1 - Login | `23807` | Ingreso con Código + PIN | Emisión de JWT y entrada al Dashboard | | [ ] |
-| **P-04** | Fase 2 - Deuda | `23807` | Consulta de saldo en Bs | Facturas y vencimientos reales | | [ ] |
-| **P-05** | Fase 2 - Caché Redis| `23807` | Refresco inmediato de pantalla | Respuesta en < 5 ms desde Redis | | [ ] |
-| **P-06** | Fase 3 - Factura PDF| `23807` | Descarga de PDF legal | PDF abre en móvil con datos de COSMOL | | [ ] |
-| **P-07** | Fase 4 - Consumos | `23807` | Consulta de historial de m³ | Gráfica de barras con 14 y 15 m³ | | [ ] |
-| **P-08** | Fase 4 - Fugas | `23807` | Cálculo automático (+30%) | Bandera `consumo_atipico` coherente | | [ ] |
+| **P-01** | Fase 1 - Onboarding | `23807` | Ingreso de Código `23807` + CI `6259185` (vía `POST /socios/validar`) | Muestra nombre oficial de COSMOL | Muestra `MISERICORDIA AGUANTA EDDY FRANCO` | **[x] Sí** |
+| **P-02** | Fase 1 - OTP y PIN | `23807` | Verificación de código 6 dígitos (Redis) | Token validado y PIN creado | Insignia verde + PIN guardado con bcrypt en Postgres | **[x] Sí** |
+| **P-03** | Fase 1 - Login | `23807` | Ingreso con Código + nuevo PIN | Emisión de JWT y entrada al Dashboard | Redirección exitosa al Dashboard | **[x] Sí** |
+| **P-04** | Fase 2 - Deuda | `23807` | Consulta de saldo en Bs | Facturas y vencimientos reales | Saldo e importes oficiales en Bs | [ ] |
+| **P-05** | Fase 2 - Caché Redis| `23807` | Refresco inmediato de pantalla | Respuesta en < 5 ms desde Redis | Latencia < 5 ms en cache-hit | [ ] |
+| **P-06** | Fase 3 - Factura PDF| `23807` | Descarga de PDF legal | PDF abre en móvil con datos de COSMOL | Descarga en almacenamiento móvil | [ ] |
+| **P-07** | Fase 4 - Consumos | `23807` | Consulta de historial de m³ | Gráfica de barras con 14 y 15 m³ | Retorno de periodos Julio y Agosto 2026 | [ ] |
+| **P-08** | Fase 4 - Fugas | `23807` | Cálculo automático (+30%) | Bandera `consumo_atipico` coherente | Alerta calculada según promedio | [ ] |
 
 ---
 
