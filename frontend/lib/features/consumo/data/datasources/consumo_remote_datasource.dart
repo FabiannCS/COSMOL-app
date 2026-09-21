@@ -16,7 +16,7 @@ class ConsumoRemoteDataSource {
   ConsumoRemoteDataSource(this._dio);
 
   /// Consulta el historial de facturas y consumo para el código de socio.
-  /// Soporta envío de POST para validación de carnet y código de socio.
+  /// Conecta con el endpoint del BFF `/api/v1/consumo/{cod_socio}` o con el endpoint legado.
   Future<List<ConsumoFacturaModel>> obtenerHistorialFacturas({
     required String codSocio,
     String? ci,
@@ -24,22 +24,28 @@ class ConsumoRemoteDataSource {
     try {
       final cleanCodSocio = codSocio.trim();
 
-      // Intento de llamada al endpoint oficial / BFF
-      // Soporta POST con cuerpo { "cod_socio": ..., "ci": ... }
+      // 1. Intento primario: Endpoint oficial del BFF FastAPI
       Response response;
       try {
-        response = await _dio.post(
-          '/socios/$cleanCodSocio/historial-facturas',
-          data: {
-            'cod_socio': cleanCodSocio,
-            if (ci != null && ci.trim().isNotEmpty) 'ci': ci.trim(),
-          },
+        response = await _dio.get(
+          '/consumo/$cleanCodSocio',
+          queryParameters: {'meses': 12},
         );
       } on DioException catch (dioErr) {
-        // Si el backend aún no implementa POST para esa ruta, intenta fallback GET
+        // 2. Si la ruta /consumo/ no responde, intenta fallback POST o GET legado
         if (dioErr.response?.statusCode == 404 ||
             dioErr.response?.statusCode == 405) {
-          response = await _dio.get('/socios/$cleanCodSocio/historial-facturas');
+          try {
+            response = await _dio.post(
+              '/socios/$cleanCodSocio/historial-facturas',
+              data: {
+                'cod_socio': cleanCodSocio,
+                if (ci != null && ci.trim().isNotEmpty) 'ci': ci.trim(),
+              },
+            );
+          } on DioException {
+            response = await _dio.get('/socios/$cleanCodSocio/historial-facturas');
+          }
         } else {
           rethrow;
         }
@@ -58,8 +64,6 @@ class ConsumoRemoteDataSource {
 
       return [];
     } on DioException catch (e) {
-      // Si la API externa aún está en despliegue o devuelve error de conexión,
-      // generamos la respuesta estructurada bajo el formato oficial exacto para no bloquear la UI.
       if (e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
           e.type == DioExceptionType.connectionError ||

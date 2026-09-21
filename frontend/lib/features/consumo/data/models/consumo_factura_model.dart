@@ -24,14 +24,14 @@ class ConsumoFacturaModel {
 
   factory ConsumoFacturaModel.fromJson(Map<String, dynamic> json) {
     return ConsumoFacturaModel(
-      codigo: (json['CODIGO'] ?? json['codigo'] ?? '').toString().trim(),
-      nombre: (json['NOMBRE'] ?? json['nombre'] ?? '').toString().trim(),
+      codigo: (json['CODIGO'] ?? json['codigo'] ?? json['cod_socio'] ?? '').toString().trim(),
+      nombre: (json['NOMBRE'] ?? json['nombre'] ?? json['alias'] ?? '').toString().trim(),
       mes: _parseInt(json['MES'] ?? json['mes']),
       anio: _parseInt(json['ANIO'] ?? json['anio'], defaultValue: DateTime.now().year),
-      monto: _parseDouble(json['MONTO'] ?? json['monto']),
-      estado: (json['ESTADO'] ?? json['estado'] ?? '1').toString().trim(),
-      consumo: _parseDouble(json['CONSUMO'] ?? json['consumo']),
-      fecha: json['FECHA']?.toString() ?? json['fecha']?.toString(),
+      monto: _parseDouble(json['MONTO'] ?? json['monto'] ?? json['monto_bs']),
+      estado: (json['ESTADO'] ?? json['estado'] ?? json['estado_lectura'] ?? '1').toString().trim(),
+      consumo: _parseDouble(json['CONSUMO'] ?? json['consumo'] ?? json['consumo_m3']),
+      fecha: json['FECHA']?.toString() ?? json['fecha']?.toString() ?? json['fecha_lectura']?.toString(),
     );
   }
 
@@ -70,7 +70,10 @@ class ConsumoFacturaModel {
   }
 
   /// Indica si la factura fue pagada
-  bool get isPagado => estado == '1' || estado.toLowerCase() == 'pagado';
+  bool get isPagado =>
+      estado == '1' ||
+      estado.toLowerCase() == 'pagado' ||
+      estado.toUpperCase() == 'NORMAL';
 
   /// Nombre abreviado del mes en español (Ene, Feb, Mar, etc.)
   String get mesNombreCorto {
@@ -120,7 +123,7 @@ class ConsumoFacturaModel {
   double get tarifaPorM3 => consumo > 0 ? (monto / consumo) : 0.0;
 }
 
-/// Respuesta de la API de historial de facturas
+/// Respuesta de la API de historial de facturas y consumo
 class ConsumoHistorialResponse {
   final String estado;
   final String mensaje;
@@ -133,11 +136,11 @@ class ConsumoHistorialResponse {
   });
 
   factory ConsumoHistorialResponse.fromJson(Map<String, dynamic> json) {
-    final rawDatos = json['datos'] as List<dynamic>? ?? [];
+    final rawDatos = json['periodos'] ?? json['datos'] as List<dynamic>? ?? [];
     return ConsumoHistorialResponse(
       estado: json['estado']?.toString() ?? 'exito',
       mensaje: json['mensaje']?.toString() ?? '',
-      datos: rawDatos
+      datos: (rawDatos as List<dynamic>)
           .whereType<Map<String, dynamic>>()
           .map((item) => ConsumoFacturaModel.fromJson(item))
           .toList(),
