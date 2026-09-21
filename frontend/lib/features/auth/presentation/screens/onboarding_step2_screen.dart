@@ -279,7 +279,7 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Asocia tu celular para verificación de seguridad y crea tu usuario personal.',
+              'Ingresa tu número de celular para verificación de seguridad.',
               style: AppTextStyles.body1.copyWith(
                 color: AppColors.textSecondary,
               ),
@@ -302,7 +302,7 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
 
             // Selector de Canal Dual (WhatsApp / SMS)
             Text(
-              'Canal de Entrega del Código',
+              'Entrega del Código via:',
               style: AppTextStyles.subtitle2.copyWith(
                 color: AppColors.textPrimary,
                 fontWeight: FontWeight.bold,
@@ -502,7 +502,7 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Por seguridad, tu C.I. quedará invalidada como contraseña. En el día a día ingresarás con tu Código de Socio y tu nuevo PIN personal.',
+                      'En el día a día ingresarás con tu Código de Socio y tu nuevo PIN personal.',
                       style: AppTextStyles.body2.copyWith(
                         fontSize: 12,
                         color: AppColors.onSurfaceVariant,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
+import '../../../multicuenta/presentation/widgets/suministro_selector_dropdown.dart';
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -8,7 +9,8 @@ class DashboardScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('COSMOL R.L.'),
+        title: const SuministroSelectorDropdown(),
+        centerTitle: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
@@ -38,3 +40,4 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 }
+

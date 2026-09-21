@@ -8,6 +8,8 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/screens/onboarding_step2_screen.dart';
 import '../../features/home/presentation/screens/dashboard_screen.dart';
+import '../../features/multicuenta/presentation/screens/supplies_list_screen.dart';
+import '../../features/multicuenta/presentation/screens/bind_supply_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -68,6 +70,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         name: 'dashboard',
         builder: (context, state) => const DashboardScreen(),
       ),
+      GoRoute(
+        path: '/suministros',
+        name: 'suministros',
+        builder: (context, state) => const SuppliesListScreen(),
+        routes: [
+          GoRoute(
+            path: 'vincular',
+            name: 'vincular-suministro',
+            builder: (context, state) => const BindSupplyScreen(),
+          ),
+        ],
+      ),
     ],
   );
 });
+

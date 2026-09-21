@@ -7,7 +7,6 @@ import '../../../../core/widgets/cosmol_button.dart';
 import '../../../../core/widgets/cosmol_text_field.dart';
 import '../providers/onboarding_provider.dart';
 import '../widgets/onboarding_progress_tracker.dart';
-import '../widgets/bill_guide_card.dart';
 
 /// Pantalla del Paso 1 de Registro: Verificación de Código de Socio y C.I.
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -147,8 +146,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 const OnboardingProgressTracker(),
-                const SizedBox(height: 14),
-                const BillGuideCard(),
                 const SizedBox(height: 14),
                 _buildFormCard(onboardingState),
               ],

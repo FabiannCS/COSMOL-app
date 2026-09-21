@@ -1,0 +1,102 @@
+<!DOCTYPE html><html class="light" lang="es" style=""><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><title>COSMOL R.L. - App de Socios</title><link href="https://fonts.googleapis.com" rel="preconnect"><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"><link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100%;margin:0;padding:0;min-height:100%;background-color:#f8f9ff;}body{overscroll-behavior-y:none;-webkit-tap-highlight-color:transparent;font-family:'Plus Jakarta Sans',sans-serif;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}*{-ms-overflow-style:none;scrollbar-width:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface-dim": "#cbdbf5", "secondary-container": "#5dc6fe", "tertiary-fixed-dim": "#bec6e0", "surface-bright": "#f8f9ff", "surface-variant": "#d3e4fe", "surface-container-low": "#eff4ff", "surface": "#f8f9ff", "secondary": "#00658c", "surface-card": "#FFFFFF", "on-primary-fixed-variant": "#00497c", "on-error-container": "#93000a", "on-secondary-fixed-variant": "#004c6a", "status-overdue": "#DC2626", "border-subtle": "#E2E8F0", "outline-variant": "#c1c7d1", "primary-fixed-dim": "#9ecaff", "on-primary-fixed": "#001d36", "inverse-primary": "#9ecaff", "inverse-on-surface": "#eaf1ff", "on-primary": "#ffffff", "error-container": "#ffdad6", "on-tertiary-fixed": "#131b2e", "inverse-surface": "#213145", "tertiary": "#343c51", "on-tertiary": "#ffffff", "error": "#ba1a1a", "chart-water-flow": "#0284C7", "status-paid": "#16A34A", "tertiary-fixed": "#dae2fd", "status-overdue-subtle": "#FEF2F2", "status-paid-subtle": "#F0FDF4", "primary": "#003e6b", "primary-fixed": "#d1e4ff", "on-secondary": "#ffffff", "on-surface": "#0b1c30", "surface-canvas": "#F8FAFC", "background": "#f8f9ff", "on-error": "#ffffff", "on-tertiary-container": "#bfc7e1", "on-primary-container": "#a0cbff", "secondary-fixed-dim": "#80cfff", "on-tertiary-fixed-variant": "#3f465c", "primary-container": "#005691", "on-secondary-container": "#005171", "surface-container-highest": "#d3e4fe", "surface-container": "#e5eeff", "tertiary-container": "#4b5369", "on-secondary-fixed": "#001e2d", "secondary-fixed": "#c5e7ff", "on-surface-variant": "#414750", "outline": "#727781", "surface-container-lowest": "#ffffff", "border-strong": "#CBD5E1", "on-background": "#0b1c30", "surface-container-high": "#dce9ff", "surface-tint": "#1a619d" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "margin-desktop": "3rem", "space-xl": "2rem", "margin-tablet": "2rem", "gutter": "1rem", "space-lg": "1.5rem", "margin": "1rem", "space-xs": "0.25rem", "gutter-desktop": "1.5rem", "space-sm": "0.5rem", "space-md": "1rem" }, "fontFamily": { "title-md": ["Plus Jakarta Sans"], "headline-xl": ["Plus Jakarta Sans"], "headline-lg-mobile": ["Plus Jakarta Sans"], "label-numeric-currency-mobile": ["Plus Jakarta Sans"], "headline-lg": ["Plus Jakarta Sans"], "label-md": ["Plus Jakarta Sans"], "label-sm": ["Plus Jakarta Sans"], "label-numeric-currency": ["Plus Jakarta Sans"], "body-lg": ["Plus Jakarta Sans"], "title-lg": ["Plus Jakarta Sans"], "headline-xl-mobile": ["Plus Jakarta Sans"], "body-sm": ["Plus Jakarta Sans"], "headline-md": ["Plus Jakarta Sans"], "body-md": ["Plus Jakarta Sans"] }, "fontSize": { "title-md": ["16px", { "lineHeight": "22px", "fontWeight": "600" }], "headline-xl": ["36px", { "lineHeight": "44px", "letterSpacing": "-0.02em", "fontWeight": "800" }], "headline-lg-mobile": ["22px", { "lineHeight": "28px", "fontWeight": "700" }], "label-numeric-currency-mobile": ["26px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "800" }], "headline-lg": ["28px", { "lineHeight": "36px", "letterSpacing": "-0.01em", "fontWeight": "700" }], "label-md": ["13px", { "lineHeight": "18px", "fontWeight": "600" }], "label-sm": ["11px", { "lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "700" }], "label-numeric-currency": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "800" }], "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "title-lg": ["18px", { "lineHeight": "24px", "fontWeight": "600" }], "headline-xl-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "800" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }], "headline-md": ["20px", { "lineHeight": "26px", "fontWeight": "600" }], "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }] } } } }</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head><body class="bg-surface font-body-md text-on-surface flex flex-col min-h-screen antialiased selection:bg-secondary-container selection:text-on-secondary-container"><header class="fixed top-0 w-full z-50 pt-safe bg-surface-card/90 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)]"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-2"><div class="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white shrink-0"><span class="material-symbols-outlined text-[20px]">water_drop</span></div><div><h1 class="font-title-md text-title-md font-bold text-primary leading-tight">COSMOL R.L.</h1><p class="font-body-sm text-body-sm text-on-surface-variant">Socio - Juan Pérez</p></div></div><button aria-label="Notificaciones" class="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container transition-colors" type="button"><span class="material-symbols-outlined text-[22px]">notifications</span></button></div></header><main class="flex flex-col relative w-full pt-16 pb-24 min-h-screen bg-surface"><div class="flex flex-col w-full px-margin py-space-md space-y-space-md"><!-- Status Banner flat -->
+<div class="flex items-center justify-between px-4 py-3 rounded-lg bg-surface-card shadow-sm border border-border-subtle">
+<div class="flex items-center gap-2.5">
+<span class="font-body-md text-body-md font-semibold text-on-surface">Pagina de Inicio</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Octubre 2026</span>
+</div>
+<!-- Main Balance Card: Flat White with Crisp Red Urgency Notice -->
+<div class="rounded-xl bg-surface-card p-4 shadow-sm border border-border-subtle space-y-4"><div class="flex items-start justify-between"><div><span class="font-label-sm text-label-sm uppercase font-bold text-on-surface-variant block">Total a Pagar</span><div class="flex items-baseline gap-1 pt-1"><span class="font-headline-lg-mobile text-headline-lg-mobile font-bold text-on-surface">Bs</span><span class="font-headline-xl text-headline-xl font-extrabold text-on-surface tracking-tight">0.00</span></div></div><div class="text-right"><span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-status-paid-subtle text-status-paid font-label-sm text-label-sm font-bold"><span class="material-symbols-outlined text-[14px]">verified</span>Al día con tus pagos</span></div></div><button class="w-full py-3 px-4 rounded-lg border border-primary text-primary hover:bg-surface-container font-title-md text-title-md font-bold flex items-center justify-center gap-2 transition-colors active:scale-[0.98]" id="btn-view-receipt" onclick="document.querySelector('a[data-path=&quot;documentos-facturas&quot;]')?.click()" type="button"><span class="material-symbols-outlined text-[20px]">receipt_long</span><span class="">Ver Último Recibo Pagado</span></button></div><div class="rounded-xl bg-surface-card p-4 shadow-sm border border-border-subtle"><div class="flex items-start gap-3"><div class="w-9 h-9 rounded-lg bg-status-paid-subtle text-status-paid flex items-center justify-center shrink-0"><span class="material-symbols-outlined text-[20px]">schedule</span></div><div class="flex-1"><div class="flex items-center justify-between"><span class="font-label-sm text-label-sm uppercase font-bold text-on-surface-variant">Próxima Emisión</span><span class="px-2 py-0.5 rounded bg-surface-container text-primary font-label-sm text-label-sm font-semibold">Periodo Octubre</span></div><p class="font-title-md text-title-md font-bold text-on-surface mt-0.5">Emisión estimada: 05 Nov 2026</p><p class="font-body-sm text-body-sm text-on-surface-variant mt-1 leading-snug">Tu próxima factura correspondiente a Octubre 2026 se generará tras la lectura mensual. Te notificaremos apenas esté disponible.</p></div></div></div>
+<!-- Simplified Socio & Meter Technical Flat Card -->
+
+<!-- Quick Actions Grid Flat -->
+<div class="rounded-xl bg-surface-card p-4 shadow-sm border border-border-subtle space-y-3"><div class="flex items-center justify-between border-b border-border-subtle pb-2.5"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-primary text-[20px]">account_balance</span><span class="font-title-md text-title-md font-bold text-on-surface">Oficinas y Atención al Asociado</span></div><span class="font-label-sm text-label-sm text-status-paid font-bold uppercase">Habilitados</span></div><div class="space-y-2"><div class="flex items-start gap-2.5 p-2.5 rounded-lg bg-surface-container-low"><div class="flex-1"><p class="font-title-md text-title-md font-semibold text-on-surface">Cajas Centrales COSMOL R.L.</p><p class="font-body-sm text-body-sm text-on-surface-variant">Calle Bolívar esq. Sucre · Lunes a Viernes 07:30 a 15:30</p></div></div></div></div>
+<!-- Modal QR Drawer Flat -->
+</div>
+<script>
+  (function() {
+    const payNowBtn = document.getElementById('btn-pay-now');
+    const quickQrBtn = document.getElementById('btn-quick-qr');
+    const downloadPdfBtn = document.getElementById('btn-download-pdf');
+    const viewHistoryBtn = document.getElementById('btn-view-history');
+    const modalQr = document.getElementById('modal-qr');
+    const modalQrCard = document.getElementById('modal-qr-card');
+    const closeModalBtn = document.getElementById('btn-close-modal');
+    const copyCodeBtn = document.getElementById('btn-copy-code');
+    const saveQrBtn = document.getElementById('btn-save-qr');
+
+    function openModal() {
+      if (!modalQr || !modalQrCard) return;
+      modalQr.classList.remove('opacity-0', 'pointer-events-none');
+      modalQr.classList.add('opacity-100');
+      modalQrCard.classList.remove('translate-y-full');
+      modalQrCard.classList.add('translate-y-0');
+    }
+
+    function closeModal() {
+      if (!modalQr || !modalQrCard) return;
+      modalQr.classList.add('opacity-0', 'pointer-events-none');
+      modalQr.classList.remove('opacity-100');
+      modalQrCard.classList.add('translate-y-full');
+      modalQrCard.classList.remove('translate-y-0');
+    }
+
+    if (payNowBtn) payNowBtn.addEventListener('click', openModal);
+    if (quickQrBtn) quickQrBtn.addEventListener('click', openModal);
+    if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
+
+    if (modalQr) {
+      modalQr.addEventListener('click', (e) => {
+        if (e.target === modalQr) closeModal();
+      });
+    }
+
+    if (copyCodeBtn) {
+      copyCodeBtn.addEventListener('click', () => {
+        copyCodeBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">done</span> ¡Copiado!';
+        setTimeout(() => {
+          copyCodeBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">content_copy</span> Copiar Glosa';
+        }, 1800);
+      });
+    }
+
+    if (saveQrBtn) {
+      saveQrBtn.addEventListener('click', () => {
+        saveQrBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">check_circle</span> Imagen Lista';
+        setTimeout(() => {
+          saveQrBtn.innerHTML = '<span class="material-symbols-outlined text-[18px]">save_alt</span> Guardar QR';
+        }, 1800);
+      });
+    }
+
+    if (downloadPdfBtn) {
+      downloadPdfBtn.addEventListener('click', () => {
+        const originalText = downloadPdfBtn.querySelector('span:last-child').textContent;
+        downloadPdfBtn.querySelector('span:last-child').textContent = 'Descargando...';
+        setTimeout(() => {
+          downloadPdfBtn.querySelector('span:last-child').textContent = originalText;
+        }, 1500);
+      });
+    }
+
+    if (viewHistoryBtn) {
+      viewHistoryBtn.addEventListener('click', () => {
+        const consumoNavLink = document.querySelector('a[data-path="consumo-mensual"]');
+        if (consumoNavLink) consumoNavLink.click();
+      });
+    }
+  })();
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface-card/95 backdrop-blur-xl shadow-[0_-2px_12px_rgba(0,62,107,0.06)]" data-active-classes="text-primary font-bold"><div class="flex items-center justify-around h-16 px-space-xs"><a aria-current="page" class="group flex flex-col items-center justify-center min-w-[44px] min-h-[44px] w-16 py-1 transition-all duration-200 text-primary font-bold" data-path="inicio-deuda" href="#"><span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">account_balance_wallet</span><span class="font-label-sm text-label-sm mt-0.5">Deuda</span></a><a class="group flex flex-col items-center justify-center min-w-[44px] min-h-[44px] w-16 py-1 text-on-surface-variant hover:text-primary transition-all duration-200" data-path="consumo-mensual" href="#"><span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">bar_chart</span><span class="font-label-sm text-label-sm mt-0.5">Consumo</span></a><a class="group flex flex-col items-center justify-center min-w-[44px] min-h-[44px] w-16 py-1 text-on-surface-variant hover:text-primary transition-all duration-200" data-path="documentos-facturas" href="#"><span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">receipt_long</span><span class="font-label-sm text-label-sm mt-0.5">Documentos</span></a><a class="group flex flex-col items-center justify-center min-w-[44px] min-h-[44px] w-16 py-1 text-on-surface-variant hover:text-primary transition-all duration-200" data-path="reclamos" href="#"><span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">report_problem</span><span class="font-label-sm text-label-sm mt-0.5">Reclamos</span></a><a class="group flex flex-col items-center justify-center min-w-[44px] min-h-[44px] w-16 py-1 text-on-surface-variant hover:text-primary transition-all duration-200" data-path="perfil-socio" href="#"><span class="material-symbols-outlined text-[24px] group-hover:scale-110 transition-transform">person</span><span class="font-label-sm text-label-sm mt-0.5">Perfil</span></a></div></nav>
+
+
+
+
+
+
+</body></html>
