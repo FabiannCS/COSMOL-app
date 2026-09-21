@@ -25,6 +25,7 @@ api_router.include_router(
 )
 
 from app.api.v1.documentos import router as documentos_router
+from app.api.v1.consumo import router as consumo_router
 
 # 4. Módulo de Repositorio Digital de Documentos y Descarga PDF (DEV 2)
 api_router.include_router(
@@ -33,13 +34,18 @@ api_router.include_router(
     tags=["Documentos y Facturas Digitales"]
 )
 
+# 5. Módulo de Analítica e Historial de Consumo (DEV 2)
+api_router.include_router(
+    consumo_router,
+    prefix="/consumo",
+    tags=["Analítica e Historial de Consumo"]
+)
+
 # ------------------------------------------------------------------------------
 # PUNTOS DE ENGANCHE PARA MÓDULOS DE NEGOCIO RESTANTES:
 # ------------------------------------------------------------------------------
-# from app.api.v1.socio import router as socio_router
 # from app.api.v1.payments import router as payments_router
 #
-# api_router.include_router(socio_router, prefix="/socio", tags=["Gestión de Socio y Deuda"])
 # api_router.include_router(payments_router, prefix="/payments", tags=["Pasarelas de Pago"])
 
 

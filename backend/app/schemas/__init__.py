@@ -29,6 +29,12 @@ from app.schemas.documento import (
     ListaDocumentosResponse,
 )
 
+from app.schemas.consumo import (
+    ConsumoPeriodoResponse,
+    EstadisticasConsumoResponse,
+    HistorialConsumoResponse,
+)
+
 __all__ = [
     "VincularSuministroRequest",
     "SuministroResponse",
@@ -45,5 +51,8 @@ __all__ = [
     "DashboardMultiSuministroResponse",
     "DocumentoResponse",
     "ListaDocumentosResponse",
+    "ConsumoPeriodoResponse",
+    "EstadisticasConsumoResponse",
+    "HistorialConsumoResponse",
 ]
 

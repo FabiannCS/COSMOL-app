@@ -112,7 +112,7 @@ El sistema debe:
 ### 4.2 Entregables de DEV 2: Esquemas, Lógica de Negocio y Endpoints REST
 
 #### A. Esquemas Pydantic v2 (`backend/app/schemas/consumo.py`):
-- [ ] `ConsumoPeriodoResponse`:
+- [x] `ConsumoPeriodoResponse`:
   - `periodo`: str (ej. `"08/2026"`).
   - `mes`: int.
   - `anio`: int.
@@ -122,7 +122,7 @@ El sistema debe:
   - `lectura_actual`: float.
   - `fecha_lectura`: Optional[str].
   - `estado_lectura`: str.
-- [ ] `EstadisticasConsumoResponse`:
+- [x] `EstadisticasConsumoResponse`:
   - `promedio_m3`: float.
   - `consumo_maximo_m3`: float.
   - `mes_consumo_maximo`: str.
@@ -132,7 +132,7 @@ El sistema debe:
   - `consumo_atipico`: bool.
   - `mensaje_alerta`: Optional[str].
   - `tendencia`: str (`"SUBIENDO"`, `"BAJANDO"`, `"ESTABLE"`).
-- [ ] `HistorialConsumoResponse`:
+- [x] `HistorialConsumoResponse`:
   - `cod_socio`: str.
   - `rol_acceso`: str (`"TITULAR"` o `"CONSULTA_PAGO"`).
   - `nro_medidor`: Optional[str] (enmascarado para inquilinos).
@@ -141,35 +141,35 @@ El sistema debe:
   - `estadisticas`: EstadisticasConsumoResponse.
 
 #### B. Servicio de Negocio (`backend/app/services/servicio_consumo.py`):
-- [ ] Implementar clase `ServicioConsumo`:
-  - `consultar_historial_consumo(usuario_id: UUID, cod_socio: str, forzar_refresco: bool = False) -> HistorialConsumoResponse`.
+- [x] Implementar clase `ServicioConsumo`:
+  - `consultar_historial(usuario_id: UUID, cod_socio: str, forzar_refresco: bool = False) -> HistorialConsumoResponse`.
   - Validación de suministro en PostgreSQL (`db: AsyncSession`): comprobación de titularidad y rol.
   - Orquestación de caché: consulta a Redis antes de invocar al cliente legado.
   - Algoritmo de cálculo estadístico y detección de consumos atípicos ($\ge +30\%$).
   - Enmascaramiento de datos confidenciales para roles de solo pago.
 
 #### C. Endpoints REST (`backend/app/api/v1/consumo.py`):
-- [ ] `GET /api/v1/consumo/{cod_socio}`:
+- [x] `GET /api/v1/consumo/{cod_socio}`:
   - Parámetro opcional: `forzar_refresco: bool = False`.
   - Seguridad: Requiere Bearer JWT (`get_current_user`).
   - Respuestas documentadas: `200 OK`, `401 Unauthorized`, `403 Forbidden`, `404 Not Found`.
-- [ ] `POST /api/v1/consumo/{cod_socio}/invalidar-cache`:
+- [x] `POST /api/v1/consumo/{cod_socio}/invalidar-cache`:
   - Endpoint administrativo/refresco manual para forzar nueva lectura.
-- [ ] Registrar `consumo_router` en `backend/app/api/v1/router.py`.
+- [x] Registrar `consumo_router` en `backend/app/api/v1/router.py`.
 
 #### D. Batería de Pruebas DEV 2 (`backend/tests/test_consumo.py`):
-- [ ] Prueba de cálculo estadístico exacto (promedio, máximos y mínimos).
-- [ ] Prueba de detección de anomalía (+30% activa `consumo_atipico = True`).
-- [ ] Prueba de control de acceso multicuenta: suministro propio vs suministro ajeno (retorno de 403).
-- [ ] Prueba de endpoint HTTP `GET /api/v1/consumo/{cod_socio}` con cliente de pruebas.
+- [x] Prueba de cálculo estadístico exacto (promedio, máximos y mínimos).
+- [x] Prueba de detección de anomalía (+30% activa `consumo_atipico = True`).
+- [x] Prueba de control de acceso multicuenta: suministro propio vs suministro ajeno (retorno de 403).
+- [x] Prueba de endpoint HTTP `GET /api/v1/consumo/{cod_socio}` con cliente de pruebas.
 
 ---
 
 ## 5. Criterios de Aceptación y Validación
 
-1. [ ] **Cobertura Histórica:** La API retorna al menos **6 meses consecutivos** de lecturas y consumos en $m^3$ ordenados cronológicamente.
-2. [ ] **Rendimiento (<20 ms):** Las consultas repetidas se sirven directamente desde Redis con latencia inferior a 20 ms.
-3. [ ] **Detección de Fugas / Anomalías:** Si el último consumo supera en 30% o más el promedio histórico, la respuesta incluye `consumo_atipico: true` y un mensaje de recomendación de inspección de instalaciones.
-4. [ ] **Seguridad Multicuenta:** Solo los usuarios autenticados con suministros asociados pueden consultar su historial; cualquier intento de consulta a códigos no vinculados devuelve `403 Forbidden`.
-5. [ ] **Compatibilidad con Flutter:** El payload JSON responde a la estructura esperada por `fl_chart` para pintar de inmediato gráficos de barras o líneas sin transformaciones pesadas en el cliente móvil.
-6. [ ] **Suite de Pruebas en Verde:** Los tests de Fase 4 pasan al 100% en Docker, sumándose a los 70 tests ya existentes sin regresiones.
+1. [x] **Cobertura Histórica:** La API retorna al menos **6 meses consecutivos** de lecturas y consumos en $m^3$ ordenados cronológicamente.
+2. [x] **Rendimiento (<20 ms):** Las consultas repetidas se sirven directamente desde Redis con latencia inferior a 20 ms.
+3. [x] **Detección de Fugas / Anomalías:** Si el último consumo supera en 30% o más el promedio histórico, la respuesta incluye `consumo_atipico: true` y un mensaje de recomendación de inspección de instalaciones.
+4. [x] **Seguridad Multicuenta:** Solo los usuarios autenticados con suministros asociados pueden consultar su historial; cualquier intento de consulta a códigos no vinculados devuelve `403 Forbidden`.
+5. [x] **Compatibilidad con Flutter:** El payload JSON responde a la estructura esperada por `fl_chart` para pintar de inmediato gráficos de barras o líneas sin transformaciones pesadas en el cliente móvil.
+6. [x] **Suite de Pruebas en Verde:** Los tests de Fase 4 pasan al 100% en Docker, sumándose a los 78 tests ya existentes para un total de 89/89 tests pasando sin regresiones.
