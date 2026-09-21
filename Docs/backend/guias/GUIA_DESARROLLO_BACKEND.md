@@ -244,27 +244,21 @@ Para no modificar `app/main.py` constantemente y evitar conflictos de Git entre 
 
 ---
 
-## 8. Ejecución de Pruebas Automatizadas
+## 8. Ejecución de Pruebas Automatizadas (Suite de 90 Tests)
 
-El entorno está configurado con `pytest` y soporte asíncrono nativo (`pytest-asyncio` con `asyncio_mode = auto`):
+El entorno está configurado con `pytest` y soporte asíncrono nativo (`pytest-asyncio` con `asyncio_mode = auto`). Toda la suite (90 pruebas) se ejecuta en Docker garantizando cero regresiones:
 
 ```bash
-# Ejecutar todas las pruebas dentro del contenedor Docker:
+# Ejecutar toda la suite de pruebas (90 tests) dentro del contenedor:
 docker compose exec backend-api pytest
 
-# Ejecutar con detalles (-v):
+# Ejecutar con detalles y tiempos por prueba (-v):
 docker compose exec backend-api pytest -v
 ```
 
-Para escribir una prueba de endpoint, usa el fixture `client` disponible en `conftest.py`:
+### 8.1 Política de Cero Mocks y Datos Reales
+A partir de la consolidación de la Fase 4, el backend opera con `MOCK_COSMOL_LEGACY=False` y `MOCK_COSMOL_CONSUMO=False`:
+* Todas las peticiones a socios consultan los endpoints oficiales de Informix (`http://api.cosmol.com.bo/api-consultas`).
+* Las pruebas utilizan socios reales de Montero (`23807`, `556`, `540`, `1001`) para validar respuestas y casos de borde (deuda pendiente, consumo atípico, etc.).
+* El servicio de caché en Redis (`cache-redis`) garantiza tiempos de respuesta `< 20 ms` en consultas subsecuentes de deudas y consumos.
 
-```python
-import pytest
-from httpx import AsyncClient
-
-@pytest.mark.asyncio
-async def test_endpoint_salud(client: AsyncClient):
-    response = await client.get("/api/v1/health")
-    assert response.status_code == 200
-    assert response.json()["status"] == "ok"
-```

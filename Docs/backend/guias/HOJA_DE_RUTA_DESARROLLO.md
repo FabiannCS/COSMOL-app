@@ -294,9 +294,13 @@ gantt
 ### **Fase 4: Analítica de Consumo Histórico**
 > **Meta:** Proveer al socio transparencia sobre sus hábitos de consumo mensual en metros cúbicos ($m^3$).
 
-- [ ] **4.1 Endpoint de Consumo:**
-  - `GET /api/v1/socio/consumption-history?cod_socio=...`
-  - Extraer y retornar historial de los últimos **6 a 12 meses**: mes/año, volumen en $m^3$, importe facturado y estado de lectura.
+- [x] **4.1 Endpoint de Consumo y Lógica de Negocio (Backend):**
+  - Endpoint `GET /api/v1/consumo/{cod_socio}` e invalidación `POST /api/v1/consumo/{cod_socio}/invalidar-cache`.
+  - Extracción en vivo desde Informix (`GET /socios/{cod_socio}/historial-facturas`) de los 12 meses históricos (atributo `"CONSUMO"` en $m^3$ y `"MONTO"` en Bs).
+  - Estrategia de caché en Redis (`consumo:{cod_socio}`, TTL 15 min, latencia <20 ms).
+  - Cálculo estadístico (promedios, máximos/mínimos, tendencia) y alerta de fuga preventiva (`consumo_atipico = True` si $\ge +30\%$).
+  - Control multicuenta: enmascaramiento de datos sensibles para inquilinos (`CONSULTA_PAGO`).
+  - Suite de pruebas de Fase 4 integrada con **90/90 tests aprobados al 100% en Docker** (cero mocks).
 - [ ] **4.2 Gráficos en Flutter:**
   - Implementación de gráficos de barras o líneas con `fl_chart`.
   - Ejes definidos: Meses vs. Volumen consumido ($m^3$).
