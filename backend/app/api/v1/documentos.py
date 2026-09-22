@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user_id, get_db
 from app.schemas.documento import ListaDocumentosResponse
 from app.services.servicio_documentos import ServicioDocumentos, registrar_auditoria_descarga
+from app.tasks.auditoria_reportes import despachar_auditoria_reportes
 
 logger = logging.getLogger(__name__)
 
@@ -86,13 +87,27 @@ async def descargar_documento_pdf(
         doc_id=doc_id
     )
 
-    # Registrar evento de auditoría asíncrono
+    # Registrar evento de auditoría interna
     background_tasks.add_task(
         registrar_auditoria_descarga,
         usuario_id=user_uuid,
         cod_socio=doc.cod_socio,
         doc_id=doc.id,
         tipo_documento=doc.tipo_documento
+    )
+
+    # Despachar evento de Descarga de Factura PDF a COSMOL-Reportes en segundo plano (Contrato § 4)
+    try:
+        cod_socio_int = int(str(doc.cod_socio).strip())
+    except (ValueError, TypeError):
+        cod_socio_int = 0
+
+    background_tasks.add_task(
+        despachar_auditoria_reportes,
+        codigo_socio=cod_socio_int,
+        nombres=f"SOCIO {cod_socio_int}",
+        id_tipo=9,
+        tipo_consulta="Descarga de Factura PDF",
     )
 
     return StreamingResponse(

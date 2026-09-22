@@ -63,7 +63,7 @@ El objetivo es construir una solución omnicanal (Android, iOS y Web) altamente 
                      ├────► Sistema Legado COSMOL (API/BD Lectura Asíncrona)
                      ├────► BD ChatbotReportes (Solo escritura auditoría)
                      ├────► Meta WhatsApp Cloud API / Gateway SMS (Envío OTP)
-                     └────► Pasarelas de Pago / Banca Externa (Webhooks/Redirects)
+                     └────► Pasarelas de Pago Oficiales (Hosted Checkout Multipago y Pago al Paso)
 ```
 
 ---
@@ -191,11 +191,12 @@ gantt
     [x] Storage MinIO & Servido Seguro de PDFs  :done, f3_1, after f2_2, 3d
     [ ] Visor & Descarga Flutter PDF            :f3_2, after f3_1, 3d
     section Fase 4: Analítica de Consumo
-    [ ] Endpoint Historial Consumo (6+ meses)   :f4_1, after f2_2, 2d
+    [x] Endpoint Historial Consumo (6+ meses)   :done, f4_1, after f2_2, 2d
     [ ] Gráficos Interactivos fl_chart          :f4_2, after f4_1, 3d
     section Fase 5: Pagos Externos
-    [ ] Integración Pasarelas & QR Interbancario:f5_1, after f2_3, 4d
-    [ ] Webhooks de Conciliación & Saldo        :f5_2, after f5_1, 3d
+    [x] Integración Pasarelas (Multipago / Paso):done, f5_1, after f2_3, 4d
+    [x] Ventana Verificación Redis & Refresco   :done, f5_2, after f5_1, 3d
+    [ ] Botón Pagar y BottomSheet Flutter       :f5_3, after f5_1, 3d
     section Fase 6: Auditoría & Seguridad
     [ ] Auditoría Async a ChatbotReportes       :f6_1, after f5_2, 2d
     [ ] Rate Limiting, Bloqueo & OWASP MASVS    :f6_2, after f6_1, 3d
@@ -309,32 +310,37 @@ gantt
 
 ---
 
-### **Fase 5: Redirección a Pagos, Generación de QR y Conciliación**
-> **Meta:** Facilitar el pago inmediato cerrando el ciclo de recaudación sin procesar tarjetas internamente.
+### **Fase 5: Redirección a Pasarelas de Pago Oficiales y Conciliación Dinámica**
+> **Meta:** Facilitar el pago inmediato cerrando el ciclo de recaudación mediante Hosted Checkout oficial de COSMOL (Multipago Bolivia y Pago al Paso 24/7) sin procesamiento de tarjetas local ni webhooks entrantes.
 
-- [ ] **5.1 Integración de Redirección y QR:**
-  - Botón principal *"Pagar Ahora"* en el Dashboard.
-  - Endpoint `POST /api/v1/payments/generate`: Solicita a la pasarela bancaria el registro de pago.
-  - Si la pasarela devuelve URL bancaria: Flutter la abre vía `url_launcher`.
-  - Si la pasarela devuelve cadena QR: Flutter dibuja el código con `qr_flutter` (con botón *"Guardar imagen QR"* y opción de compartir a la app del banco).
-- [ ] **5.2 Webhooks de Notificación y Conciliación:**
-  - Endpoint público seguro `POST /api/v1/payments/webhook`: Recibe la confirmación del banco con firma criptográfica.
-  - Actualiza el estado del pago en la base de datos propia.
-  - **Invalida inmediatamente la caché de Redis** de ese código de socio para que el dashboard muestre saldo Bs 0 en la siguiente consulta.
-  - Emite notificación push de confirmación al usuario vía FCM.
+- [x] **5.1 Catálogo Oficial y Redirección Hosted Checkout (Backend FastAPI):**
+  - Endpoint `GET /api/v1/pagos/canales/{cod_socio}`: Retorna canales oficiales con monto exacto en Bs y URLs de recaudación configuradas.
+  - Endpoint `POST /api/v1/pagos/registrar-intento/{cod_socio}`: Registra la intención, guarda auditoría en PostgreSQL (`auditoria_pagos_redireccion`) y activa la ventana de verificación en Redis.
+  - Endpoint `GET /api/v1/pagos/verificar-estado/{cod_socio}`: Consulta en vivo si la deuda fue saldada.
+- [x] **5.2 Ventana Inteligente de Verificación y Refresco Dinámico (Sin Webhooks):**
+  - Al no existir webhooks entrantes en la arquitectura de COSMOL (las pasarelas liquidan directamente B2B en Informix central), se implementa la **Ventana Inteligente de Verificación** en Redis con clave `pago_en_proceso:{cod_socio}` (TTL 15 min, `NX=True`) y purga de caché de deuda vieja.
+  - Endpoint `GET /api/v1/deuda/{cod_socio}?forzar_refresco=true`: Detecta automáticamente la ventana activa y aplica un micro-TTL de 30s (cooldown anti-saturación de Informix) para reflejar inmediatamente el saldo Bs 0.00 cuando el socio regresa a la app.
+- [ ] **5.3 Experiencia de Usuario en Flutter (Frontend):**
+  - Botón principal *"Pagar Ahora"* en el Dashboard que consume el catálogo y despliega un *BottomSheet*.
+  - Al seleccionar un canal, consume `registrar-intento` y abre la pasarela externa usando `url_launcher`.
+  - Pull-to-refresh en el Dashboard con `forzar_refresco=true` para actualizar el saldo en tiempo real tras pagar.
 
 ---
 
-### **Fase 6: Auditoría a ChatbotReportes, Rate Limiting y Seguridad Avanzada**
+### **Fase 6: Auditoría a COSMOL-Reportes, Rate Limiting y Seguridad Avanzada**
 > **Meta:** Cumplir con las políticas de auditoría corporativa y blindar la app contra ataques.
 
-- [ ] **6.1 Despacho de Auditoría Asíncrono hacia `ChatbotReportes`:**
-  - Conexión asíncrona de solo escritura a la base de datos de ChatbotReportes.
-  - Envío en segundo plano (`BackgroundTasks` de FastAPI o cola Redis) de eventos:
-    - `USER_LOGIN_SUCCESS` / `USER_LOGIN_FAILED`
-    - `OTP_REQUESTED` / `OTP_VERIFIED`
-    - `DOCUMENT_DOWNLOADED` (id_documento, cod_socio)
-    - `PAYMENT_INITIATED` / `PAYMENT_COMPLETED`
+- [ ] **6.1 Despacho de Auditoría Asíncrono hacia `COSMOL-Reportes`:**
+  - Integración desacoplada vía REST API consumiendo `POST {REPORTES_API_URL}/api/consultas` con header `X-Reportes-Token`.
+  - Despacho en segundo plano (`BackgroundTasks` de FastAPI) con 0 ms de impacto en la latencia del socio.
+  - Identificación del canal: **`id_usuario = 3`** (App de Socios) y **`tipo_ubicacion = 'APP_MOVIL'`** para distinguirse del Chatbot (`id_usuario = 2`).
+  - Eventos despachados:
+    - `id_tipo = 1`: `Autenticación / Acceso` (Login diario y Onboarding).
+    - `id_tipo = 2`: `Consulta de Deuda` (Dashboard principal).
+    - `id_tipo = 3`: `Historial de Facturas` (Consumos de 12 meses).
+    - `id_tipo = 9`: `Descarga de Documento PDF` (Facturas oficiales y avisos).
+    - `id_tipo = 10`: `Intento de Pago Pasarela` (Multipago / Pago al Paso).
+  - Documentos de soporte: `Docs/backend/pendiente/TASK-06-auditoria-reportes.md` y `Docs/reportes/GUIA_VISTA_APP_SOCIOS_COSMOL_REPORTES.md`.
 - [ ] **6.2 Política de Bloqueo por Intentos Fallidos:**
   - Implementar `slowapi` en FastAPI para rate limiting por IP (previene ataques distribuidos).
   - Bloqueo progresivo por cuenta tras **3 intentos fallidos consecutivos**:
@@ -408,7 +414,7 @@ Para mantener una gobernanza limpia del avance durante el desarrollo:
 | **Demora o fallo en entrega de SMS** | Alto | Media | Priorizar **WhatsApp Cloud API** como canal predeterminado (tasa de entrega >98% en segundos). Ofrecer reenvío con contador de 60 segundos. |
 | **Pérdida de conectividad móvil en el socio** | Medio | Alta | Almacenamiento local seguro en Flutter (`hive_flutter`). El socio puede abrir la app y ver su aviso/factura descargada previamente sin tener señal. |
 | **Ataques de fuerza bruta a contraseñas o OTP** | Crítico | Media | Bloqueo estricto tras 3 intentos fallidos, rate limit por IP con `slowapi`, y máximo 3 solicitudes de OTP por hora por número. |
-| **Desfase en la actualización de saldo tras un pago** | Alto | Media | El webhook de la pasarela bancaria invalida la clave de Redis al instante. Además, se añade botón manual *"Actualizar saldo"* en la app. |
+| **Desfase en la actualización de saldo tras un pago** | Alto | Media | La ventana inteligente de Redis purga la caché de deuda e impone un micro-TTL de 30s para consultar directamente a Informix al hacer pull-to-refresh o refresco manual, sin depender de webhooks externos. |
 
 ---
 

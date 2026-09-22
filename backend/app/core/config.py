@@ -66,6 +66,19 @@ class Settings(BaseSettings):
     DEBT_CACHE_TTL_SECONDS: int = 600  # 10 minutos (600 segundos)
     CONSUMO_CACHE_TTL_SECONDS: int = 900  # 15 minutos (900 segundos)
 
+    # Pasarelas de Pago Externas (Hosted Checkout)
+    URL_MULTIPAGO_COSMOL: str = "https://multipago.com/service/cosmol_payment/first"
+    URL_PAGO_AL_PASO_COSMOL: str = "https://red.pagoalpaso247.net/servicio/cosmol"
+    VENTANA_VERIFICACION_PAGO_SEGUNDOS: int = 900  # 15 minutos (900 segundos)
+    COOLDOWN_VERIFICACION_PAGO_SEGUNDOS: int = 30  # Micro-TTL anti-saturación Informix (30 segundos)
+
+    # Integración con COSMOL-Reportes (Auditoría Asíncrona)
+    REPORTES_API_URL: str = ""       # Ej: "http://cosmol-reportes:80" o URL de producción
+    REPORTES_API_TOKEN: str = ""     # Token validado por cabecera X-Reportes-Token
+    REPORTES_ID_USUARIO_APP: int = 3 # Usuario 3 = App Móvil (Usuario 2 = Chatbot WhatsApp)
+    REPORTES_TIMEOUT_SECONDS: float = 3.0
+    REPORTES_ENABLED: bool = True
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

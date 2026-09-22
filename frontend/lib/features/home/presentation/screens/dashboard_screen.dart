@@ -3,13 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/widgets/cosmol_app_bar.dart';
+import '../../../consumo/presentation/screens/consumo_screen.dart';
 import '../../../deuda/presentation/providers/deuda_provider.dart';
+import '../../../deuda/presentation/screens/deuda_screen.dart';
+import '../../../documentos/presentation/screens/documentos_screen.dart';
 import '../../../multicuenta/presentation/providers/multicuenta_provider.dart';
-import '../widgets/consumo_tab_content.dart';
-import '../widgets/deuda_tab_content.dart';
-import '../widgets/documentos_tab_content.dart';
-import '../widgets/perfil_tab_content.dart';
-import '../widgets/suministros_tab_content.dart';
+import '../../../multicuenta/presentation/screens/supplies_list_screen.dart';
+import '../../../perfil/presentation/screens/perfil_screen.dart';
 
 /// Shell Principal del Dashboard post-login con Navegación Inferior Fija.
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -26,17 +26,20 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final multicuentaState = ref.watch(multicuentaProvider);
     final activeSuministro = multicuentaState.activeSuministro;
+
     final deudaState = ref.watch(deudaProvider);
-    final nombreTitularReal = deudaState.deuda?.suministro?.nombreTitular;
+    final titularBackend = deudaState.resumenDeuda?.suministro?.nombreTitular;
 
     return Scaffold(
       appBar: _currentIndex == 0
           ? CosmolAppBar(
               title: 'COSMOL R.L.',
-              subtitle: _getSocioNombre(activeSuministro, nombreTitularReal),
+              subtitle: _getSocioNombre(activeSuministro,
+                  titularBackend: titularBackend),
               actions: [
                 IconButton(
-                  icon: const Icon(Icons.notifications_outlined, color: AppColors.onSurfaceVariant),
+                  icon: const Icon(Icons.notifications_outlined,
+                      color: AppColors.onSurfaceVariant),
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
@@ -53,7 +56,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               actions: [
                 if (_currentIndex == 3)
                   IconButton(
-                    icon: const Icon(Icons.add_rounded, color: AppColors.primary),
+                    icon: const Icon(Icons.add_rounded,
+                        color: AppColors.primary),
                     onPressed: () => context.push('/suministros/vincular'),
                   ),
               ],
@@ -63,7 +67,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           index: _currentIndex,
           children: [
             // Tab 0: Deuda / Inicio
-            DeudaTabContent(
+            DeudaScreen(
               activeSuministro: activeSuministro,
               onVerRecibo: () {
                 setState(() {
@@ -73,14 +77,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
 
             // Tab 1: Consumo Analítico (Fase 2)
-            const ConsumoTabContent(),
+            const ConsumoScreen(),
 
             // Tab 2: Documentos y Facturas PDF (Fase 2)
-            const DocumentosTabContent(),
+            const DocumentosScreen(),
 
             // Tab 3: Gestión Multicuenta
-            SuministrosTabContent(
-              multicuentaState: multicuentaState,
+            SuppliesListScreen(
+              isEmbedded: true,
               onSuministroSeleccionado: () {
                 setState(() {
                   _currentIndex = 0; // Regresar a Deuda/Inicio
@@ -89,7 +93,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
 
             // Tab 4: Perfil de Socio
-            PerfilTabContent(
+            PerfilScreen(
               activeSuministro: activeSuministro,
             ),
           ],
@@ -167,22 +171,21 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
-  String _getSocioNombre(dynamic activeSuministro, String? nombreTitularReal) {
-    if (activeSuministro == null) return 'Socio Digital';
-
-    // 1. Nombre oficial devuelto en vivo por COSMOL / Informix
-    if (nombreTitularReal != null && nombreTitularReal.trim().isNotEmpty) {
-      return nombreTitularReal.trim();
+  String _getSocioNombre(dynamic activeSuministro, {String? titularBackend}) {
+    if (titularBackend != null && titularBackend.trim().isNotEmpty) {
+      return titularBackend.trim();
     }
 
-    // 2. Alias personalizado del suministro
+    if (activeSuministro == null) return 'Socio Digital';
+
+    final cod = activeSuministro.codSocio?.toString().trim() ?? '';
+
     if (activeSuministro.alias != null &&
         activeSuministro.alias.toString().isNotEmpty &&
         !activeSuministro.alias.toString().startsWith('Suministro')) {
       return activeSuministro.alias.toString();
     }
 
-    final cod = activeSuministro.codSocio?.toString().trim() ?? '';
     return 'Socio $cod';
   }
 }

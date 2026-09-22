@@ -1,86 +1,95 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../multicuenta/presentation/providers/multicuenta_provider.dart';
-import '../../data/models/deuda_response_model.dart';
+import '../../data/models/resumen_deuda_model.dart';
 import '../../data/repositories/deuda_repository_impl.dart';
 import '../../domain/repositories/deuda_repository.dart';
 
 class DeudaState {
   final bool isLoading;
-  final ResumenDeudaModel? deuda;
+  final ResumenDeudaModel? resumenDeuda;
   final String? errorMessage;
   final String? currentCodSocio;
 
   const DeudaState({
     this.isLoading = false,
-    this.deuda,
+    this.resumenDeuda,
     this.errorMessage,
     this.currentCodSocio,
   });
 
   DeudaState copyWith({
     bool? isLoading,
-    ResumenDeudaModel? deuda,
+    ResumenDeudaModel? resumenDeuda,
     String? errorMessage,
     String? currentCodSocio,
   }) {
     return DeudaState(
       isLoading: isLoading ?? this.isLoading,
-      deuda: deuda ?? this.deuda,
+      resumenDeuda: resumenDeuda ?? this.resumenDeuda,
       errorMessage: errorMessage,
       currentCodSocio: currentCodSocio ?? this.currentCodSocio,
     );
   }
+
+  bool get hasDebt => resumenDeuda?.hasDebt ?? false;
+  double get saldoTotal => resumenDeuda?.saldoPendienteBs ?? 0.0;
+  int get cantidadFacturas => resumenDeuda?.cantidadFacturasPendientes ?? 0;
+  bool get alertaCorte => resumenDeuda?.alertaCorte ?? false;
+  bool get estaVencido => resumenDeuda?.estaVencido ?? false;
+  List<FacturaPendienteModel> get facturas =>
+      resumenDeuda?.facturasPendientes ?? const [];
 }
 
 final deudaProvider = StateNotifierProvider<DeudaNotifier, DeudaState>((ref) {
   final repository = ref.watch(deudaRepositoryProvider);
   final multicuentaState = ref.watch(multicuentaProvider);
-  final activeCodSocio = multicuentaState.activeSuministro?.codSocio.trim();
+  final activeCodSocio = multicuentaState.activeSuministro?.codSocio;
 
-  return DeudaNotifier(
-    repository: repository,
-    initialCodSocio: activeCodSocio,
-  );
+  final notifier = DeudaNotifier(repository);
+
+  // Cargar automáticamente la deuda cuando haya un suministro activo
+  if (activeCodSocio != null && activeCodSocio.isNotEmpty) {
+    notifier.cargarDeuda(activeCodSocio);
+  }
+
+  return notifier;
 });
 
 class DeudaNotifier extends StateNotifier<DeudaState> {
-  final DeudaRepository repository;
+  final DeudaRepository _repository;
 
-  DeudaNotifier({
-    required this.repository,
-    String? initialCodSocio,
-  }) : super(DeudaState(currentCodSocio: initialCodSocio)) {
-    if (initialCodSocio != null && initialCodSocio.isNotEmpty) {
-      cargarDeuda(codSocio: initialCodSocio);
-    }
-  }
+  DeudaNotifier(this._repository) : super(const DeudaState());
 
-  Future<void> cargarDeuda({
-    String? codSocio,
+  Future<void> cargarDeuda(
+    String codSocio, {
     bool forzarRefresco = false,
   }) async {
-    final targetCodSocio = codSocio ?? state.currentCodSocio;
-    if (targetCodSocio == null || targetCodSocio.isEmpty) {
+    final cleanCod = codSocio.trim();
+    if (cleanCod.isEmpty) return;
+
+    // Si ya estamos cargando el mismo socio sin refresco forzado, evitar peticiones duplicadas
+    if (state.isLoading && state.currentCodSocio == cleanCod && !forzarRefresco) {
       return;
     }
 
     state = state.copyWith(
       isLoading: true,
       errorMessage: null,
-      currentCodSocio: targetCodSocio,
+      currentCodSocio: cleanCod,
     );
 
     try {
-      final deuda = await repository.obtenerDeudaSuministro(
-        codSocio: targetCodSocio,
+      final resumen = await _repository.obtenerDeudaSuministro(
+        codSocio: cleanCod,
         forzarRefresco: forzarRefresco,
       );
 
       state = state.copyWith(
         isLoading: false,
-        deuda: deuda,
+        resumenDeuda: resumen,
         errorMessage: null,
+        currentCodSocio: cleanCod,
       );
     } on AppException catch (e) {
       state = state.copyWith(
@@ -90,8 +99,16 @@ class DeudaNotifier extends StateNotifier<DeudaState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'No se pudo consultar el estado de deuda del suministro.',
+        errorMessage:
+            'No se pudo consultar el saldo de deuda. Verifique su conexión.',
       );
+    }
+  }
+
+  Future<void> refrescar() async {
+    final codSocio = state.currentCodSocio;
+    if (codSocio != null && codSocio.isNotEmpty) {
+      await cargarDeuda(codSocio, forzarRefresco: true);
     }
   }
 }

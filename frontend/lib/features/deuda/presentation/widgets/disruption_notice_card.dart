@@ -1,39 +1,45 @@
 import 'package:flutter/material.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
+import '../../data/models/resumen_deuda_model.dart';
 
-/// Tarjeta de Alerta y Aviso Preventivo de Corte emitida por COSMOL.
+/// Tarjeta de Alerta y Aviso Preventivo de Corte institucional.
 class DisruptionNoticeCard extends StatelessWidget {
-  final String? fechaLimite;
-  final String? mensajeAlerta;
+  final ResumenDeudaModel? deuda;
 
   const DisruptionNoticeCard({
     super.key,
-    this.fechaLimite,
-    this.mensajeAlerta,
+    this.deuda,
   });
 
   @override
   Widget build(BuildContext context) {
+    final cantFacturas = deuda?.cantidadFacturasPendientes ?? 2;
+    final mensajeCustom = deuda?.mensajeAlerta;
+    final fechaVencimiento = deuda?.fechaProximoVencimiento;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.errorRed.withValues(alpha: 0.3)),
+        border: Border.all(
+          color: AppColors.errorRed.withValues(alpha: 0.4),
+          width: 1.2,
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Container(
-            width: 36,
-            height: 36,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: AppColors.errorContainer,
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(Icons.warning_amber_rounded,
-                color: AppColors.errorRed, size: 20),
+                color: AppColors.errorRed, size: 22),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -56,21 +62,27 @@ class DisruptionNoticeCard extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (fechaLimite != null && fechaLimite!.isNotEmpty) ...[
-                  const SizedBox(height: 4),
+                const SizedBox(height: 4),
+                if (fechaVencimiento != null && fechaVencimiento.isNotEmpty)
                   Text(
-                    'Límite para evitar corte: $fechaLimite',
+                    'Fecha de vencimiento: $fechaVencimiento',
+                    style: AppTextStyles.subtitle2.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkNavy,
+                    ),
+                  )
+                else
+                  Text(
+                    'Acumulación de $cantFacturas facturas impagas',
                     style: AppTextStyles.subtitle2.copyWith(
                       fontWeight: FontWeight.bold,
                       color: AppColors.darkNavy,
                     ),
                   ),
-                ],
                 const SizedBox(height: 4),
                 Text(
-                  mensajeAlerta != null && mensajeAlerta!.isNotEmpty
-                      ? mensajeAlerta!
-                      : 'Adeuda facturas de servicio con riesgo de orden de corte según normativa cooperativa. Regularice a tiempo para evitar la suspensión de su suministro.',
+                  mensajeCustom ??
+                      'Con 2 o más facturas pendientes se emite orden de corte según normativa de COSMOL R.L. Regularice su pago a tiempo para evitar la suspensión del servicio.',
                   style: AppTextStyles.caption.copyWith(
                     color: AppColors.onSurfaceVariant,
                   ),
