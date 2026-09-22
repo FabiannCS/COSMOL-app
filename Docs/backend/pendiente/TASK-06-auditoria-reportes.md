@@ -125,17 +125,17 @@ El backend enviará peticiones HTTP asíncronas hacia el endpoint de `COSMOL-Rep
 ### 4.2 Entregables de DEV 2 (Eduardo): Enganche en Endpoints y Pruebas End-to-End
 
 #### A. Integración en Endpoints de Autenticación (`backend/app/api/v1/autenticacion.py`):
-- [ ] Inyectar `BackgroundTasks` en `POST /autenticacion/login`:
+- [x] Inyectar `BackgroundTasks` en `POST /autenticacion/login`:
   - Tras validar PIN y emitir JWT, encolar evento `id_tipo = 1`, `tipo_consulta = "Autenticación / Acceso"`.
-- [ ] Inyectar `BackgroundTasks` en `POST /autenticacion/establecer-pin`:
+- [x] Inyectar `BackgroundTasks` en `POST /autenticacion/establecer-pin`:
   - Tras registrar PIN y crear suministro, encolar evento de Onboarding con `id_tipo = 1`.
 
 #### B. Integración en Endpoints de Consulta de Deuda (`backend/app/api/v1/deuda.py`):
-- [ ] Inyectar `BackgroundTasks` en `GET /deuda/{cod_socio}`:
-  - Al consultar el saldo del socio, encolar evento `id_tipo = 2`, `tipo_consulta = "Consulta de Deuda"`.
+- [x] Inyectar `BackgroundTasks` en `GET /deuda/{cod_socio}`:
+  - Al consultar el saldo del socio, encolar evento `id_tipo = 2`, `tipo_consulta = "Consulta de Deuda"` (extrayendo el nombre titular con validación segura de existencia `hasattr`).
 
 #### C. Integración en Endpoints de Consumo e Historial (`backend/app/api/v1/consumo.py`):
-- [ ] Inyectar `BackgroundTasks` en `GET /consumo/{cod_socio}`:
+- [x] Inyectar `BackgroundTasks` en `GET /consumo/{cod_socio}`:
   - Al consultar la gráfica de 12 meses, encolar evento `id_tipo = 3`, `tipo_consulta = "Historial de Facturas"`.
 
 #### D. Integración en Endpoints de Documentos PDF (`backend/app/api/v1/documentos.py`):
@@ -159,4 +159,4 @@ El backend enviará peticiones HTTP asíncronas hacia el endpoint de `COSMOL-Rep
 2. [x] **Autenticación con Token:** Las peticiones viajan con la cabecera `X-Reportes-Token`.
 3. [x] **Rendimiento (<20 ms):** El tiempo de respuesta de los endpoints de la app no se ve afectado por el despacho a Reportes.
 4. [x] **Resiliencia Total:** La desconexión o fallo del servidor de Reportes no produce errores HTTP 500 ni bloqueos en la app de Flutter.
-5. [x] **Suite de Pruebas en Verde:** Todas las pruebas pasan al 100% en Docker sumándose a las 96 pruebas existentes sin regresiones.
+5. [x] **Suite de Pruebas en Verde:** Todas las pruebas pasan al 100% en Docker sumándose a las 118 pruebas existentes en total sin regresiones.

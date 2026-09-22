@@ -38,7 +38,7 @@ En cumplimiento de la arquitectura del proyecto (la App Móvil no tiene panel ad
   * Al consultar el saldo pendiente del suministro (en caché de Redis o en vivo):
     * `id_tipo = 2`
     * `tipo_consulta = "Consulta de Deuda"`
-    * `nombres = resumen.suministro.nombre_titular`
+    * `nombres = resumen.suministro.nombre_titular` (con extracción segura vía `hasattr` para prevenir `AttributeError`)
 
 ### 2.3 Módulo de Historial y Analítica de Consumo (`app/api/v1/consumo.py`)
 * **Endpoint `GET /consumo/{cod_socio}`:**

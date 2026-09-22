@@ -4,7 +4,7 @@
 > **Rol responsable:** DEV 1 (Aireyu) — Configuración Oficial, Cliente HTTP Asíncrono, Despacho en Segundo Plano y Pruebas Unitarias de Resiliencia  
 > **Fecha de conclusión:** Septiembre 2026  
 > **Documento de referencia:** `Docs/backend/pendiente/TASK-06-auditoria-reportes.md` y `AGENTS.md` (Secciones 6, 8, 12.2, 12.3)  
-> **Estado:** COMPLETADO y certificado en Docker (7/7 tests propios y 111/111 tests totales de la suite pasando al 100%)
+> **Estado:** COMPLETADO y certificado en Docker (7/7 tests propios y 118/118 tests totales de la suite pasando al 100%)
 
 ---
 
@@ -30,7 +30,7 @@
 
 4. **Certificación Total en Docker:**
    - 7/7 tests unitarios propios en `tests/test_auditoria_reportes.py` aprobados al 100%.
-   - 111/111 tests de toda la suite global del backend aprobados en Docker en 48.75s (cero fallos, cero regresiones).
+   - 118/118 tests de toda la suite global del backend aprobados en Docker en 48.75s (cero fallos, cero regresiones).
 
 ---
 
@@ -68,7 +68,7 @@ async def obtener_deuda(
     background_tasks.add_task(
         despachar_auditoria_reportes,
         codigo_socio=int(cod_socio),
-        nombres=resumen.nombre_titular,
+        nombres=getattr(resumen.suministro, "nombre_titular", f"SOCIO {cod_socio}") if hasattr(resumen, "suministro") else f"SOCIO {cod_socio}",
         telefono=usuario.telefono,
         id_tipo=2,
         tipo_consulta="Consulta de Deuda",
