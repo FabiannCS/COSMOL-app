@@ -66,6 +66,12 @@ class Settings(BaseSettings):
     DEBT_CACHE_TTL_SECONDS: int = 600  # 10 minutos (600 segundos)
     CONSUMO_CACHE_TTL_SECONDS: int = 900  # 15 minutos (900 segundos)
 
+    # Pasarelas de Recaudación Externa de COSMOL (Fase 5)
+    URL_MULTIPAGO_COSMOL: str = "https://multipago.com/service/cosmol_payment/first"
+    URL_PAGO_AL_PASO_COSMOL: str = "https://red.pagoalpaso247.net/servicio/cosmol"
+    VENTANA_VERIFICACION_PAGO_SEGUNDOS: int = 900  # 15 minutos
+    COOLDOWN_VERIFICACION_PAGO_SEGUNDOS: int = 30  # Micro-TTL anti-saturación Informix
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
