@@ -5,6 +5,11 @@ import '../../../../core/config/theme/app_text_styles.dart';
 import '../../../../core/widgets/cosmol_button.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
 
+import '../../../deuda/presentation/providers/deuda_provider.dart';
+import '../../../multicuenta/presentation/providers/multicuenta_provider.dart';
+import '../../../consumo/presentation/providers/consumo_provider.dart';
+import '../../../documentos/presentation/providers/documentos_provider.dart';
+
 /// Pantalla y Tab de Perfil de Socio, Seguridad y Logout.
 class PerfilScreen extends ConsumerWidget {
   final dynamic activeSuministro;
@@ -137,6 +142,10 @@ class PerfilScreen extends ConsumerWidget {
             icon: Icons.logout,
             onPressed: () async {
               await ref.read(authProvider.notifier).logout();
+              ref.invalidate(deudaProvider);
+              ref.invalidate(multicuentaProvider);
+              ref.invalidate(consumoProvider);
+              ref.invalidate(documentosProvider);
             },
           ),
         ],

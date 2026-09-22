@@ -142,7 +142,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           // Campo 2: Contraseña
                           CosmolTextField(
                             label: 'Contraseña',
-                            hint: 'Ingrese su contraseña',
                             controller: _passwordController,
                             isPassword: true,
                             prefixIcon: Icons.lock_outline,
@@ -203,7 +202,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                           // Submit Button (Ingresar a mi Cuenta)
                           CosmolButton(
-                            text: 'Ingresar a mi Cuenta',
+                            text: 'Ingresar',
                             loadingText: 'Verificando Credenciales...',
                             suffixIcon: Icons.arrow_forward,
                             isLoading: authState.isLoading,
@@ -224,12 +223,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(
-                                      Icons.help_outline,
-                                      size: 18,
-                                      color: AppColors.secondary,
-                                    ),
-                                    const SizedBox(width: 6),
                                     Flexible(
                                       child: Text(
                                         '¿Olvidaste tu contraseña?',

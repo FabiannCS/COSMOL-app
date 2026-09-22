@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:dio/dio.dart';
 import '../services/storage_service.dart';
 import '../services/device_service.dart';
@@ -17,7 +18,7 @@ class AuthInterceptor extends Interceptor {
   OnAccountLocked? onAccountLocked;
   OnUnauthenticated? onUnauthenticated;
 
-  bool _isRefreshing = false;
+  Completer<String?>? _refreshCompleter;
 
   AuthInterceptor({
     required this.storageService,
@@ -81,11 +82,32 @@ class AuthInterceptor extends Interceptor {
         return handler.next(err);
       }
 
-      // 3. Manejo de 401 Unauthorized -> Intento de Renovación Silenciosa de Token
-      if (response.statusCode == 401 && !_isRefreshing) {
+      // 3. Manejo de 401 Unauthorized -> Renovación de Token Silenciosa y Encolada
+      final isRefreshEndpoint = err.requestOptions.path.contains('/autenticacion/renovar-token');
+      if (response.statusCode == 401 && !isRefreshEndpoint) {
+        // Si ya hay un refresco en curso por otra petición concurrente, esperar su resultado
+        if (_refreshCompleter != null) {
+          try {
+            final newToken = await _refreshCompleter!.future;
+            if (newToken != null && newToken.isNotEmpty) {
+              final opts = err.requestOptions;
+              opts.headers['Authorization'] = 'Bearer $newToken';
+              final retryResponse = await refreshDio.fetch(opts);
+              return handler.resolve(retryResponse);
+            } else {
+              return handler.reject(err);
+            }
+          } catch (_) {
+            return handler.reject(err);
+          }
+        }
+
+        // Primer hilo en detectar 401: crea el Completer y ejecuta la renovación
+        final completer = Completer<String?>();
+        _refreshCompleter = completer;
+
         final refreshToken = await storageService.getRefreshToken();
         if (refreshToken != null && refreshToken.isNotEmpty) {
-          _isRefreshing = true;
           try {
             final deviceInfo = await deviceService.getDeviceInfo();
             final refreshResponse = await refreshDio.post(
@@ -97,25 +119,30 @@ class AuthInterceptor extends Interceptor {
             );
 
             if (refreshResponse.statusCode == 200 && refreshResponse.data != null) {
-              final newAccessToken = refreshResponse.data['access_token'];
-              final newRefreshToken = refreshResponse.data['refresh_token'];
+              final newAccessToken = refreshResponse.data['access_token']?.toString();
+              final newRefreshToken = refreshResponse.data['refresh_token']?.toString() ?? refreshToken;
 
-              await storageService.saveTokens(
-                accessToken: newAccessToken,
-                refreshToken: newRefreshToken,
-              );
+              if (newAccessToken != null && newAccessToken.isNotEmpty) {
+                await storageService.saveTokens(
+                  accessToken: newAccessToken,
+                  refreshToken: newRefreshToken,
+                );
 
-              _isRefreshing = false;
+                completer.complete(newAccessToken);
+                _refreshCompleter = null;
 
-              // Re-intentar la petición original retenida con el nuevo token
-              final opts = err.requestOptions;
-              opts.headers['Authorization'] = 'Bearer $newAccessToken';
+                // Re-intentar la petición original retenida con el nuevo token
+                final opts = err.requestOptions;
+                opts.headers['Authorization'] = 'Bearer $newAccessToken';
 
-              final retryResponse = await refreshDio.fetch(opts);
-              return handler.resolve(retryResponse);
+                final retryResponse = await refreshDio.fetch(opts);
+                return handler.resolve(retryResponse);
+              }
             }
+            throw Exception('Respuesta de refresco inválida');
           } catch (refreshErr) {
-            _isRefreshing = false;
+            completer.complete(null);
+            _refreshCompleter = null;
             await storageService.clearAuthData();
             onUnauthenticated?.call();
             return handler.reject(
@@ -127,8 +154,17 @@ class AuthInterceptor extends Interceptor {
             );
           }
         } else {
+          completer.complete(null);
+          _refreshCompleter = null;
           await storageService.clearAuthData();
           onUnauthenticated?.call();
+          return handler.reject(
+            DioException(
+              requestOptions: err.requestOptions,
+              response: err.response,
+              error: const UnauthorizedException(),
+            ),
+          );
         }
       }
     }

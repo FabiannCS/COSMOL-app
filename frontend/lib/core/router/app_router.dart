@@ -17,7 +17,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
 
   return GoRouter(
-    initialLocation: '/login',
+    initialLocation: '/splash',
     redirect: (BuildContext context, GoRouterState state) {
       final status = authState.status;
       final isSplash = state.matchedLocation == '/splash';
@@ -25,7 +25,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isOnboarding = state.matchedLocation.startsWith('/onboarding');
 
       if (status == AuthStatus.initial) {
-        return isSplash || isLoggingIn || isOnboarding ? null : '/login';
+        return isSplash ? null : '/splash';
       }
 
       if (status == AuthStatus.unauthenticated || status == AuthStatus.locked) {
