@@ -54,6 +54,10 @@ async def obtener_deuda_suministro(
         False,
         description="Si es true, ignora la caché de Redis y consulta en vivo al sistema comercial legado."
     ),
+    force_refresh: bool = Query(
+        False,
+        description="Alias en inglés para forzar_refresco."
+    ),
     current_user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     redis_client: Redis = Depends(get_redis),
@@ -63,14 +67,29 @@ async def obtener_deuda_suministro(
     - Retorna en <20 ms si la respuesta está en caché de Redis.
     - Aplica semaforización de vencimiento y alerta de corte (2 o más facturas).
     - Aplica enmascaramiento estricto si el usuario tiene rol CONSULTA_PAGO (inquilino).
+    - Si existe una ventana de verificación activa (pago_en_proceso), consulta en vivo a Informix.
     - Rechaza con HTTP 403 si el suministro no pertenece al usuario autenticado.
     """
+    from app.services.servicio_cache_pagos import esta_en_ventana_verificacion, cerrar_ventana_verificacion
+
+    refresco_efectivo = forzar_refresco or force_refresh
+    if not refresco_efectivo:
+        # Si el socio tiene un pago en proceso en pasarela externa, consultar fresco
+        if await esta_en_ventana_verificacion(redis_client, cod_socio):
+            refresco_efectivo = True
+
     servicio = ServicioDeuda(db=db, redis_client=redis_client)
-    return await servicio.obtener_deuda_suministro(
+    resumen = await servicio.obtener_deuda_suministro(
         usuario_id=UUID(current_user_id),
         cod_socio=cod_socio,
-        forzar_refresco=forzar_refresco
+        forzar_refresco=refresco_efectivo
     )
+
+    # Si la deuda ya fue liquidada (saldo 0 Bs), cerrar ventana de verificación
+    if resumen.saldo_pendiente_bs <= 0.0 or resumen.cantidad_facturas_pendientes == 0:
+        await cerrar_ventana_verificacion(redis_client, cod_socio)
+
+    return resumen
 
 
 @router.post(

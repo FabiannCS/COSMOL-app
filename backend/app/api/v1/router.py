@@ -41,11 +41,13 @@ api_router.include_router(
     tags=["Analítica e Historial de Consumo"]
 )
 
-# ------------------------------------------------------------------------------
-# PUNTOS DE ENGANCHE PARA MÓDULOS DE NEGOCIO RESTANTES:
-# ------------------------------------------------------------------------------
-# from app.api.v1.payments import router as payments_router
-#
-# api_router.include_router(payments_router, prefix="/payments", tags=["Pasarelas de Pago"])
+from app.api.v1.pagos import router as pagos_router
+
+# 6. Módulo de Pasarelas de Pago Externas y Verificación Inteligente (DEV 2)
+api_router.include_router(
+    pagos_router,
+    prefix="/pagos",
+    tags=["Pasarelas de Pago y Recaudación"]
+)
 
 
