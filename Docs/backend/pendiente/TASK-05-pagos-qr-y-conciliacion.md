@@ -1,42 +1,45 @@
-# Tarea 05: Redirección a Pasarelas de Pago Externas (Multipago / Pago al Paso) y Actualización de Deuda
+# Tarea 05: Pasarelas de Pago Externas (Multipago / Pago al Paso) y Actualización Dinámica de Deuda
 
 > **Estado:** PENDIENTE  
-> **Fase:** Fase 5 — Redirección a Pagos Externos y Actualización de Deuda  
+> **Fase:** Fase 5 — Redirección a Pasarelas de Pago y Actualización de Deuda  
 > **Fecha de actualización:** Septiembre 2026  
 > **Entorno de ejecución:** Backend FastAPI en Docker (`cosmol-backend-api`, `cosmol-cache-redis`, `cosmol-db-postgres`)  
-> **Documentos de referencia:** `AGENTS.md` (Secciones 4.3, 10.3, 12.4), `HOJA_DE_RUTA_DESARROLLO.md` (Fase 5) y Arquitectura de `Cosmol-Chatbot` (Multipago / Al Paso).
+> **Documentos de referencia:** `AGENTS.md` (Secciones 4.3, 10.3, 12.4), `HOJA_DE_RUTA_DESARROLLO.md` (Fase 5) y Arquitectura de Producción de `Cosmol-Chatbot`.
 
 ---
 
-## 1. Contexto de Negocio y Realidad Operativa de COSMOL
+## 1. Realidad Operativa y Arquitectura de Pagos de COSMOL
 
-A partir de la auditoría y análisis de la solución productiva existente (**`Cosmol-Chatbot`**), se constata la realidad operativa de recaudación de la Cooperativa COSMOL R.L.:
+A partir del mensaje de producción del Chatbot oficial de COSMOL y el análisis de su arquitectura, se establece la realidad operativa de recaudación de la cooperativa:
 
-1. **Pasarelas de Recaudación Activas:**
-   * **Multipago Bolivia:** Servicio oficial web (`https://multipago.com/service/cosmol_payment/first`) habilitado para cobro de facturas de COSMOL mediante **Simple QR interoperable, tarjeta de débito/crédito y banca por internet**.
-   * **Pago Al Paso:** Red de cobranza autorizada para pagos presenciales y digitales en Montero y Santa Cruz.
+```
+💳 Canales de pago seguro oficiales de COSMOL R.L.:
+• Multipago Bolivia: https://multipago.com/service/cosmol_payment/first
+• Pago al Paso:     https://red.pagoalpaso247.net/servicio/cosmol
+```
 
-2. **Inexistencia de Webhooks Entrantes hacia la App:**
-   * Ni Multipago ni Pago Al Paso emiten webhooks HTTP en tiempo real hacia aplicaciones satélites o al Chatbot.
-   * La conciliación y liquidación se ejecuta directamente entre las empresas de recaudación y el sistema central legado **SAI (IBM Informix)** de COSMOL.
-
-3. **Cero Procesamiento de Tarjetas (AGENTS.md Sección 4.3 y 12.4):**
-   * COSMOL **no procesa pagos dentro de la app móvil ni en el backend**, eliminando al 100% el alcance de cumplimiento PCI-DSS.
-   * La app redirige al socio a los canales autorizados, cumpliendo con la exigencia de proveer pago por QR Simple y canales interbancarios.
-
-4. **El Rol Clave del Backend (FastAPI BFF):**
-   * **Evitar quemar URLs en el APK de Flutter:** El backend entrega dinámicamente las pasarelas activas y las URLs prellenadas con el código de socio (`?codigo={cod_socio}`). Si COSMOL cambia un dominio o agrega una nueva pasarela, no requiere republicar la app en Google Play.
-   * **Invalidación de Caché (Actualización de Saldo):** Al pagar en Multipago y volver a la app, el socio requiere ver su saldo actualizado. El backend debe soportar refresco forzado (`?force_refresh=true` o endpoint de invalidación) para purgar la caché de Redis y consultar al sistema de COSMOL.
-   * **Auditoría Externa:** Despachar en segundo plano el evento `PAYMENT_CLICKED` hacia la base de datos de `ChatbotReportes`.
+### 1.1 Modelo Conceptual: Pasarelas de Pago por Redirección (Hosted Checkout)
+1. **Sí son Pasarelas de Pago:**
+   * **Multipago Bolivia** y **Pago al Paso** son pasarelas y recaudadoras financieras autorizadas por la ASFI y el Banco Central de Bolivia (BCB).
+   * En sus respectivos portales web, ellas se encargan de generar el **Simple QR interoperable**, procesar tarjetas Visa/Mastercard y conectar con la banca por internet.
+2. **Cero Procesamiento Local de Tarjetas (AGENTS.md Sección 4.3 y 12.4):**
+   * COSMOL **no procesa pagos ni captura tarjetas dentro de la app móvil ni en el backend**, evitando a la cooperativa el costo y la responsabilidad de certificación PCI-DSS.
+3. **Inexistencia de Webhooks hacia la App (Conciliación Delegada B2B):**
+   * Ni Multipago ni Pago al Paso envían webhooks a la app de socios ni al Chatbot.
+   * La conciliación y liquidación del dinero ocurre de forma delegada y directa entre las pasarelas y el sistema comercial central **SAI (IBM Informix)** de COSMOL.
+4. **Rol del Backend FastAPI (BFF):**
+   * **Catálogo Dinámico de Canales:** Expone `GET /api/v1/pagos/canales/{cod_socio}` para entregar las URLs oficiales preconfiguradas con el código del socio. Si COSMOL cambia un dominio o suma un nuevo canal de pago, no es necesario recompilar ni republicar la app móvil en Google Play / App Store.
+   * **Actualización de Saldo (Pull-to-Refresh):** Como no existe un webhook push, cuando el socio paga en la web de Multipago y regresa a la app de Flutter, el endpoint `GET /api/v1/deuda/{cod_socio}?force_refresh=true` purga la clave en Redis (`deuda:{cod_socio}`) y consulta al sistema central de COSMOL para reflejar la deuda saldada.
+   * **Auditoría Asíncrona:** Despacho de eventos `PAYMENT_CHANNEL_SELECTED` hacia `ChatbotReportes` sin bloquear la experiencia del socio.
 
 ---
 
-## 2. Objetivos de la Tarea
+## 2. Objetivos Técnicos de la Tarea
 
-1. Exponer el endpoint `GET /api/v1/pagos/canales/{cod_socio}` para proveer a Flutter la lista de canales externos habilitados (Multipago Bolivia con QR/Tarjeta y Pago Al Paso) con sus respectivas URLs de redirección.
-2. Permitir el parámetro `force_refresh=true` en el endpoint de consulta de deuda `GET /api/v1/deuda/{cod_socio}` para que la acción de Pull-to-Refresh en Flutter invalide la caché de Redis (`deuda:{cod_socio}`) y obtenga el saldo actualizado en tiempo real.
-3. Registrar la intención de pago en PostgreSQL local para métricas internas (`RegistroRedireccionPago`).
-4. Despachar el evento de auditoría asíncrono `PAYMENT_REDIRECTED` hacia `ChatbotReportes` con `BackgroundTasks`.
+1. Exponer el endpoint `GET /api/v1/pagos/canales/{cod_socio}` que devuelva la deuda total en Bs y los canales de pago disponibles (**Multipago** y **Pago al Paso**) con sus URLs oficiales listas para abrir.
+2. Añadir el parámetro opcional `force_refresh: bool = False` en el endpoint de deuda `GET /api/v1/deuda/{cod_socio}` para invalidar inmediatamente la caché de Redis al hacer pull-to-refresh en Flutter.
+3. Registrar la intención de pago en PostgreSQL local para estadísticas internas (`auditoria_pagos_redireccion`).
+4. Despachar el evento de auditoría asíncrono `PAYMENT_CHANNEL_SELECTED` hacia `ChatbotReportes` con `BackgroundTasks`.
 
 ---
 
@@ -52,10 +55,10 @@ A partir de la auditoría y análisis de la solución productiva existente (**`C
 │   de Clics a Pasarelas            │   (`schemas/pago.py`)              │
 │   (`models/pago.py`)              │ • Servicio de Canales de Pago      │
 │ • Configuración centralizada de   │   (`servicio_pagos.py`)            │
-│   Pasarelas y URLs base en        │ • Endpoints REST (`pagos.py`)      │
-│   (`core/config.py`)              │ • Invalidación Forzada de Caché    │
-│ • Tests de modelo y config DEV 1  │   en `/deuda/{cod_socio}`          │
-│                                   │ • Tests de integración DEV 2       │
+│   URLs oficiales de Multipago     │ • Endpoints REST (`pagos.py`)      │
+│   y Pago al Paso en               │ • Soporte `force_refresh` en       │
+│   (`core/config.py`)              │   `/deuda/{cod_socio}` (Redis)     │
+│ • Tests de modelo y config DEV 1  │ • Tests de integración DEV 2       │
 └───────────────────────────────────┴────────────────────────────────────┘
 ```
 
@@ -63,32 +66,32 @@ A partir de la auditoría y análisis de la solución productiva existente (**`C
 
 ## 4. Detalle de Entregables Técnicos
 
-### 4.1 Entregables de DEV 1: Persistencia y Configuración
+### 4.1 Entregables de DEV 1 (Aireyu): Persistencia y Configuración
 
 #### A. Modelo en PostgreSQL (`backend/app/db/models/pago.py`):
 - [ ] Tabla `auditoria_pagos_redireccion`:
   - `id`: UUID (PK)
   - `usuario_id`: UUID (FK a `usuarios.id`)
   - `cod_socio`: String (indexado)
-  - `canal_id`: String (`"multipago"`, `"al_paso"`)
+  - `canal_id`: String (`"multipago"`, `"pago_al_paso"`)
   - `monto_deuda_bs`: Numeric(10, 2)
   - `creado_en`: DateTime(timezone=True, default=utcnow)
 
-#### B. Variables de Configuración (`backend/app/core/config.py`):
-- [ ] Settings para URLs base de recaudación:
+#### B. Variables de Configuración Oficiales (`backend/app/core/config.py`):
+- [ ] Settings para URLs base de recaudación (idénticas a producción):
   - `URL_MULTIPAGO_COSMOL: str = "https://multipago.com/service/cosmol_payment/first"`
-  - `URL_AL_PASO_COSMOL: str = "https://alpaso.com.bo/cosmol"`
+  - `URL_PAGO_AL_PASO_COSMOL: str = "https://red.pagoalpaso247.net/servicio/cosmol"`
 
 ---
 
-### 4.2 Entregables de DEV 2: Esquemas, Lógica de Negocio y Endpoints
+### 4.2 Entregables de DEV 2 (Eduardo): Esquemas, Servicio y Endpoints
 
 #### A. Esquemas Pydantic v2 (`backend/app/schemas/pago.py`):
 - [ ] `CanalPagoItem`:
-  - `id`: str (`"multipago"` | `"al_paso"`)
-  - `nombre`: str (ej. `"Multipago Bolivia"`)
-  - `descripcion`: str (ej. `"Pago seguro con Simple QR, Tarjeta de Débito/Crédito y Banca Móvil"`)
-  - `url_redireccion`: str (URL completa formateada con el código de socio)
+  - `id`: str (`"multipago"` | `"pago_al_paso"`)
+  - `nombre`: str (ej. `"Multipago Bolivia"`, `"Pago al Paso"`)
+  - `descripcion`: str (ej. `"Pago con Simple QR, Tarjeta de Débito/Crédito y Banca Móvil"`)
+  - `url_redireccion`: str (URL oficial de la pasarela)
   - `icono`: str (`"qr_code"`, `"storefront"`)
   - `soporta_qr`: bool
 - [ ] `CanalesPagoResponse`:
@@ -98,25 +101,26 @@ A partir de la auditoría y análisis de la solución productiva existente (**`C
 
 #### B. Servicio de Negocio (`backend/app/services/servicio_pagos.py`):
 - [ ] Implementar `ServicioPagos`:
-  - `obtener_canales_pago(cod_socio: str, usuario_id: UUID) -> CanalesPagoResponse`:
-    - Consulta la deuda actual del socio (vía cliente COSMOL).
-    - Construye las URLs parametrizadas.
-    - Registra el log de intención de pago en PostgreSQL.
-    - Despacha en background la auditoría a `ChatbotReportes`.
+  - `obtener_canales_pago(cod_socio: str, usuario_id: UUID, db: AsyncSession, background_tasks: BackgroundTasks) -> CanalesPagoResponse`:
+    - Consulta la deuda actual del socio desde la integración de COSMOL.
+    - Genera la lista de canales con las URLs oficiales configuradas.
+    - Registra el registro de intención en PostgreSQL (`auditoria_pagos_redireccion`).
+    - Encola el despacho de auditoría `PAYMENT_CHANNEL_SELECTED` a `ChatbotReportes`.
 
 #### C. Endpoints REST:
 - [ ] **`GET /api/v1/pagos/canales/{cod_socio}`** (`backend/app/api/v1/pagos.py`):
   - Protegido con `current_user` (JWT Bearer).
-  - Retorna los canales disponibles con URLs formateadas.
-- [ ] **Refresco Forzado en Deuda** (`backend/app/api/v1/deuda.py`):
-  - Añadir soporte para parámetro opcional `force_refresh: bool = False`.
-  - Si `force_refresh=True`: purga de inmediato la clave `deuda:{cod_socio}` en Redis y consulta al servicio de COSMOL.
+  - Retorna `CanalesPagoResponse`.
+- [ ] **Soporte de Refresco en Deuda** (`backend/app/api/v1/deuda.py`):
+  - Añadir el parámetro query opcional: `force_refresh: bool = Query(default=False)`.
+  - Si `force_refresh is True`: ejecuta `await redis_client.delete(f"deuda:{cod_socio}")` antes de consultar al cliente de COSMOL.
+- [ ] Registrar `pagos.router` en [`backend/app/api/v1/router.py`](file:///c:/Users/Lenovo/Desktop/COSMOL-app/backend/app/api/v1/router.py).
 
 #### D. Batería de Pruebas DEV 2 (`backend/tests/test_pagos.py`):
-- [ ] Prueba de obtención de canales con URLs formateadas para el socio.
-- [ ] Prueba de verificación de que no expone datos bancarios sensibles.
-- [ ] Prueba de invalidación forzada de caché (`force_refresh=True`) en el endpoint de deuda.
-- [ ] Prueba de protección de endpoint con JWT Bearer.
+- [ ] Prueba de obtención de canales con URLs oficiales de Multipago y Pago al Paso.
+- [ ] Prueba de validación de no exposición de datos financieros sensibles (cero tarjetas/claves).
+- [ ] Prueba de invalidación de caché de Redis con `force_refresh=True` en `/deuda/{cod_socio}`.
+- [ ] Prueba de control de acceso JWT Bearer (401 si no está autenticado).
 
 ---
 
@@ -124,17 +128,17 @@ A partir de la auditoría y análisis de la solución productiva existente (**`C
 
 1. En [`balance_card_widget.dart`](file:///c:/Users/Lenovo/Desktop/COSMOL-app/frontend/lib/features/home/presentation/widgets/balance_card_widget.dart), al presionar el botón **"Pagar Ahora"**:
    - Flutter realiza `GET /api/v1/pagos/canales/{cod_socio}`.
-   - Despliega un Modal / Bottom Sheet moderno con las opciones:
-     - **Multipago Bolivia (Pago con QR Simple / Tarjetas)**
-     - **Pago Al Paso**
-   - Al seleccionar una opción, ejecuta `launchUrl(Uri.parse(canal.urlRedireccion))` mediante el paquete `url_launcher`.
-2. Al regresar a la app, el gesto de **Pull-to-Refresh** en el Dashboard ejecuta la recarga con refresco de saldo.
+   - Despliega un Modal / Bottom Sheet con los canales oficiales:
+     * **Multipago Bolivia (Simple QR / Tarjetas / Banca)**
+     * **Pago al Paso**
+   - Al seleccionar una opción, ejecuta `launchUrl(Uri.parse(canal.urlRedireccion), mode: LaunchMode.externalApplication)` con el paquete `url_launcher`.
+2. Al regresar a la app, el gesto de **Pull-to-Refresh** en el Dashboard ejecuta `GET /api/v1/deuda/{cod_socio}?force_refresh=true` para actualizar el saldo en pantalla.
 
 ---
 
 ## 6. Criterios de Aceptación
 
-1. [ ] El endpoint `GET /api/v1/pagos/canales/{cod_socio}` retorna HTTP 200 con las opciones oficiales de Multipago y Al Paso.
-2. [ ] Las URLs entregadas incluyen los parámetros necesarios para que el socio no deba redigitar su código en Multipago.
-3. [ ] El parámetro `force_refresh=True` en `/api/v1/deuda/{cod_socio}` limpia la caché en Redis y devuelve el estado actualizado.
-4. [ ] 100% de la suite de pruebas pasando sin regresiones en el entorno Docker.
+1. [ ] `GET /api/v1/pagos/canales/{cod_socio}` responde HTTP 200 con la información de Multipago y Pago al Paso.
+2. [ ] Las URLs entregadas apuntan exactamente a los servicios oficiales de recaudación de COSMOL.
+3. [ ] `GET /api/v1/deuda/{cod_socio}?force_refresh=true` purga la caché de Redis y refresca la deuda en tiempo real.
+4. [ ] La suite de pruebas de FastAPI pasa al 100% en Docker sin regresiones.
