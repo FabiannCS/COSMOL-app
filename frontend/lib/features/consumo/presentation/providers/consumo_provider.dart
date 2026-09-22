@@ -105,7 +105,7 @@ final consumoProvider =
   final repository = ref.watch(consumoRepositoryProvider);
   final multicuentaState = ref.watch(multicuentaProvider);
   final activeCodSocio =
-      multicuentaState.activeSuministro?.codSocio.trim() ?? '23807';
+      multicuentaState.activeSuministro?.codSocio.trim();
 
   return ConsumoNotifier(
     repository: repository,
@@ -126,7 +126,11 @@ class ConsumoNotifier extends StateNotifier<ConsumoState> {
   }
 
   Future<void> cargarHistorial({String? codSocio, String? ci}) async {
-    final targetCodSocio = codSocio ?? state.currentCodSocio ?? '23807';
+    final targetCodSocio = codSocio ?? state.currentCodSocio;
+    if (targetCodSocio == null || targetCodSocio.isEmpty) {
+      return;
+    }
+
     state = state.copyWith(
       isLoading: true,
       errorMessage: null,

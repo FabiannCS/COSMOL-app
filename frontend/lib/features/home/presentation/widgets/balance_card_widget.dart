@@ -1,21 +1,26 @@
 import 'package:flutter/material.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
+import '../../../deuda/data/models/deuda_response_model.dart';
 
-/// Tarjeta principal de balance (Estado dual: Deuda pendiente vs Al día).
+/// Tarjeta principal de balance conectada a datos reales de COSMOL.
 class BalanceCardWidget extends StatelessWidget {
-  final bool hasDebt;
+  final ResumenDeudaModel? deuda;
   final VoidCallback onVerRecibo;
 
   const BalanceCardWidget({
     super.key,
-    required this.hasDebt,
+    required this.deuda,
     required this.onVerRecibo,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (hasDebt) {
+    final hasDebt = deuda?.hasDebt ?? false;
+
+    if (hasDebt && deuda != null) {
+      final facturas = deuda!.facturasPendientes;
+
       return Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -60,9 +65,9 @@ class BalanceCardWidget extends StatelessWidget {
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 6),
                         Text(
-                          '164.50',
+                          deuda!.saldoFormateado,
                           style: AppTextStyles.h1.copyWith(
                             fontSize: 32,
                             color: AppColors.darkNavy,
@@ -73,10 +78,18 @@ class BalanceCardWidget extends StatelessWidget {
                     ),
                   ],
                 ),
-                Text(
-                  '2 facturas pendientes',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.onSurfaceVariant,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.errorContainer.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${deuda!.cantidadFacturasPendientes} ${deuda!.cantidadFacturasPendientes == 1 ? "factura pendiente" : "facturas pendientes"}',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.errorRed,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
@@ -106,6 +119,7 @@ class BalanceCardWidget extends StatelessWidget {
                     ),
                   );
                 },
+                icon: const Icon(Icons.qr_code_rounded, size: 20),
                 label: const Text(
                   'Pagar Ahora',
                   style: TextStyle(
@@ -115,83 +129,74 @@ class BalanceCardWidget extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
 
-            // Desglose de facturas impagas
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.borderSubtle),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Agosto 2026',
-                        style: AppTextStyles.subtitle2.copyWith(
-                          fontWeight: FontWeight.w600,
+            if (facturas.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              // Desglose de facturas impagas reales
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.borderSubtle),
+                ),
+                child: Column(
+                  children: [
+                    for (int i = 0; i < facturas.length; i++) ...[
+                      if (i > 0)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Divider(height: 1, color: AppColors.borderSubtle),
                         ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Bs 78.00',
-                            style: AppTextStyles.subtitle2.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                facturas[i].mesLectura.isNotEmpty
+                                    ? facturas[i].mesLectura
+                                    : facturas[i].periodo,
+                                style: AppTextStyles.subtitle2.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              if (facturas[i].nroFactura.isNotEmpty)
+                                Text(
+                                  'Fac. N° ${facturas[i].nroFactura}',
+                                  style: AppTextStyles.caption.copyWith(
+                                    color: AppColors.textSecondary,
+                                    fontSize: 11,
+                                  ),
+                                ),
+                            ],
                           ),
-                          Text(
-                            'Impaga',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.errorRed,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                facturas[i].montoFormateado,
+                                style: AppTextStyles.subtitle2.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                facturas[i].estaVencida ? 'Vencida' : 'Impaga',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.errorRed,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ],
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Divider(height: 1, color: AppColors.borderSubtle),
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Septiembre 2026',
-                        style: AppTextStyles.subtitle2.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            'Bs 86.50',
-                            style: AppTextStyles.subtitle2.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'Impaga',
-                            style: AppTextStyles.caption.copyWith(
-                              color: AppColors.errorRed,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
+            ],
           ],
         ),
       );
@@ -231,16 +236,14 @@ class BalanceCardWidget extends StatelessWidget {
                 ],
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
                   color: AppColors.successBackground,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.verified,
-                        size: 16, color: AppColors.successGreen),
+                    Icon(Icons.verified, size: 16, color: AppColors.successGreen),
                     SizedBox(width: 4),
                     Text(
                       'Al día con tus pagos',

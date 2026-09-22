@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
 import '../../../auth/presentation/providers/auth_provider.dart';
+import '../../../deuda/presentation/providers/deuda_provider.dart';
 
 /// Contenido de la Pestaña 4: Perfil de Socio, Seguridad y Logout.
 class PerfilTabContent extends ConsumerWidget {
@@ -15,6 +16,15 @@ class PerfilTabContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final deudaState = ref.watch(deudaProvider);
+    final nombreTitular = deudaState.deuda?.suministro?.nombreTitular;
+    final displayName = (nombreTitular != null && nombreTitular.isNotEmpty)
+        ? nombreTitular
+        : (activeSuministro?.alias != null && activeSuministro!.alias.isNotEmpty)
+            ? activeSuministro!.alias
+            : 'Socio Digital COSMOL';
+    final rol = activeSuministro?.rol ?? 'TITULAR';
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -40,15 +50,37 @@ class PerfilTabContent extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Socio Digital COSMOL',
+                        displayName,
                         style: AppTextStyles.subtitle1
                             .copyWith(fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        'Código Activo: ${activeSuministro?.codSocio ?? 'N/A'}',
-                        style: AppTextStyles.body2
-                            .copyWith(color: AppColors.textSecondary),
+                      Row(
+                        children: [
+                          Text(
+                            'Socio: ${activeSuministro?.codSocio ?? 'N/A'}',
+                            style: AppTextStyles.body2
+                                .copyWith(color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.surfaceContainerLow,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              rol,
+                              style: AppTextStyles.caption.copyWith(
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

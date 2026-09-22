@@ -2,9 +2,16 @@ import 'package:flutter/material.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
 
-/// Tarjeta de Alerta y Aviso Preventivo de Corte por 3 facturas impagas.
+/// Tarjeta de Alerta y Aviso Preventivo de Corte emitida por COSMOL.
 class DisruptionNoticeCard extends StatelessWidget {
-  const DisruptionNoticeCard({super.key});
+  final String? fechaLimite;
+  final String? mensajeAlerta;
+
+  const DisruptionNoticeCard({
+    super.key,
+    this.fechaLimite,
+    this.mensajeAlerta,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -13,7 +20,7 @@ class DisruptionNoticeCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.borderSubtle),
+        border: Border.all(color: AppColors.errorRed.withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -42,24 +49,28 @@ class DisruptionNoticeCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.caption.copyWith(
-                          color: AppColors.onSurfaceVariant,
+                          color: AppColors.errorRed,
                           fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Límite para evitar corte: 25 Oct 2026',
-                  style: AppTextStyles.subtitle2.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.darkNavy,
+                if (fechaLimite != null && fechaLimite!.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Límite para evitar corte: $fechaLimite',
+                    style: AppTextStyles.subtitle2.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkNavy,
+                    ),
                   ),
-                ),
+                ],
                 const SizedBox(height: 4),
                 Text(
-                  'Con 3 facturas pendientes se emite orden de corte según normativa cooperativa. Regularice a tiempo para evitar el corte de su medidor.',
+                  mensajeAlerta != null && mensajeAlerta!.isNotEmpty
+                      ? mensajeAlerta!
+                      : 'Adeuda facturas de servicio con riesgo de orden de corte según normativa cooperativa. Regularice a tiempo para evitar la suspensión de su suministro.',
                   style: AppTextStyles.caption.copyWith(
                     color: AppColors.onSurfaceVariant,
                   ),

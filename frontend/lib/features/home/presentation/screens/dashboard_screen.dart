@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/widgets/cosmol_app_bar.dart';
+import '../../../deuda/presentation/providers/deuda_provider.dart';
 import '../../../multicuenta/presentation/providers/multicuenta_provider.dart';
 import '../widgets/consumo_tab_content.dart';
 import '../widgets/deuda_tab_content.dart';
@@ -25,12 +26,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   Widget build(BuildContext context) {
     final multicuentaState = ref.watch(multicuentaProvider);
     final activeSuministro = multicuentaState.activeSuministro;
+    final deudaState = ref.watch(deudaProvider);
+    final nombreTitularReal = deudaState.deuda?.suministro?.nombreTitular;
 
     return Scaffold(
       appBar: _currentIndex == 0
           ? CosmolAppBar(
               title: 'COSMOL R.L.',
-              subtitle: _getSocioNombre(activeSuministro),
+              subtitle: _getSocioNombre(activeSuministro, nombreTitularReal),
               actions: [
                 IconButton(
                   icon: const Icon(Icons.notifications_outlined, color: AppColors.onSurfaceVariant),
@@ -164,30 +167,22 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
   }
 
-  String _getSocioNombre(dynamic activeSuministro) {
+  String _getSocioNombre(dynamic activeSuministro, String? nombreTitularReal) {
     if (activeSuministro == null) return 'Socio Digital';
 
-    final cod = activeSuministro.codSocio?.toString().trim() ?? '';
-
-    // Mapeo de nombres oficiales del padrón comercial de COSMOL para socios de prueba
-    const knownNames = {
-      '540': 'DURAN ELOISA RIVERA',
-      '104523': 'CARLOS EDUARDO PEREZ',
-      '205566': 'MARIA ELENA ROJAS',
-      '301144': 'JUAN PABLO SUAREZ',
-      '556': 'SUAREZ BALTAZAR VICTOR HUGO',
-    };
-
-    if (knownNames.containsKey(cod)) {
-      return knownNames[cod]!;
+    // 1. Nombre oficial devuelto en vivo por COSMOL / Informix
+    if (nombreTitularReal != null && nombreTitularReal.trim().isNotEmpty) {
+      return nombreTitularReal.trim();
     }
 
+    // 2. Alias personalizado del suministro
     if (activeSuministro.alias != null &&
         activeSuministro.alias.toString().isNotEmpty &&
         !activeSuministro.alias.toString().startsWith('Suministro')) {
       return activeSuministro.alias.toString();
     }
 
+    final cod = activeSuministro.codSocio?.toString().trim() ?? '';
     return 'Socio $cod';
   }
 }

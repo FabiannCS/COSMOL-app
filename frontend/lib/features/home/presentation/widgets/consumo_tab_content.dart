@@ -36,8 +36,10 @@ class _ConsumoTabContentState extends ConsumerState<ConsumoTabContent> {
     return RefreshIndicator(
       color: AppColors.primary,
       onRefresh: () async {
-        final codSocio = activeSuministro?.codSocio.trim() ?? '23807';
-        await consumoNotifier.cargarHistorial(codSocio: codSocio);
+        final codSocio = activeSuministro?.codSocio.trim();
+        if (codSocio != null && codSocio.isNotEmpty) {
+          await consumoNotifier.cargarHistorial(codSocio: codSocio);
+        }
       },
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
