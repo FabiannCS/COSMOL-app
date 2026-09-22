@@ -71,7 +71,8 @@ async def test_envio_exitoso_auditoria_payload_y_headers():
         assert resultado is True
         mock_http_client.post.assert_called_once()
         args, kwargs = mock_http_client.post.call_args
-        assert args[0] == "/api/consultas"
+        assert args[0] == "http://reportes.cosmol.local/api/consultas"
+        assert kwargs.get("follow_redirects") is True
         
         payload = kwargs["json"]
         assert payload["codigo_socio"] == 23807

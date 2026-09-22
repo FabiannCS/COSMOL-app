@@ -139,24 +139,24 @@ El backend enviará peticiones HTTP asíncronas hacia el endpoint de `COSMOL-Rep
   - Al consultar la gráfica de 12 meses, encolar evento `id_tipo = 3`, `tipo_consulta = "Historial de Facturas"`.
 
 #### D. Integración en Endpoints de Documentos PDF (`backend/app/api/v1/documentos.py`):
-- [ ] Inyectar `BackgroundTasks` en `GET /documentos/{doc_id}/descargar`:
+- [x] Inyectar `BackgroundTasks` en `GET /documentos/{doc_id}/descargar`:
   - Al iniciar la descarga del PDF en streaming, encolar evento `id_tipo = 9`, `tipo_consulta = "Descarga de Documento PDF"`.
 
 #### E. Integración en Endpoints de Pagos (`backend/app/api/v1/pagos.py`):
-- [ ] Inyectar `BackgroundTasks` en `POST /pagos/registrar-intento/{cod_socio}`:
+- [x] Inyectar `BackgroundTasks` en `POST /pagos/registrar-intento/{cod_socio}`:
   - Al seleccionar un canal de pago (Multipago o Pago al Paso), encolar evento `id_tipo = 10`, `tipo_consulta = "Intento de Pago Pasarela"`.
 
 #### F. Batería de Pruebas de Integración DEV 2 (`backend/tests/test_auditoria_endpoints.py`):
-- [ ] Prueba de que los endpoints agreguen la tarea a `BackgroundTasks` sin ralentizar la respuesta.
-- [ ] Prueba de que las respuestas HTTP sigan siendo `< 20 ms` con la auditoría activa.
-- [ ] Prueba de que una falla en Reportes no altere el código de respuesta (ej. 200 OK en deuda o 201 en login).
+- [x] Prueba de que los endpoints agreguen la tarea a `BackgroundTasks` sin ralentizar la respuesta.
+- [x] Prueba de que las respuestas HTTP sigan siendo `< 20 ms` con la auditoría activa.
+- [x] Prueba de que una falla en Reportes no altere el código de respuesta (ej. 200 OK en deuda o 201 en login).
 
 ---
 
 ## 5. Criterios de Aceptación y Validación
 
-1. [ ] **Payload Conforme:** Cada evento despachado contiene `id_usuario: 3`, `tipo_ubicacion: "APP_MOVIL"`, código de socio, nombres, teléfono y timestamp.
-2. [ ] **Autenticación con Token:** Las peticiones viajan con la cabecera `X-Reportes-Token`.
-3. [ ] **Rendimiento (<20 ms):** El tiempo de respuesta de los endpoints de la app no se ve afectado por el despacho a Reportes.
-4. [ ] **Resiliencia Total:** La desconexión o fallo del servidor de Reportes no produce errores HTTP 500 ni bloqueos en la app de Flutter.
-5. [ ] **Suite de Pruebas en Verde:** Todas las pruebas pasan al 100% en Docker sumándose a las 96 pruebas existentes sin regresiones.
+1. [x] **Payload Conforme:** Cada evento despachado contiene `id_usuario: 3`, `tipo_ubicacion: "APP_MOVIL"`, código de socio, nombres, teléfono y timestamp.
+2. [x] **Autenticación con Token:** Las peticiones viajan con la cabecera `X-Reportes-Token`.
+3. [x] **Rendimiento (<20 ms):** El tiempo de respuesta de los endpoints de la app no se ve afectado por el despacho a Reportes.
+4. [x] **Resiliencia Total:** La desconexión o fallo del servidor de Reportes no produce errores HTTP 500 ni bloqueos en la app de Flutter.
+5. [x] **Suite de Pruebas en Verde:** Todas las pruebas pasan al 100% en Docker sumándose a las 96 pruebas existentes sin regresiones.

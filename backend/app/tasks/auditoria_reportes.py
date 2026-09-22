@@ -10,7 +10,7 @@ async def despachar_auditoria_reportes(
     nombres: str,
     telefono: Optional[str] = None,
     id_tipo: int = 2,
-    tipo_consulta: str = "Consulta de Deuda",
+    tipo_consulta: Optional[str] = None,
     tipo_ubicacion: str = "APP_MOVIL",
 ) -> None:
     """
