@@ -14,13 +14,20 @@ class ConsumoRepositoryImpl implements ConsumoRepository {
   ConsumoRepositoryImpl(this.remoteDataSource);
 
   @override
-  Future<List<ConsumoFacturaModel>> obtenerHistorialConsumo({
+  Future<HistorialConsumoModel> obtenerHistorialConsumo({
     required String codSocio,
-    String? ci,
+    bool forzarRefresco = false,
+    int meses = 12,
   }) {
-    return remoteDataSource.obtenerHistorialFacturas(
+    return remoteDataSource.obtenerHistorialConsumo(
       codSocio: codSocio,
-      ci: ci,
+      forzarRefresco: forzarRefresco,
+      meses: meses,
     );
+  }
+
+  @override
+  Future<bool> invalidarCacheConsumo({required String codSocio}) {
+    return remoteDataSource.invalidarCacheConsumo(codSocio: codSocio);
   }
 }

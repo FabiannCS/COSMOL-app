@@ -12,24 +12,27 @@ enum PeriodoConsumo {
 
 class ConsumoState {
   final bool isLoading;
-  final List<ConsumoFacturaModel> facturas;
+  final bool isRefreshing;
+  final HistorialConsumoModel? historial;
   final PeriodoConsumo periodo;
-  final int? selectedIndex;
+  final int selectedIndex;
   final String? errorMessage;
   final String? currentCodSocio;
 
   const ConsumoState({
     this.isLoading = false,
-    this.facturas = const [],
+    this.isRefreshing = false,
+    this.historial,
     this.periodo = PeriodoConsumo.seisMeses,
-    this.selectedIndex,
+    this.selectedIndex = 0,
     this.errorMessage,
     this.currentCodSocio,
   });
 
   ConsumoState copyWith({
     bool? isLoading,
-    List<ConsumoFacturaModel>? facturas,
+    bool? isRefreshing,
+    HistorialConsumoModel? historial,
     PeriodoConsumo? periodo,
     int? selectedIndex,
     String? errorMessage,
@@ -37,7 +40,8 @@ class ConsumoState {
   }) {
     return ConsumoState(
       isLoading: isLoading ?? this.isLoading,
-      facturas: facturas ?? this.facturas,
+      isRefreshing: isRefreshing ?? this.isRefreshing,
+      historial: historial ?? this.historial,
       periodo: periodo ?? this.periodo,
       selectedIndex: selectedIndex ?? this.selectedIndex,
       errorMessage: errorMessage,
@@ -45,59 +49,101 @@ class ConsumoState {
     );
   }
 
-  /// Facturas filtradas por el período activo (6 o 12 meses)
-  List<ConsumoFacturaModel> get filteredFacturas {
-    final limit = periodo == PeriodoConsumo.seisMeses ? 6 : 12;
-    if (facturas.length <= limit) return facturas;
-    return facturas.take(limit).toList();
+  /// Todos los periodos ordenados de forma descendente (el más reciente primero)
+  List<ConsumoPeriodoModel> get allFacturasDescendente {
+    if (historial == null || historial!.periodos.isEmpty) return const [];
+    final list = List<ConsumoPeriodoModel>.from(historial!.periodos);
+    list.sort((a, b) {
+      final cmpAnio = b.anio.compareTo(a.anio);
+      if (cmpAnio != 0) return cmpAnio;
+      return b.mes.compareTo(a.mes);
+    });
+    return list;
   }
 
-  /// Factura del mes más reciente
-  ConsumoFacturaModel? get mesActual =>
-      facturas.isNotEmpty ? facturas.first : null;
+  /// Periodos filtrados según la ventana temporal activa (6 o 12 meses)
+  List<ConsumoPeriodoModel> get filteredFacturas {
+    final list = allFacturasDescendente;
+    final limit = periodo == PeriodoConsumo.seisMeses ? 6 : 12;
+    if (list.length <= limit) return list;
+    return list.take(limit).toList();
+  }
+
+  /// Facturas en orden cronológico (el más antiguo a la izquierda) para renderizado de gráficas
+  List<ConsumoPeriodoModel> get chronologicFacturas {
+    final list = List<ConsumoPeriodoModel>.from(filteredFacturas);
+    list.sort((a, b) {
+      final cmpAnio = a.anio.compareTo(b.anio);
+      if (cmpAnio != 0) return cmpAnio;
+      return a.mes.compareTo(b.mes);
+    });
+    return list;
+  }
+
+  /// Periodo del mes más reciente
+  ConsumoPeriodoModel? get mesActual =>
+      filteredFacturas.isNotEmpty ? filteredFacturas.first : null;
 
   /// Consumo del mes más reciente en m³
-  double get consumoActual => mesActual?.consumo ?? 0.0;
+  double get consumoActual => mesActual?.consumoM3 ?? 0.0;
 
-  /// Promedio de consumo del período activo
+  /// Promedio de consumo calculado sobre el período activo (6 o 12 meses)
   double get promedioConsumo {
     final list = filteredFacturas;
-    if (list.isEmpty) return 0.0;
-    final total = list.fold<double>(0.0, (sum, item) => sum + item.consumo);
-    return total / list.length;
+    if (list.isEmpty) return historial?.estadisticas.promedioM3 ?? 0.0;
+    final total = list.fold<double>(0.0, (sum, item) => sum + item.consumoM3);
+    return double.parse((total / list.length).toStringAsFixed(2));
   }
 
-  /// Indica si el consumo del mes actual está por debajo del promedio del período
+  /// Indica si el consumo del mes actual está por debajo o igual al promedio del período
   bool get isBajoPromedio => consumoActual <= promedioConsumo;
 
   /// Factura actualmente seleccionada en la gráfica interactiva (por defecto la más reciente)
-  ConsumoFacturaModel? get selectedFactura {
+  ConsumoPeriodoModel? get selectedFactura {
     final list = filteredFacturas;
     if (list.isEmpty) return null;
-    if (selectedIndex != null &&
-        selectedIndex! >= 0 &&
-        selectedIndex! < list.length) {
-      return list[selectedIndex!];
-    }
-    return list.first;
+    final index = selectedIndex.clamp(0, list.length - 1);
+    return list[index];
   }
 
   /// Registro con menor consumo dentro del período (mayor ahorro)
-  ConsumoFacturaModel? get mayorAhorroFactura {
+  ConsumoPeriodoModel? get mayorAhorroFactura {
     final list = filteredFacturas;
     if (list.isEmpty) return null;
     return list.reduce((curr, next) =>
-        (curr.consumo > 0 && curr.consumo < next.consumo) ? curr : next);
+        (curr.consumoM3 > 0 && curr.consumoM3 < next.consumoM3) ? curr : next);
   }
 
-  /// Tarifa promedio o de referencia por m³
+  /// Tarifa promedio o de referencia por m³ en el período
   double get tarifaReferencial {
-    final list = filteredFacturas.where((f) => f.consumo > 0).toList();
+    final list = filteredFacturas.where((f) => f.consumoM3 > 0).toList();
     if (list.isEmpty) return 6.60;
     final totalTarifa =
         list.fold<double>(0.0, (sum, item) => sum + item.tarifaPorM3);
-    return totalTarifa / list.length;
+    return double.parse((totalTarifa / list.length).toStringAsFixed(2));
   }
+
+  /// Indica si el backend detectó consumo atípico o fuga preventiva
+  bool get consumoAtipico =>
+      historial?.estadisticas.consumoAtipico ??
+      (promedioConsumo > 0 && consumoActual >= (promedioConsumo * 1.30));
+
+  /// Mensaje oficial preventivo de fuga
+  String? get mensajeAlerta =>
+      historial?.estadisticas.mensajeAlerta ??
+      (consumoAtipico
+          ? 'Detectamos un consumo anormalmente alto en el último periodo. Le sugerimos revisar sus instalaciones internas para descartar posibles fugas de agua.'
+          : null);
+
+  /// Tendencia de consumo (SUBIENDO, BAJANDO, ESTABLE)
+  String get tendencia => historial?.estadisticas.tendencia ?? 'ESTABLE';
+
+  /// Número de medidor instalado
+  String? get nroMedidor => historial?.nroMedidor;
+
+  /// Rol del usuario sobre este suministro (TITULAR vs CONSULTA_PAGO)
+  String get rolAcceso => historial?.rolAcceso ?? 'TITULAR';
+  bool get isTitular => rolAcceso == 'TITULAR';
 }
 
 final consumoProvider =
@@ -125,41 +171,47 @@ class ConsumoNotifier extends StateNotifier<ConsumoState> {
     }
   }
 
-  Future<void> cargarHistorial({String? codSocio, String? ci}) async {
+  Future<void> cargarHistorial({
+    String? codSocio,
+    bool forzarRefresco = false,
+  }) async {
     final targetCodSocio = codSocio ?? state.currentCodSocio ?? '23807';
+
+    // Si ya tenemos datos y solo refrescamos, marcamos isRefreshing para no parpadear toda la pantalla
+    final esPrimeraCarga = state.historial == null || targetCodSocio != state.currentCodSocio;
+
     state = state.copyWith(
-      isLoading: true,
+      isLoading: esPrimeraCarga,
+      isRefreshing: !esPrimeraCarga,
       errorMessage: null,
       currentCodSocio: targetCodSocio,
     );
 
     try {
-      final facturas = await repository.obtenerHistorialConsumo(
+      final historial = await repository.obtenerHistorialConsumo(
         codSocio: targetCodSocio,
-        ci: ci,
+        forzarRefresco: forzarRefresco,
+        meses: 12,
       );
-
-      // Ordenar por año y mes descendente (el más reciente primero)
-      facturas.sort((a, b) {
-        final cmpAnio = b.anio.compareTo(a.anio);
-        if (cmpAnio != 0) return cmpAnio;
-        return b.mes.compareTo(a.mes);
-      });
 
       state = state.copyWith(
         isLoading: false,
-        facturas: facturas,
+        isRefreshing: false,
+        historial: historial,
         selectedIndex: 0,
+        errorMessage: null,
       );
     } on AppException catch (e) {
       state = state.copyWith(
         isLoading: false,
+        isRefreshing: false,
         errorMessage: e.message,
       );
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'No se pudo cargar el historial de consumo.',
+        isRefreshing: false,
+        errorMessage: 'No se pudo cargar el historial de consumo desde COSMOL.',
       );
     }
   }

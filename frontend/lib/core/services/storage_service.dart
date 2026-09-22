@@ -38,17 +38,26 @@ class StorageService {
   }
 
   Future<String?> getAccessToken() async {
-    return await _secureStorage.read(key: _keyAccessToken);
+    final token = await _secureStorage.read(key: _keyAccessToken);
+    if (token == null || token.trim().isEmpty) return null;
+    return token.trim();
   }
 
   Future<String?> getRefreshToken() async {
-    return await _secureStorage.read(key: _keyRefreshToken);
+    final token = await _secureStorage.read(key: _keyRefreshToken);
+    if (token == null || token.trim().isEmpty) return null;
+    return token.trim();
   }
 
   Future<void> clearAuthData() async {
-    await _secureStorage.delete(key: _keyAccessToken);
-    await _secureStorage.delete(key: _keyRefreshToken);
-    await _secureStorage.delete(key: _keyCodSocio);
+    try {
+      await _secureStorage.write(key: _keyAccessToken, value: '');
+      await _secureStorage.write(key: _keyRefreshToken, value: '');
+      await _secureStorage.write(key: _keyCodSocio, value: '');
+      await _secureStorage.delete(key: _keyAccessToken);
+      await _secureStorage.delete(key: _keyRefreshToken);
+      await _secureStorage.delete(key: _keyCodSocio);
+    } catch (_) {}
   }
 
   // --- Código de Socio Principal ---
@@ -57,7 +66,9 @@ class StorageService {
   }
 
   Future<String?> getActiveCodSocio() async {
-    return await _secureStorage.read(key: _keyCodSocio);
+    final codSocio = await _secureStorage.read(key: _keyCodSocio);
+    if (codSocio == null || codSocio.trim().isEmpty) return null;
+    return codSocio.trim();
   }
 
   // --- Device ID Persistente ---

@@ -6,9 +6,11 @@ import '../providers/consumo_provider.dart';
 
 /// Tabla detallada con el historial de lecturas, volúmenes, montos y estados de cobro.
 class ConsumoHistoryTable extends StatelessWidget {
-  final List<ConsumoFacturaModel> facturas;
+  final List<ConsumoPeriodoModel> facturas;
   final PeriodoConsumo periodo;
   final double tarifaReferencial;
+  final int selectedIndex;
+  final ValueChanged<int> onSelectMes;
   final VoidCallback onExportarPdf;
 
   const ConsumoHistoryTable({
@@ -16,6 +18,8 @@ class ConsumoHistoryTable extends StatelessWidget {
     required this.facturas,
     required this.periodo,
     required this.tarifaReferencial,
+    this.selectedIndex = 0,
+    required this.onSelectMes,
     required this.onExportarPdf,
   });
 
@@ -51,12 +55,6 @@ class ConsumoHistoryTable extends StatelessWidget {
               children: [
                 Row(
                   children: [
-                    const Icon(
-                      Icons.receipt_long_rounded,
-                      size: 20,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 8),
                     Text(
                       'Historial de Lecturas',
                       style: GoogleFonts.plusJakartaSans(
@@ -160,62 +158,94 @@ class ConsumoHistoryTable extends StatelessWidget {
               ),
               itemBuilder: (context, index) {
                 final item = facturas[index];
-                final isFirst = index == 0;
+                final isSelected = index == selectedIndex;
 
-                return Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  color: index.isEven ? Colors.white : const Color(0xFFF8FAFC),
-                  child: Row(
-                    children: [
-                      // Mes
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          item.mesAnioCorto,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 13,
-                            fontWeight: isFirst ? FontWeight.w700 : FontWeight.w600,
-                            color: isFirst ? AppColors.primary : AppColors.onSurface,
+                return Material(
+                  color: isSelected
+                      ? const Color(0xFFEFF6FF)
+                      : (index.isEven ? Colors.white : const Color(0xFFF8FAFC)),
+                  child: InkWell(
+                    onTap: () => onSelectMes(index),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: isSelected
+                            ? const Border(
+                                left: BorderSide(
+                                  color: AppColors.primary,
+                                  width: 3.5,
+                                ),
+                              )
+                            : null,
+                      ),
+                      child: Row(
+                        children: [
+                          // Mes
+                          Expanded(
+                            flex: 3,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                item.mesAnioCorto,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                  color: isSelected ? AppColors.primary : AppColors.onSurface,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
 
-                      // Volumen m³
-                      Expanded(
-                        flex: 2,
-                        child: Text(
-                          item.consumoFormateado,
-                          textAlign: TextAlign.right,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: isFirst ? AppColors.secondary : AppColors.onSurface,
+                          // Volumen m³
+                          Expanded(
+                            flex: 2,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                item.consumoFormateado,
+                                textAlign: TextAlign.right,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                  color: isSelected ? AppColors.primary : AppColors.secondary,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
 
-                      // Monto Bs
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          item.montoFormateado,
-                          textAlign: TextAlign.right,
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.onSurface,
+                          // Monto Bs
+                          Expanded(
+                            flex: 3,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                item.montoFormateado,
+                                textAlign: TextAlign.right,
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontSize: 13,
+                                  fontWeight: isSelected ? FontWeight.w800 : FontWeight.w600,
+                                  color: AppColors.onSurface,
+                                ),
+                              ),
+                            ),
                           ),
-                        ),
-                      ),
 
-                      // Estado (Pagado / Pendiente)
-                      Expanded(
-                        flex: 3,
-                        child: Center(
-                          child: _buildStatusChip(item.isPagado),
-                        ),
+                          // Estado (Pagado / Pendiente) - Overflow-Proof con FittedBox
+                          Expanded(
+                            flex: 3,
+                            child: Center(
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: _buildStatusChip(item.isPagado),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 );
               },
@@ -228,14 +258,21 @@ class ConsumoHistoryTable extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Tarifa: Bs ${tarifaReferencial.toStringAsFixed(2)} / m³',
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.onSurfaceVariant,
+                Expanded(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Tarifa: Bs ${tarifaReferencial.toStringAsFixed(2)} / m³',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.onSurfaceVariant,
+                      ),
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
                 InkWell(
                   onTap: onExportarPdf,
                   borderRadius: BorderRadius.circular(6),
@@ -273,24 +310,14 @@ class ConsumoHistoryTable extends StatelessWidget {
   Widget _buildStatusChip(bool isPagado) {
     if (isPagado) {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: AppColors.successBackground,
-          borderRadius: BorderRadius.circular(12),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(
-              Icons.check_rounded,
-              size: 12,
-              color: AppColors.successGreen,
-            ),
-            const SizedBox(width: 2),
             Text(
               'Pagado',
               style: GoogleFonts.plusJakartaSans(
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w700,
                 color: AppColors.successGreen,
               ),
@@ -300,27 +327,15 @@ class ConsumoHistoryTable extends StatelessWidget {
       );
     } else {
       return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: AppColors.errorBackground,
-          borderRadius: BorderRadius.circular(12),
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Container(
-              width: 5,
-              height: 5,
-              decoration: const BoxDecoration(
-                color: AppColors.errorRed,
-                shape: BoxShape.circle,
-              ),
-            ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
             Text(
               'Pendiente',
               style: GoogleFonts.plusJakartaSans(
-                fontSize: 11,
+                fontSize: 10.5,
                 fontWeight: FontWeight.w700,
                 color: AppColors.errorRed,
               ),

@@ -4,9 +4,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../data/models/consumo_factura_model.dart';
 
-/// Gráfico interactivo de evolución y comparativa de consumo mensual (m³).
+/// Gráfico interactivo de evolución de consumo mensual (m³).
 class ConsumoChartWidget extends StatefulWidget {
-  final List<ConsumoFacturaModel> facturas;
+  final List<ConsumoPeriodoModel> facturas;
   final int selectedIndex;
   final ValueChanged<int> onMonthSelected;
 
@@ -30,8 +30,15 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
 
     // Cronológicamente de izquierda a derecha (el más antiguo primero en la gráfica)
     final chronologicItems = widget.facturas.reversed.toList();
-    final currentYear = chronologicItems.last.anio;
-    final prevYear = currentYear - 1;
+    final firstYear = chronologicItems.first.anio;
+    final lastYear = chronologicItems.last.anio;
+    final yearSubtitle = firstYear == lastYear
+        ? 'Gestión $firstYear'
+        : 'Gestión $firstYear - $lastYear';
+
+    // Calcular el promedio del conjunto
+    final totalVolumen = chronologicItems.fold<double>(0.0, (sum, f) => sum + f.consumoM3);
+    final promedio = chronologicItems.isNotEmpty ? (totalVolumen / chronologicItems.length) : 0.0;
 
     // Calcular el índice correspondiente en la lista cronológica
     final activeChronologicalIndex =
@@ -39,7 +46,7 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(16),
@@ -56,22 +63,47 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Título y Subtítulo
-          Text(
-            'Evolución Comparativa de Consumo',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppColors.onSurface,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Gestión ($currentYear) vs Gestión ($prevYear)',
-            style: GoogleFonts.plusJakartaSans(
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              color: AppColors.onSurfaceVariant,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Evolución de Consumo (m³)',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.onSurface,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    yearSubtitle,
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  '${chronologicItems.length} meses',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.primary,
+                  ),
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
 
@@ -81,32 +113,32 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
               _buildLegendItem(
                 color: AppColors.primaryContainer,
                 isDashed: false,
-                label: 'Gestión $currentYear',
+                label: 'Consumo medido',
                 isPrimary: true,
               ),
               const SizedBox(width: 16),
               _buildLegendItem(
-                color: const Color(0xFF5DC6FE),
+                color: Colors.blueGrey,
                 isDashed: true,
-                label: 'Gestión $prevYear',
+                label: 'Promedio (${promedio.toStringAsFixed(1)} m³)',
                 isPrimary: false,
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Área de Dibujo de la Gráfica con Gestos Táctiles
           SizedBox(
-            height: 190,
+            height: 195,
             width: double.infinity,
             child: LayoutBuilder(
               builder: (context, constraints) {
                 return GestureDetector(
                   behavior: HitTestBehavior.opaque,
                   onTapDown: (details) {
-                    final itemWidth = (constraints.maxWidth - 40) /
+                    final itemWidth = (constraints.maxWidth - 46) /
                         math.max(1, chronologicItems.length - 1);
-                    final dx = details.localPosition.dx - 35;
+                    final dx = details.localPosition.dx - 36;
                     final clickedIndex = (dx / itemWidth).round().clamp(0, chronologicItems.length - 1);
 
                     // Convertir el índice cronológico de vuelta al índice descendente original
@@ -114,10 +146,11 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
                     widget.onMonthSelected(originalIndex);
                   },
                   child: CustomPaint(
-                    size: Size(constraints.maxWidth, 190),
+                    size: Size(constraints.maxWidth, 195),
                     painter: _ConsumoChartPainter(
                       items: chronologicItems,
                       selectedIndex: activeChronologicalIndex,
+                      promedio: promedio,
                     ),
                   ),
                 );
@@ -161,12 +194,14 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
 }
 
 class _ConsumoChartPainter extends CustomPainter {
-  final List<ConsumoFacturaModel> items;
+  final List<ConsumoPeriodoModel> items;
   final int selectedIndex;
+  final double promedio;
 
   _ConsumoChartPainter({
     required this.items,
     required this.selectedIndex,
+    required this.promedio,
   });
 
   @override
@@ -182,12 +217,12 @@ class _ConsumoChartPainter extends CustomPainter {
     final chartHeight = size.height - topMargin - bottomMargin;
 
     // Determinar valor máximo de escala
-    double maxConsumo = 25.0;
+    double maxConsumo = 20.0;
     for (final item in items) {
-      if (item.consumo > maxConsumo) maxConsumo = item.consumo;
+      if (item.consumoM3 > maxConsumo) maxConsumo = item.consumoM3;
     }
-    // Redondear maxConsumo a múltiplo superior de 10
-    final maxY = ((maxConsumo / 10).ceil() * 10).toDouble() + 5.0;
+    // Redondear maxConsumo a múltiplo superior de 5
+    final maxY = ((maxConsumo / 5).ceil() * 5).toDouble() + 5.0;
     const minY = 0.0;
 
     // Pintar líneas de fondo horizontales y etiquetas Y
@@ -231,67 +266,68 @@ class _ConsumoChartPainter extends CustomPainter {
       );
     }
 
+    // Línea horizontal punteada del Promedio
+    if (promedio > 0) {
+      final normPromY = (promedio - minY) / (maxY - minY);
+      final yPromPos = topMargin + (chartHeight * (1.0 - normPromY.clamp(0.0, 1.0)));
+      final promPaint = Paint()
+        ..color = const Color(0xFF94A3B8)
+        ..strokeWidth = 1.5;
+
+      _drawDashedLine(
+        canvas: canvas,
+        p1: Offset(leftMargin, yPromPos),
+        p2: Offset(size.width - rightMargin, yPromPos),
+        paint: promPaint,
+        dashWidth: 4.0,
+        dashSpace: 4.0,
+      );
+    }
+
     final numPoints = items.length;
     final stepX = numPoints > 1 ? (chartWidth / (numPoints - 1)) : 0.0;
 
-    // Calcular puntos de la serie actual
+    // Calcular puntos de la serie de consumo
     final currentPoints = <Offset>[];
-    // Serie comparativa simulada basada en el histórico de año anterior
-    final comparisonPoints = <Offset>[];
-
     for (int i = 0; i < numPoints; i++) {
       final item = items[i];
       final x = leftMargin + (i * stepX);
-
-      // Valor actual
-      final normY = (item.consumo - minY) / (maxY - minY);
+      final normY = (item.consumoM3 - minY) / (maxY - minY);
       final y = topMargin + (chartHeight * (1.0 - normY.clamp(0.0, 1.0)));
       currentPoints.add(Offset(x, y));
-
-      // Valor comparativo (desfase natural de gestión anterior para análisis de ahorro)
-      final compConsumo = (item.consumo * 1.12).clamp(10.0, maxY - 2.0);
-      final normYComp = (compConsumo - minY) / (maxY - minY);
-      final yComp = topMargin + (chartHeight * (1.0 - normYComp.clamp(0.0, 1.0)));
-      comparisonPoints.add(Offset(x, yComp));
     }
 
-    // 1. Dibujar línea comparativa (gestión anterior - punteada)
-    final compLinePaint = Paint()
-      ..color = const Color(0xFF5DC6FE)
-      ..strokeWidth = 2.0
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
+    // 1. Dibujar área sombreada con gradiente
+    if (currentPoints.isNotEmpty) {
+      final fillPath = Path();
+      fillPath.moveTo(currentPoints.first.dx, size.height - bottomMargin);
+      fillPath.lineTo(currentPoints.first.dx, currentPoints.first.dy);
 
-    for (int i = 0; i < comparisonPoints.length - 1; i++) {
-      _drawDashedLine(
-        canvas: canvas,
-        p1: comparisonPoints[i],
-        p2: comparisonPoints[i + 1],
-        paint: compLinePaint,
-        dashWidth: 4.0,
-        dashSpace: 3.0,
-      );
+      for (int i = 0; i < currentPoints.length - 1; i++) {
+        final p0 = currentPoints[i];
+        final p1 = currentPoints[i + 1];
+        final midX = (p0.dx + p1.dx) / 2;
+        fillPath.cubicTo(midX, p0.dy, midX, p1.dy, p1.dx, p1.dy);
+      }
+
+      fillPath.lineTo(currentPoints.last.dx, size.height - bottomMargin);
+      fillPath.close();
+
+      final gradientPaint = Paint()
+        ..shader = const LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Color(0x33005691),
+            Color(0x02005691),
+          ],
+        ).createShader(Rect.fromLTWH(0, topMargin, size.width, chartHeight))
+        ..style = PaintingStyle.fill;
+
+      canvas.drawPath(fillPath, gradientPaint);
     }
 
-    // Puntos comparativos
-    for (int i = 0; i < comparisonPoints.length; i++) {
-      final pt = comparisonPoints[i];
-      canvas.drawCircle(
-        pt,
-        3.0,
-        Paint()..color = Colors.white,
-      );
-      canvas.drawCircle(
-        pt,
-        3.0,
-        Paint()
-          ..color = const Color(0xFF00658C)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5,
-      );
-    }
-
-    // 2. Dibujar línea principal de gestión actual (sólida y curva)
+    // 2. Dibujar línea principal (curva sólida)
     final mainLinePaint = Paint()
       ..color = AppColors.primaryContainer
       ..strokeWidth = 3.0
@@ -339,43 +375,50 @@ class _ConsumoChartPainter extends CustomPainter {
       if (isSelected) {
         canvas.drawCircle(
           pt,
-          9.0,
-          Paint()..color = AppColors.primary.withValues(alpha: 0.15),
+          10.0,
+          Paint()..color = AppColors.primary.withValues(alpha: 0.18),
         );
       }
 
       // Punto
       canvas.drawCircle(
         pt,
-        isSelected ? 5.5 : 4.5,
+        isSelected ? 5.5 : 4.0,
         Paint()..color = isSelected ? AppColors.primary : Colors.white,
       );
       canvas.drawCircle(
         pt,
-        isSelected ? 5.5 : 4.5,
+        isSelected ? 5.5 : 4.0,
         Paint()
           ..color = isSelected ? Colors.white : AppColors.primary
           ..style = PaintingStyle.stroke
-          ..strokeWidth = isSelected ? 2.0 : 2.5,
+          ..strokeWidth = isSelected ? 2.0 : 2.2,
       );
 
-      // Etiqueta de valor sobre el punto
-      final valSpan = TextSpan(
-        text: item.consumo.toInt().toString(),
-        style: textStyleValue.copyWith(
-          color: isSelected ? AppColors.primary : const Color(0xFF003E6B),
-          fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-        ),
-      );
-      final valPainter = TextPainter(
-        text: valSpan,
-        textDirection: TextDirection.ltr,
-        textAlign: TextAlign.center,
-      )..layout();
-      valPainter.paint(
-        canvas,
-        Offset(pt.dx - (valPainter.width / 2), pt.dy - (valPainter.height) - 7),
-      );
+      // Etiqueta de valor sobre el punto (solo si hay suficiente espacio o si está seleccionado)
+      final showLabel = numPoints <= 7 || isSelected || (i % 2 == 0);
+      if (showLabel) {
+        final valText = item.consumoM3 == item.consumoM3.roundToDouble()
+            ? item.consumoM3.toInt().toString()
+            : item.consumoM3.toStringAsFixed(1);
+
+        final valSpan = TextSpan(
+          text: valText,
+          style: textStyleValue.copyWith(
+            color: isSelected ? AppColors.primary : const Color(0xFF003E6B),
+            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+          ),
+        );
+        final valPainter = TextPainter(
+          text: valSpan,
+          textDirection: TextDirection.ltr,
+          textAlign: TextAlign.center,
+        )..layout();
+        valPainter.paint(
+          canvas,
+          Offset(pt.dx - (valPainter.width / 2), pt.dy - (valPainter.height) - 6),
+        );
+      }
 
       // Etiqueta del Mes en el eje X
       final xSpan = TextSpan(
@@ -426,6 +469,8 @@ class _ConsumoChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ConsumoChartPainter oldDelegate) {
-    return oldDelegate.items != items || oldDelegate.selectedIndex != selectedIndex;
+    return oldDelegate.items != items ||
+        oldDelegate.selectedIndex != selectedIndex ||
+        oldDelegate.promedio != promedio;
   }
 }

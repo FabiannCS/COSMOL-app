@@ -15,198 +15,53 @@ class ConsumoRemoteDataSource {
 
   ConsumoRemoteDataSource(this._dio);
 
-  /// Consulta el historial de facturas y consumo para el código de socio.
-  /// Conecta con el endpoint del BFF `/api/v1/consumo/{cod_socio}` o con el endpoint legado.
-  Future<List<ConsumoFacturaModel>> obtenerHistorialFacturas({
+  /// Consulta el historial completo de consumo y analítica para el código de socio.
+  /// Conecta con el endpoint oficial del BFF FastAPI: `GET /api/v1/consumo/{cod_socio}`
+  Future<HistorialConsumoModel> obtenerHistorialConsumo({
     required String codSocio,
-    String? ci,
+    bool forzarRefresco = false,
+    int meses = 12,
   }) async {
     try {
       final cleanCodSocio = codSocio.trim();
 
-      // 1. Intento primario: Endpoint oficial del BFF FastAPI
-      Response response;
-      try {
-        response = await _dio.get(
-          '/consumo/$cleanCodSocio',
-          queryParameters: {'meses': 12},
-        );
-      } on DioException catch (dioErr) {
-        // 2. Si la ruta /consumo/ no responde, intenta fallback POST o GET legado
-        if (dioErr.response?.statusCode == 404 ||
-            dioErr.response?.statusCode == 405) {
-          try {
-            response = await _dio.post(
-              '/socios/$cleanCodSocio/historial-facturas',
-              data: {
-                'cod_socio': cleanCodSocio,
-                if (ci != null && ci.trim().isNotEmpty) 'ci': ci.trim(),
-              },
-            );
-          } on DioException {
-            response = await _dio.get('/socios/$cleanCodSocio/historial-facturas');
-          }
-        } else {
-          rethrow;
-        }
-      }
+      final response = await _dio.get(
+        '/consumo/$cleanCodSocio',
+        queryParameters: {
+          'meses': meses,
+          'forzar_refresco': forzarRefresco,
+        },
+      );
 
       if (response.data is Map<String, dynamic>) {
-        final parsed = ConsumoHistorialResponse.fromJson(response.data as Map<String, dynamic>);
-        return parsed.datos;
-      } else if (response.data is List) {
-        final list = response.data as List;
-        return list
-            .whereType<Map<String, dynamic>>()
-            .map((item) => ConsumoFacturaModel.fromJson(item))
-            .toList();
+        return HistorialConsumoModel.fromJson(
+          response.data as Map<String, dynamic>,
+        );
       }
 
-      return [];
+      throw const ServerException(
+        message: 'Respuesta inválida del servidor de consumo.',
+      );
     } on DioException catch (e) {
-      if (e.type == DioExceptionType.connectionTimeout ||
-          e.type == DioExceptionType.receiveTimeout ||
-          e.type == DioExceptionType.connectionError ||
-          e.response?.statusCode == 404) {
-        return _obtenerHistorialEstructuradoFallback(codSocio);
-      }
       throw _handleDioError(e);
     } catch (e) {
       if (e is AppException) rethrow;
-      return _obtenerHistorialEstructuradoFallback(codSocio);
+      throw ServerException(message: 'Error inesperado: ${e.toString()}');
     }
   }
 
-  /// Estructura base que coincide al 100% con el contrato de la API de COSMOL
-  List<ConsumoFacturaModel> _obtenerHistorialEstructuradoFallback(String codSocio) {
-    final rawJson = {
-      "estado": "exito",
-      "mensaje": "Historial de facturas recuperado con éxito",
-      "datos": [
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "8",
-          "ANIO": "2026",
-          "MONTO": "58.01",
-          "ESTADO": "1",
-          "CONSUMO": "15",
-          "FECHA": "2026-08-13"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "7",
-          "ANIO": "2026",
-          "MONTO": "54.22",
-          "ESTADO": "1",
-          "CONSUMO": "14",
-          "FECHA": "2026-07-15"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "6",
-          "ANIO": "2026",
-          "MONTO": "61.90",
-          "ESTADO": "1",
-          "CONSUMO": "16",
-          "FECHA": "2026-06-12"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "5",
-          "ANIO": "2026",
-          "MONTO": "49.80",
-          "ESTADO": "1",
-          "CONSUMO": "13",
-          "FECHA": "2026-05-14"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "4",
-          "ANIO": "2026",
-          "MONTO": "69.50",
-          "ESTADO": "1",
-          "CONSUMO": "18",
-          "FECHA": "2026-04-15"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "3",
-          "ANIO": "2026",
-          "MONTO": "58.01",
-          "ESTADO": "1",
-          "CONSUMO": "15",
-          "FECHA": "2026-03-12"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "2",
-          "ANIO": "2026",
-          "MONTO": "65.70",
-          "ESTADO": "1",
-          "CONSUMO": "17",
-          "FECHA": "2026-02-13"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "1",
-          "ANIO": "2026",
-          "MONTO": "54.22",
-          "ESTADO": "1",
-          "CONSUMO": "14",
-          "FECHA": "2026-01-15"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "12",
-          "ANIO": "2025",
-          "MONTO": "73.20",
-          "ESTADO": "1",
-          "CONSUMO": "19",
-          "FECHA": "2025-12-14"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "11",
-          "ANIO": "2025",
-          "MONTO": "58.01",
-          "ESTADO": "1",
-          "CONSUMO": "15",
-          "FECHA": "2025-11-13"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "10",
-          "ANIO": "2025",
-          "MONTO": "61.90",
-          "ESTADO": "1",
-          "CONSUMO": "16",
-          "FECHA": "2025-10-15"
-        },
-        {
-          "CODIGO": codSocio.isNotEmpty ? codSocio : "23807",
-          "NOMBRE": "MISERICORDIA AGUANTA EDDY FRANCO",
-          "MES": "9",
-          "ANIO": "2025",
-          "MONTO": "54.22",
-          "ESTADO": "1",
-          "CONSUMO": "14",
-          "FECHA": "2025-09-12"
-        }
-      ]
-    };
-
-    return ConsumoHistorialResponse.fromJson(rawJson).datos;
+  /// Invalida manualmente la clave de caché en Redis para forzar lectura fresca
+  Future<bool> invalidarCacheConsumo({required String codSocio}) async {
+    try {
+      final cleanCodSocio = codSocio.trim();
+      final response = await _dio.post('/consumo/$cleanCodSocio/invalidar-cache');
+      if (response.data is Map<String, dynamic>) {
+        return response.data['cache_invalidada'] == true;
+      }
+      return true;
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
   }
 
   AppException _handleDioError(DioException e) {
@@ -218,7 +73,9 @@ class ConsumoRemoteDataSource {
         e.type == DioExceptionType.receiveTimeout ||
         e.type == DioExceptionType.sendTimeout ||
         e.type == DioExceptionType.connectionError) {
-      return const NetworkException();
+      return const NetworkException(
+        message: 'No se pudo conectar con el servidor de COSMOL. Verifique su conexión a internet.',
+      );
     }
 
     final response = e.response;
@@ -227,8 +84,7 @@ class ConsumoRemoteDataSource {
       if (data is Map<String, dynamic>) {
         if (data['error'] is Map<String, dynamic>) {
           final errMap = data['error'] as Map<String, dynamic>;
-          final message =
-              errMap['message']?.toString() ?? 'Error en la solicitud';
+          final message = errMap['message']?.toString() ?? 'Error en la solicitud';
           final code = errMap['code']?.toString();
           final details = errMap['details'] as Map<String, dynamic>?;
 
@@ -238,9 +94,12 @@ class ConsumoRemoteDataSource {
             details: details,
           );
         } else if (data['detail'] != null) {
-          return ValidationException(
-            message: data['detail'].toString(),
-          );
+          final detail = data['detail'];
+          if (detail is String) {
+            return ValidationException(message: detail);
+          } else if (detail is Map<String, dynamic> && detail['message'] != null) {
+            return ValidationException(message: detail['message'].toString());
+          }
         } else if (data['mensaje'] != null) {
           return ValidationException(
             message: data['mensaje'].toString(),
@@ -249,9 +108,21 @@ class ConsumoRemoteDataSource {
       }
     }
 
+    if (response?.statusCode == 403) {
+      return const ValidationException(
+        message: 'No tiene permisos para consultar el historial de este suministro o no está vinculado a su cuenta.',
+        code: 'SUPPLY_ACCESS_DENIED',
+      );
+    }
+
+    if (response?.statusCode == 404) {
+      return const ValidationException(
+        message: 'No se encontraron registros de historial de consumo para este suministro.',
+      );
+    }
+
     return ServerException(
-      message:
-          'Error de comunicación con el servidor (${response?.statusCode ?? 500})',
+      message: 'Error de comunicación con el servidor (${response?.statusCode ?? 500})',
     );
   }
 }
