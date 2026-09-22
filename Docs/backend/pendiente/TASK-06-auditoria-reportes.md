@@ -91,7 +91,7 @@ El backend enviará peticiones HTTP asíncronas hacia el endpoint de `COSMOL-Rep
 ### 4.1 Entregables de DEV 1 (Aireyu): Cliente HTTP, Configuración y Tareas Background
 
 #### A. Variables de Configuración (`backend/app/core/config.py`):
-- [ ] Incorporar parámetros para la conexión con COSMOL-Reportes:
+- [x] Incorporar parámetros para la conexión con COSMOL-Reportes:
   ```python
   REPORTES_API_URL: str = ""       # Ej: "http://cosmol-reportes:80" o URL de producción
   REPORTES_API_TOKEN: str = ""     # Token validado por X-Reportes-Token
@@ -101,7 +101,7 @@ El backend enviará peticiones HTTP asíncronas hacia el endpoint de `COSMOL-Rep
   ```
 
 #### B. Cliente HTTP Asíncrono (`backend/app/integrations/reportes_client.py`):
-- [ ] Clase `ReportesApiClient`:
+- [x] Clase `ReportesApiClient`:
   - Utiliza `httpx.AsyncClient` con pool de conexiones y timeout estricto de 3.0s.
   - Método `enviar_evento_auditoria(codigo_socio: int, nombres: str, telefono: Optional[str], id_tipo: int, tipo_consulta: str, tipo_ubicacion: str = "APP_MOVIL") -> bool`:
     - Si `REPORTES_ENABLED is False` o `REPORTES_API_URL` está vacío: omite la llamada y retorna `False` sin error.
@@ -110,15 +110,15 @@ El backend enviará peticiones HTTP asíncronas hacia el endpoint de `COSMOL-Rep
     - Captura excepciones de conexión, timeout o servidor caído con `logger.warning`, retornando `False` sin lanzar errores hacia arriba.
 
 #### C. Módulo de Despacho en Segundo Plano (`backend/app/tasks/auditoria_reportes.py`):
-- [ ] Función `despachar_auditoria_reportes(codigo_socio, nombres, telefono, id_tipo, tipo_consulta, tipo_ubicacion="APP_MOVIL")`:
+- [x] Función `despachar_auditoria_reportes(codigo_socio, nombres, telefono, id_tipo, tipo_consulta, tipo_ubicacion="APP_MOVIL")`:
   - Función asíncrona preparada para ser inyectada en `background_tasks.add_task(...)`.
   - Asegura que la ejecución corra de forma completamente desacoplada de la respuesta HTTP devuelta al socio.
 
 #### D. Batería de Pruebas DEV 1 (`backend/tests/test_auditoria_reportes.py`):
-- [ ] Prueba de envío exitoso con respuesta HTTP 201 y validación de `id_usuario: 3`.
-- [ ] Prueba de degradación suave cuando `REPORTES_API_URL` está vacío (omisión limpia).
-- [ ] Prueba de resiliencia ante servidor Reportes offline / timeout (cero excepciones no controladas).
-- [ ] Prueba de encabezado `X-Reportes-Token` y estructura del payload.
+- [x] Prueba de envío exitoso con respuesta HTTP 201 y validación de `id_usuario: 3`.
+- [x] Prueba de degradación suave cuando `REPORTES_API_URL` está vacío (omisión limpia).
+- [x] Prueba de resiliencia ante servidor Reportes offline / timeout (cero excepciones no controladas).
+- [x] Prueba de encabezado `X-Reportes-Token` y estructura del payload.
 
 ---
 

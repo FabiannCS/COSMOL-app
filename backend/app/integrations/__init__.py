@@ -8,6 +8,7 @@ from app.integrations.base_client import BaseApiClient
 from app.integrations.cosmol_client import CosmolLegacyClient, cosmol_client
 from app.integrations.whatsapp_client import WhatsAppClient, whatsapp_client
 from app.integrations.sms_client import SmsClient, sms_client
+from app.integrations.reportes_client import ReportesApiClient
 
 __all__ = [
     "BaseApiClient",
@@ -17,4 +18,6 @@ __all__ = [
     "whatsapp_client",
     "SmsClient",
     "sms_client",
+    "ReportesApiClient",
 ]
+
