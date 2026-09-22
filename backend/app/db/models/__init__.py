@@ -12,7 +12,7 @@ from app.db.models.suministro import Suministro
 from app.db.models.dispositivo import Dispositivo
 from app.db.models.otp import Otp
 from app.db.models.documento import Documento
-from app.db.models.pago import AuditoriaPagosRedireccion
+from app.db.models.pago import AuditoriaPagoRedireccion
 
 __all__ = [
     "BaseModel",
@@ -21,6 +21,6 @@ __all__ = [
     "Dispositivo",
     "Otp",
     "Documento",
-    "AuditoriaPagosRedireccion"
+    "AuditoriaPagoRedireccion"
 ]
 

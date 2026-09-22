@@ -74,7 +74,7 @@ async def test_cache_pagos_activacion_nx_y_cierre(redis_override: Redis):
     assert await redis_override.exists(f"deuda:{cod_socio}") == 1
 
     # 1. Primera activación: debe retornar True
-    activada = await activar_ventana_verificacion(redis_override, cod_socio, ttl=60)
+    activada = await activar_ventana_verificacion(redis_override, cod_socio, ttl_seconds=60)
     assert activada is True
     assert await esta_en_ventana_verificacion(redis_override, cod_socio) is True
 
@@ -82,7 +82,7 @@ async def test_cache_pagos_activacion_nx_y_cierre(redis_override: Redis):
     assert await redis_override.exists(f"deuda:{cod_socio}") == 0
 
     # 2. Clic repetido (Idempotencia con NX): debe retornar False sin reiniciar el TTL
-    segundo_intento = await activar_ventana_verificacion(redis_override, cod_socio, ttl=60)
+    segundo_intento = await activar_ventana_verificacion(redis_override, cod_socio, ttl_seconds=60)
     assert segundo_intento is False
     assert await esta_en_ventana_verificacion(redis_override, cod_socio) is True
 

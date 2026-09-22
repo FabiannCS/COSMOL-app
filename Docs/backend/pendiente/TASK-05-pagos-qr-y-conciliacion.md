@@ -107,7 +107,7 @@ sequenceDiagram
 ### 4.1 Entregables de DEV 1 (Aireyu): Configuración, Caché Redis y Persistencia
 
 #### A. Variables de Configuración Oficiales (`backend/app/core/config.py`):
-- [ ] Incorporar parámetros de pasarelas y control de tiempos:
+- [x] Incorporar parámetros de pasarelas y control de tiempos:
   ```python
   URL_MULTIPAGO_COSMOL: str = "https://multipago.com/service/cosmol_payment/first"
   URL_PAGO_AL_PASO_COSMOL: str = "https://red.pagoalpaso247.net/servicio/cosmol"
@@ -116,17 +116,17 @@ sequenceDiagram
   ```
 
 #### B. Servicio de Caché en Redis (`backend/app/services/servicio_cache_pagos.py`):
-- [ ] `activar_ventana_verificacion(redis: Redis, cod_socio: str, ttl: int = 900) -> bool`:
+- [x] `activar_ventana_verificacion(redis: Redis, cod_socio: str, ttl: int = 900) -> bool`:
   - Ejecuta `SET pago_en_proceso:{cod_socio} "activo" EX ttl NX`.
   - Invalida la clave de deuda `deuda:{cod_socio}`.
   - Retorna `True` si activó la ventana por primera vez o `False` si ya estaba activa (idempotente).
-- [ ] `esta_en_ventana_verificacion(redis: Redis, cod_socio: str) -> bool`:
+- [x] `esta_en_ventana_verificacion(redis: Redis, cod_socio: str) -> bool`:
   - Comprueba si existe la clave en Redis.
-- [ ] `cerrar_ventana_verificacion(redis: Redis, cod_socio: str) -> None`:
+- [x] `cerrar_ventana_verificacion(redis: Redis, cod_socio: str) -> None`:
   - Elimina `pago_en_proceso:{cod_socio}` al constatar deuda saldada.
 
 #### C. Modelo en PostgreSQL (`backend/app/db/models/pago.py`):
-- [ ] Tabla `auditoria_pagos_redireccion`:
+- [x] Tabla `auditoria_pagos_redireccion`:
   - `id`: UUID (PK)
   - `usuario_id`: UUID (FK a `usuarios.id`)
   - `cod_socio`: String (indexado)
@@ -134,19 +134,20 @@ sequenceDiagram
   - `monto_deuda_bs`: Numeric(10, 2)
   - `ip_origen`: String opcional
   - `creado_en`: DateTime(timezone=True, default=utcnow)
-- [ ] Exportar modelo en `backend/app/db/models/__init__.py`.
+- [x] Exportar modelo en `backend/app/db/models/__init__.py`.
 
 #### D. Batería de Pruebas DEV 1 (`backend/tests/test_cache_pagos.py`):
-- [ ] Prueba de activación atómica de ventana con opción `NX=True`.
-- [ ] Prueba de no alteración ni bugeo ante doble clic consecutivo.
-- [ ] Prueba de expiración de ventana por TTL (900s) y cierre manual.
+- [x] Prueba de activación atómica de ventana con opción `NX=True`.
+- [x] Prueba de no alteración ni bugeo ante doble clic consecutivo.
+- [x] Prueba de expiración de ventana por TTL (900s) y cierre manual.
+
 
 ---
 
 ### 4.2 Entregables de DEV 2 (Eduardo): Esquemas, Lógica de Negocio y Endpoints
 
 #### A. Esquemas Pydantic v2 (`backend/app/schemas/pago.py`):
-- [ ] `CanalPagoItem`:
+- [x] `CanalPagoItem`:
   - `id`: str (`"multipago"` | `"pago_al_paso"`)
   - `nombre`: str (`"Multipago Bolivia"`, `"Pago al Paso 24/7"`)
   - `descripcion`: str (`"Pago con Simple QR, Tarjetas de Débito/Crédito y Banca por Internet"`)
@@ -154,54 +155,54 @@ sequenceDiagram
   - `icono`: str (`"qr_code"`, `"storefront"`)
   - `soporta_qr`: bool = True
   - `activo`: bool = True
-- [ ] `CanalesPagoResponse`:
+- [x] `CanalesPagoResponse`:
   - `cod_socio`: str
   - `total_deuda_bs`: float
   - `cant_facturas_pendientes`: int
   - `canales`: List[CanalPagoItem]
   - `mensaje_ayuda`: str
-- [ ] `RegistrarIntentoPagoRequest`:
+- [x] `RegistrarIntentoPagoRequest`:
   - `canal_id`: str (ej. `"multipago"`)
-- [ ] `RegistrarIntentoPagoResponse`:
+- [x] `RegistrarIntentoPagoResponse`:
   - `exito`: bool
   - `mensaje`: str
   - `url_redireccion`: str
   - `ventana_verificacion_activa`: bool
-- [ ] `EstadoVerificacionPagoResponse`:
+- [x] `EstadoVerificacionPagoResponse`:
   - `cod_socio`: str
   - `deuda_saldada`: bool
   - `saldo_actual_bs`: float
   - `mensaje`: str
 
 #### B. Servicio de Negocio (`backend/app/services/servicio_pagos.py`):
-- [ ] `obtener_canales_pago(usuario_id: UUID, cod_socio: str, db: AsyncSession) -> CanalesPagoResponse`:
+- [x] `obtener_canales_pago(usuario_id: UUID, cod_socio: str, db: AsyncSession) -> CanalesPagoResponse`:
   - Valida pertenencia del suministro al usuario autenticado en PostgreSQL.
   - Obtiene la deuda actual mediante el servicio de deuda de COSMOL.
   - Entrega el catálogo oficial de canales disponibles.
-- [ ] `registrar_intento_pago(usuario_id: UUID, cod_socio: str, canal_id: str, db: AsyncSession, redis: Redis, background_tasks: BackgroundTasks) -> RegistrarIntentoPagoResponse`:
+- [x] `registrar_intento_pago(usuario_id: UUID, cod_socio: str, canal_id: str, db: AsyncSession, redis: Redis, background_tasks: BackgroundTasks) -> RegistrarIntentoPagoResponse`:
   - Activa la ventana de verificación en Redis con `NX=True`.
   - Invalida la clave de caché vieja de deuda.
   - Guarda el registro de intención en PostgreSQL (`auditoria_pagos_redireccion`).
   - Despacha el evento asíncrono `PAYMENT_CHANNEL_SELECTED` hacia `ChatbotReportes`.
-- [ ] `verificar_estado_post_pago(usuario_id: UUID, cod_socio: str, db: AsyncSession, redis: Redis) -> EstadoVerificacionPagoResponse`:
+- [x] `verificar_estado_post_pago(usuario_id: UUID, cod_socio: str, db: AsyncSession, redis: Redis) -> EstadoVerificacionPagoResponse`:
   - Consulta en vivo la deuda en Informix.
   - Si el saldo es 0 Bs, llama a `cerrar_ventana_verificacion`.
 
 #### C. Endpoints REST:
-- [ ] **`backend/app/api/v1/pagos.py`**:
+- [x] **`backend/app/api/v1/pagos.py`**:
   - `GET /api/v1/pagos/canales/{cod_socio}`: Retorna canales oficiales y saldo pendiente.
   - `POST /api/v1/pagos/registrar-intento/{cod_socio}`: Registra el clic e inicia la ventana.
   - `GET /api/v1/pagos/verificar-estado/{cod_socio}`: Verificación rápida de impacto del pago.
-- [ ] **`backend/app/api/v1/deuda.py`**:
+- [x] **`backend/app/api/v1/deuda.py`**:
   - Añadir soporte para `forzar_refresco: bool = Query(default=False)`.
   - Integrar la detección de `pago_en_proceso`: si la ventana está activa, aplicar micro-TTL de 30s en lugar de 10 minutos.
-- [ ] Registrar `pagos.router` en `backend/app/api/v1/router.py`.
+- [x] Registrar `pagos.router` en `backend/app/api/v1/router.py`.
 
 #### D. Batería de Pruebas DEV 2 (`backend/tests/test_pagos.py`):
-- [ ] Prueba de obtención de canales con URLs oficiales y montos exactos en Bs.
-- [ ] Prueba de registro de intención con activación de ventana en Redis.
-- [ ] Prueba de comportamiento del endpoint de deuda con `forzar_refresco=True`.
-- [ ] Prueba de control de acceso JWT Bearer (401 si no está autenticado, 403 si el suministro no le pertenece).
+- [x] Prueba de obtención de canales con URLs oficiales y montos exactos en Bs.
+- [x] Prueba de registro de intención con activación de ventana en Redis.
+- [x] Prueba de comportamiento del endpoint de deuda con `forzar_refresco=True`.
+- [x] Prueba de control de acceso JWT Bearer (401 si no está autenticado, 403 si el suministro no le pertenece).
 
 ---
 
@@ -226,8 +227,8 @@ El frontend de Flutter (manejado por Fabian) solo necesitará consumir estos end
 
 ## 6. Criterios de Aceptación y Certificación
 
-1. [ ] **Catálogo Dinámico:** `GET /api/v1/pagos/canales/{cod_socio}` devuelve las pasarelas oficiales de COSMOL con sus URLs configuradas en el backend.
-2. [ ] **Idempotencia y Resiliencia en Redis:** Múltiples clics seguidos a la URL de pago no generan errores ni reinicios descontrolados en Redis gracias al uso de `SET NX`.
-3. [ ] **Protección a Informix:** La ventana de verificación respeta el cooldown de 30 segundos impidiendo saturación por refrescos compulsivos.
-4. [ ] **Actualización Automática:** En cuanto Informix liquida la deuda, el backend cierra la ventana de verificación y muestra saldo Bs 0.00.
-5. [ ] **Cero Mocks y 100% de Pruebas en Verde:** Toda la suite de pruebas corre dentro de Docker sumándose a los 90 tests actuales sin fallos.
+1. [x] **Catálogo Dinámico:** `GET /api/v1/pagos/canales/{cod_socio}` devuelve las pasarelas oficiales de COSMOL con sus URLs configuradas en el backend.
+2. [x] **Idempotencia y Resiliencia en Redis:** Múltiples clics seguidos a la URL de pago no generan errores ni reinicios descontrolados en Redis gracias al uso de `SET NX`.
+3. [x] **Protección a Informix:** La ventana de verificación respeta el cooldown de 30 segundos impidiendo saturación por refrescos compulsivos.
+4. [x] **Actualización Automática:** En cuanto Informix liquida la deuda, el backend cierra la ventana de verificación y muestra saldo Bs 0.00.
+5. [x] **Cero Mocks y 100% de Pruebas en Verde:** Toda la suite de pruebas corre dentro de Docker sumándose a los 90 tests actuales sin fallos.

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.exceptions import ForbiddenException, BadRequestException, NotFoundException
 from app.db.models.suministro import Suministro
-from app.db.models.pago import AuditoriaPagosRedireccion
+from app.db.models.pago import AuditoriaPagoRedireccion
 from app.schemas.pago import (
     CanalPagoItem,
     CanalesPagoResponse,
@@ -167,9 +167,9 @@ class ServicioPagos:
 
         # 2. Activar ventana de verificación en Redis (atómica, NX=True)
         ventana_activa = await activar_ventana_verificacion(
-            redis=self.redis,
-            cod_socio=cod_socio,
-            ttl=settings.VENTANA_VERIFICACION_PAGO_SEGUNDOS
+            self.redis,
+            cod_socio,
+            settings.VENTANA_VERIFICACION_PAGO_SEGUNDOS
         )
 
         # 3. Determinar URL oficial de redirección
@@ -181,7 +181,7 @@ class ServicioPagos:
 
         # 4. Registrar en PostgreSQL
         try:
-            registro = AuditoriaPagosRedireccion(
+            registro = AuditoriaPagoRedireccion(
                 usuario_id=usuario_id,
                 cod_socio=cod_socio.strip(),
                 canal_id=canal_limpio,
