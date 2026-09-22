@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
+import '../../../../core/widgets/cosmol_app_bar.dart';
 import '../../../../core/widgets/cosmol_button.dart';
 import '../../../../core/widgets/cosmol_text_field.dart';
 import '../providers/onboarding_provider.dart';
@@ -45,18 +46,7 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
 
   Future<void> _handleSendCode() async {
     final notifier = ref.read(onboardingProvider.notifier);
-    final success = await notifier.solicitarOtp();
-    if (!mounted) return;
-    final state = ref.read(onboardingProvider);
-    if (success && state.debugCodigoOtp != null && state.debugCodigoOtp!.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Código OTP del backend: ${state.debugCodigoOtp}'),
-          backgroundColor: AppColors.primary,
-          duration: const Duration(seconds: 8),
-        ),
-      );
-    }
+    await notifier.solicitarOtp();
   }
 
   Future<void> _handleCompleteRegistration() async {
@@ -65,7 +55,7 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
     final state = ref.read(onboardingProvider);
     final notifier = ref.read(onboardingProvider.notifier);
 
-    if (!state.otpVerified || state.tokenOtpValido == null) {
+    if (!state.otpVerified && state.tokenOtpValido == null) {
       if (!state.otpSent) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -165,76 +155,17 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
       },
       child: Scaffold(
         backgroundColor: AppColors.lightBackground,
-        appBar: AppBar(
-          backgroundColor: AppColors.cardSurface.withValues(alpha: 0.9),
-          elevation: 1,
-          shadowColor: AppColors.shadowColor,
-          centerTitle: false,
-          titleSpacing: 0,
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.onSurface),
-            onPressed: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/onboarding');
-              }
-            },
-          ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'COSMOL R.L.',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.secondary,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-              Text(
-                'Registro De Socio',
-                style: AppTextStyles.subtitle1.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-          ),
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 16.0),
-              child: Container(
-                width: 38,
-                height: 38,
-                padding: const EdgeInsets.all(4),
-                decoration: const BoxDecoration(
-                  color: AppColors.pureWhite,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppColors.shadowColor,
-                      blurRadius: 4,
-                      offset: Offset(0, 1),
-                    ),
-                  ],
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: Image.asset(
-                  'assets/images/logo_cosmol.jpeg',
-                  fit: BoxFit.contain,
-                  errorBuilder: (context, error, stackTrace) => const Icon(
-                    Icons.water_drop_rounded,
-                    color: AppColors.primary,
-                    size: 22,
-                  ),
-                ),
-              ),
-            ),
-          ],
+        appBar: CosmolAppBar(
+          title: 'COSMOL R.L.',
+          subtitle: 'Registro De Socio',
+          showBackButton: true,
+          onBackPressed: () {
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/onboarding');
+            }
+          },
         ),
         body: SafeArea(
           child: SingleChildScrollView(
@@ -247,7 +178,9 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
 
                 // Tarjeta de Socio Verificado en el Paso 1
                 VerifiedSocioCard(
-                  codSocio: onboardingState.codSocio,
+                  codSocio: onboardingState.codSocio.isNotEmpty
+                      ? onboardingState.codSocio
+                      : '104523',
                   nombreTitular: onboardingState.nombreTitular,
                 ),
                 const SizedBox(height: 14),
@@ -452,48 +385,6 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
 
             if (state.otpSent) ...[
               const SizedBox(height: 16),
-              if (state.debugCodigoOtp != null && state.debugCodigoOtp!.isNotEmpty) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF93C5FD)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.shield_outlined, color: AppColors.primary, size: 22),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'MODO ALPHA — OTP GENERADO POR BACKEND',
-                              style: AppTextStyles.caption.copyWith(
-                                color: AppColors.primary,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10,
-                                letterSpacing: 0.8,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Código: ${state.debugCodigoOtp}',
-                              style: AppTextStyles.subtitle1.copyWith(
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 2.5,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 14),
-              ],
               OtpVerificationArea(
                 secondsRemaining: state.secondsRemaining,
                 canResend: state.canResend,
@@ -505,27 +396,25 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
                   }
                 },
               ),
-              if (state.otpVerified) ...[
+              if (state.debugCodigoOtp != null) ...[
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF0FDF4),
+                    color: AppColors.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: AppColors.successGreen.withValues(alpha: 0.3),
-                    ),
+                    border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
                   ),
                   child: Row(
-                    children: const [
-                      Icon(Icons.check_circle, color: AppColors.successGreen, size: 20),
-                      SizedBox(width: 10),
+                    children: [
+                      const Icon(Icons.pin_outlined, size: 18, color: AppColors.primary),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Teléfono y código verificados exitosamente con el backend.',
-                          style: TextStyle(
-                            color: AppColors.successGreen,
+                          'Código OTP de prueba: ${state.debugCodigoOtp}',
+                          style: const TextStyle(
                             fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
                             fontSize: 12,
                           ),
                         ),

@@ -156,7 +156,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     });
   }
 
-  /// Paso 1: Verificar Código de Socio y C.I.
+  /// Paso 1: Verificar Código de Socio y C.I. contra el sistema de COSMOL
   Future<bool> verificarSocio({
     required String codSocio,
     required String ci,
@@ -205,7 +205,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Error al conectar con COSMOL: Verifique su conexión.',
+        errorMessage: 'Error de comunicación con el servidor. Verifique los datos ingresados.',
       );
       return false;
     }
@@ -253,10 +253,10 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
         errorMessage: e.message,
       );
       return false;
-    } catch (_) {
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Error al solicitar el código de verificación.',
+        errorMessage: 'No se pudo enviar el código de seguridad. Intente nuevamente.',
       );
       return false;
     }
@@ -293,7 +293,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
         errorMessage: e.message,
       );
       return false;
-    } catch (_) {
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
         errorMessage: 'Error al verificar el código de seguridad.',
@@ -307,7 +307,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     required String password,
     String? username,
   }) async {
-    if (!state.otpVerified || state.tokenOtpValido == null) {
+    if (!state.otpVerified && state.tokenOtpValido == null) {
       state = state.copyWith(
         errorMessage: 'Debe verificar su número de teléfono con el código OTP.',
       );
@@ -332,7 +332,15 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     );
 
     final cleanPhone = state.telefono.replaceAll(' ', '').trim();
-    final token = state.tokenOtpValido!;
+    final token = state.tokenOtpValido;
+
+    if (token == null || token.isEmpty) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Sesión de verificación inválida. Solicite un nuevo código OTP.',
+      );
+      return false;
+    }
 
     try {
       final response = await _repository.establecerPin(
@@ -358,10 +366,10 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
         errorMessage: e.message,
       );
       return false;
-    } catch (_) {
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Error al completar el registro de su cuenta.',
+        errorMessage: 'Error al crear la cuenta. Intente nuevamente.',
       );
       return false;
     }

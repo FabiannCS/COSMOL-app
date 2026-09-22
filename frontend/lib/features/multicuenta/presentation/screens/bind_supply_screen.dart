@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
+import '../../../../core/widgets/cosmol_app_bar.dart';
 import '../../../../core/widgets/cosmol_button.dart';
 import '../../../../core/widgets/cosmol_text_field.dart';
 import '../providers/multicuenta_provider.dart';
@@ -97,8 +98,7 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content:
-              Text('Suministro vinculado en Modo Consulta y Pago'),
+          content: Text('Suministro vinculado correctamente en Modo Consulta y Pago'),
           backgroundColor: AppColors.successGreen,
         ),
       );
@@ -120,12 +120,11 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
     final state = ref.watch(multicuentaProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Vincular Suministro'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
-        ),
+      appBar: CosmolAppBar(
+        title: 'COSMOL R.L.',
+        subtitle: 'Vincular Suministro',
+        showBackButton: true,
+        onBackPressed: () => context.pop(),
       ),
       body: SafeArea(
         child: Column(

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
+import '../../../../core/widgets/cosmol_app_bar.dart';
 import '../../../../core/widgets/cosmol_button.dart';
 import '../providers/multicuenta_provider.dart';
 
@@ -14,12 +15,11 @@ class SuppliesListScreen extends ConsumerWidget {
     final state = ref.watch(multicuentaProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mis Suministros'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded),
-          onPressed: () => context.pop(),
-        ),
+      appBar: CosmolAppBar(
+        title: 'COSMOL R.L.',
+        subtitle: 'Mis Suministros',
+        showBackButton: true,
+        onBackPressed: () => context.pop(),
       ),
       body: SafeArea(
         child: Padding(
@@ -71,7 +71,7 @@ class SuppliesListScreen extends ConsumerWidget {
                         ref.read(multicuentaProvider.notifier).cargarSuministros(),
                     child: ListView.separated(
                       itemCount: state.suministros.length,
-                      separatorBuilder: (_, __) => const SizedBox(height: 14),
+                      separatorBuilder: (_, _) => const SizedBox(height: 14),
                       itemBuilder: (context, index) {
                         final item = state.suministros[index];
                         final isSelected =
