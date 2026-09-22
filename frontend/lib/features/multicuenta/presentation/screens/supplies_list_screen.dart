@@ -119,7 +119,7 @@ class SuppliesListScreen extends ConsumerWidget {
                                   color: isTitular
                                       ? AppColors.primary
                                       : AppColors.warningOrange,
-                                  borderRadius: BorderRadius.circular(8),
+                                  
                                 ),
                                 child: Text(
                                   isTitular

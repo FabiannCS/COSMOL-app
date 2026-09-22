@@ -29,7 +29,7 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
     _tabController.addListener(_handleTabChange);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(documentosProvider.notifier).cargarDocumentos();
+      ref.read(documentosProvider.notifier).cargarDocumentos(forceRefresh: true);
     });
   }
 

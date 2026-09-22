@@ -35,7 +35,9 @@ class DeudaState {
   bool get hasDebt => resumenDeuda?.hasDebt ?? false;
   double get saldoTotal => resumenDeuda?.saldoPendienteBs ?? 0.0;
   int get cantidadFacturas => resumenDeuda?.cantidadFacturasPendientes ?? 0;
-  bool get alertaCorte => resumenDeuda?.alertaCorte ?? false;
+  
+  /// Regla Oficial de Negocio COSMOL R.L.: Un aviso/alerta de corte solo aplica cuando se deben 3 o más facturas.
+  bool get alertaCorte => (cantidadFacturas >= 3) && (resumenDeuda?.alertaCorte ?? false);
   bool get estaVencido => resumenDeuda?.estaVencido ?? false;
   List<FacturaPendienteModel> get facturas =>
       resumenDeuda?.facturasPendientes ?? const [];

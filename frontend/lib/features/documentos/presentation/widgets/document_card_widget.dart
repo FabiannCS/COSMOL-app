@@ -185,7 +185,7 @@ class DocumentCardWidget extends StatelessWidget {
                           color: !isPagado &&
                                   documento.fechaVencimiento!
                                       .isBefore(DateTime.now())
-                              ? AppColors.error
+                              ? AppColors.primary
                               : AppColors.textSecondary,
                           fontWeight: !isPagado &&
                                   documento.fechaVencimiento!
@@ -268,7 +268,7 @@ class DocumentCardWidget extends StatelessWidget {
                   onPressed: isDownloading ? null : onCompartir,
                   icon: const Icon(
                     Icons.share_outlined,
-                    color: Color(0xFF059669), // Green
+                    color: AppColors.primary, // Green
                   ),
                   tooltip: 'Compartir vía WhatsApp',
                   style: IconButton.styleFrom(
