@@ -156,7 +156,7 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     });
   }
 
-  /// Paso 1: Verificar Código de Socio y C.I.
+  /// Paso 1: Verificar Código de Socio y C.I. contra el sistema de COSMOL
   Future<bool> verificarSocio({
     required String codSocio,
     required String ci,
@@ -197,23 +197,17 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       );
       return true;
     } on AppException catch (e) {
-      // Soporte para simulación de desarrollo si backend no está disponible
       state = state.copyWith(
         isLoading: false,
-        socioVerificado: true,
-        nombreTitular: 'JUAN PÉREZ (SOCIO $cleanCod)',
-        currentStep: 2,
-        successMessage: 'Socio verificado en modo desarrollo (${e.message})',
+        errorMessage: e.message,
       );
-      return true;
-    } catch (_) {
+      return false;
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        socioVerificado: true,
-        nombreTitular: 'SOCIO COSMOL $cleanCod',
-        currentStep: 2,
+        errorMessage: 'Error de comunicación con el servidor. Verifique los datos ingresados.',
       );
-      return true;
+      return false;
     }
   }
 
@@ -254,24 +248,17 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       );
       return true;
     } on AppException catch (e) {
-      _startTimer();
       state = state.copyWith(
         isLoading: false,
-        otpSent: true,
-        debugCodigoOtp: '482190',
-        telefonoEnmascarado: '+591 7***${cleanPhone.length >= 4 ? cleanPhone.substring(cleanPhone.length - 4) : '219'}',
-        successMessage: 'Código simulado para desarrollo: 482190 (${e.message})',
+        errorMessage: e.message,
       );
-      return true;
-    } catch (_) {
-      _startTimer();
+      return false;
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        otpSent: true,
-        debugCodigoOtp: '482190',
-        telefonoEnmascarado: '+591 7***219',
+        errorMessage: 'No se pudo enviar el código de seguridad. Intente nuevamente.',
       );
-      return true;
+      return false;
     }
   }
 
@@ -301,28 +288,17 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
       );
       return true;
     } on AppException catch (e) {
-      if (codigo == (state.debugCodigoOtp ?? '482190') || codigo == '482190') {
-        state = state.copyWith(
-          isLoading: false,
-          otpVerified: true,
-          tokenOtpValido: 'mock-token-otp-${DateTime.now().millisecondsSinceEpoch}',
-          successMessage: 'Teléfono verificado en modo desarrollo.',
-        );
-        return true;
-      }
-
       state = state.copyWith(
         isLoading: false,
         errorMessage: e.message,
       );
       return false;
-    } catch (_) {
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        otpVerified: true,
-        tokenOtpValido: 'mock-token-otp-${DateTime.now().millisecondsSinceEpoch}',
+        errorMessage: 'Error al verificar el código de seguridad.',
       );
-      return true;
+      return false;
     }
   }
 
@@ -356,7 +332,15 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     );
 
     final cleanPhone = state.telefono.replaceAll(' ', '').trim();
-    final token = state.tokenOtpValido ?? 'mock-valid-token';
+    final token = state.tokenOtpValido;
+
+    if (token == null || token.isEmpty) {
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Sesión de verificación inválida. Solicite un nuevo código OTP.',
+      );
+      return false;
+    }
 
     try {
       final response = await _repository.establecerPin(
@@ -379,17 +363,15 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
     } on AppException catch (e) {
       state = state.copyWith(
         isLoading: false,
-        registroCompletado: true,
-        successMessage: '¡Registro completado! (${e.message})',
+        errorMessage: e.message,
       );
-      return true;
-    } catch (_) {
+      return false;
+    } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        registroCompletado: true,
-        successMessage: '¡Registro completado exitosamente!',
+        errorMessage: 'Error al crear la cuenta. Intente nuevamente.',
       );
-      return true;
+      return false;
     }
   }
 
