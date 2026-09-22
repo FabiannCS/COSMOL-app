@@ -3,7 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../providers/consumo_provider.dart';
 
-/// Tarjeta Hero destacada que muestra el consumo del mes actual y la comparativa con el promedio.
+/// Tarjeta Hero destacada que muestra el consumo del mes actual, comparativa con el promedio y tendencia.
 class ConsumoKpiCard extends StatelessWidget {
   final ConsumoState state;
 
@@ -15,89 +15,133 @@ class ConsumoKpiCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final mesActual = state.mesActual;
-    final consumo = mesActual?.consumo ?? 0.0;
+    final consumo = mesActual?.consumoM3 ?? 0.0;
     final promedio = state.promedioConsumo;
     final isBajo = state.isBajoPromedio;
     final mesesCount = state.periodo == PeriodoConsumo.seisMeses ? '6' : '12';
+    final tendencia = state.tendencia;
+    final esAtipico = state.consumoAtipico;
 
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.primary,
+        color: esAtipico ? const Color(0xFF7F1D1D) : AppColors.primary,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
+        boxShadow: [
           BoxShadow(
-            color: Color(0x1A003E6B),
+            color: esAtipico
+                ? const Color(0x33DC2626)
+                : const Color(0x1A003E6B),
             blurRadius: 16,
-            offset: Offset(0, 4),
+            offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header del Card
+          // Header del Card con Mes Actual y Badge
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                'Consumo del Mes Actual',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: const Color(0xFFD1E4FF),
+              Expanded(
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.water_drop_rounded,
+                      size: 16,
+                      color: Color(0xFFC5E7FF),
+                    ),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text(
+                        'Consumo del Mes Actual',
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: const Color(0xFFD1E4FF),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              if (mesActual != null)
+              if (mesActual != null) ...[
+                const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.12),
+                    color: Colors.white.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     mesActual.mesAnioCorto,
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 11,
-                      fontWeight: FontWeight.w600,
+                      fontWeight: FontWeight.w700,
                       color: Colors.white,
                     ),
                   ),
                 ),
+              ],
             ],
           ),
           const SizedBox(height: 12),
 
-          // Número Grande de Consumo
+          // Número Grande de Consumo y Litros
           Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(
-                consumo == consumo.roundToDouble()
-                    ? '${consumo.toInt()}'
-                    : consumo.toStringAsFixed(1),
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 38,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.white,
-                  letterSpacing: -1.0,
-                  height: 1.0,
+              Expanded(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text(
+                        consumo == consumo.roundToDouble()
+                            ? '${consumo.toInt()}'
+                            : consumo.toStringAsFixed(1),
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 38,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                          letterSpacing: -1.0,
+                          height: 1.0,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'm³',
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: const Color(0xFFC5E7FF),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 6),
-              Text(
-                'm³',
-                style: GoogleFonts.plusJakartaSans(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w700,
-                  color: const Color(0xFFC5E7FF),
+              if (mesActual != null) ...[
+                const SizedBox(width: 8),
+                Text(
+                  '${(consumo * 1000).toInt()} Litros',
+                  style: GoogleFonts.plusJakartaSans(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: const Color(0xFFD1E4FF),
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
 
           // Divisor sutil
           Container(
@@ -106,53 +150,89 @@ class ConsumoKpiCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Fila de Promedio y Estado
+          // Fila de Promedio y Estado Comparativo (Responsive & Overflow-Safe)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              RichText(
-                text: TextSpan(
-                  style: GoogleFonts.plusJakartaSans(
-                    fontSize: 12,
-                    color: const Color(0xFFD1E4FF),
-                  ),
-                  children: [
-                    TextSpan(text: 'Promedio $mesesCount meses: '),
-                    TextSpan(
-                      text: '${promedio.toStringAsFixed(1)} m³',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
+              Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: RichText(
+                    text: TextSpan(
+                      style: GoogleFonts.plusJakartaSans(
+                        fontSize: 12,
+                        color: const Color(0xFFD1E4FF),
                       ),
+                      children: [
+                        TextSpan(text: 'Promedio $mesesCount meses: '),
+                        TextSpan(
+                          text: '${promedio.toStringAsFixed(1)} m³',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isBajo
-                      ? const Color(0xFF16A34A).withValues(alpha: 0.25)
-                      : const Color(0xFFDC2626).withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(12),
-                ),
+              const SizedBox(width: 8),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      isBajo ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
-                      size: 12,
-                      color: isBajo ? const Color(0xFF4ADE80) : const Color(0xFFFCA5A5),
-                    ),
-                    const SizedBox(width: 3),
-                    Text(
-                      isBajo ? 'Bajo el promedio' : 'Sobre el promedio',
-                      style: GoogleFonts.plusJakartaSans(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: isBajo ? const Color(0xFF4ADE80) : const Color(0xFFFCA5A5),
+                    // Badge Comparativo Promedio
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isBajo
+                            ? const Color(0xFF16A34A).withValues(alpha: 0.3)
+                            : const Color(0xFFDC2626).withValues(alpha: 0.3),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isBajo ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                            size: 12,
+                            color: isBajo ? const Color(0xFF4ADE80) : const Color(0xFFFCA5A5),
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            isBajo ? 'Bajo promedio' : 'Sobre promedio',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: isBajo ? const Color(0xFF4ADE80) : const Color(0xFFFCA5A5),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
+                    if (tendencia != 'ESTABLE') ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          tendencia == 'SUBIENDO' ? '↑ Subiendo' : '↓ Bajando',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -1,50 +1,63 @@
 import 'package:intl/intl.dart';
 
-/// Modelo que representa un registro mensual de factura y consumo de agua.
-class ConsumoFacturaModel {
-  final String codigo;
-  final String nombre;
+/// Representa el consumo y lecturas de medidor de un periodo mensual específico.
+class ConsumoPeriodoModel {
+  final String periodo;
   final int mes;
+  final String mesNombre;
   final int anio;
-  final double monto;
-  final String estado; // '1' = Pagado, '0' = Pendiente
-  final double consumo; // en m³
-  final String? fecha;
+  final double consumoM3;
+  final double montoBs;
+  final double lecturaAnterior;
+  final double lecturaActual;
+  final String? fechaLectura;
+  final String estadoLectura;
 
-  const ConsumoFacturaModel({
-    required this.codigo,
-    required this.nombre,
+  const ConsumoPeriodoModel({
+    required this.periodo,
     required this.mes,
+    required this.mesNombre,
     required this.anio,
-    required this.monto,
-    required this.estado,
-    required this.consumo,
-    this.fecha,
+    required this.consumoM3,
+    required this.montoBs,
+    required this.lecturaAnterior,
+    required this.lecturaActual,
+    this.fechaLectura,
+    this.estadoLectura = 'NORMAL',
   });
 
-  factory ConsumoFacturaModel.fromJson(Map<String, dynamic> json) {
-    return ConsumoFacturaModel(
-      codigo: (json['CODIGO'] ?? json['codigo'] ?? json['cod_socio'] ?? '').toString().trim(),
-      nombre: (json['NOMBRE'] ?? json['nombre'] ?? json['alias'] ?? '').toString().trim(),
-      mes: _parseInt(json['MES'] ?? json['mes']),
-      anio: _parseInt(json['ANIO'] ?? json['anio'], defaultValue: DateTime.now().year),
-      monto: _parseDouble(json['MONTO'] ?? json['monto'] ?? json['monto_bs']),
-      estado: (json['ESTADO'] ?? json['estado'] ?? json['estado_lectura'] ?? '1').toString().trim(),
-      consumo: _parseDouble(json['CONSUMO'] ?? json['consumo'] ?? json['consumo_m3']),
-      fecha: json['FECHA']?.toString() ?? json['fecha']?.toString() ?? json['fecha_lectura']?.toString(),
+  factory ConsumoPeriodoModel.fromJson(Map<String, dynamic> json) {
+    final rawMes = _parseInt(json['mes'] ?? json['MES'] ?? json['nmes']);
+    final rawAnio = _parseInt(json['anio'] ?? json['ANIO'] ?? json['gestion'], defaultValue: DateTime.now().year);
+    final rawPeriodo = (json['periodo'] ?? '${rawMes.toString().padLeft(2, '0')}/$rawAnio').toString().trim();
+    final rawMesNombre = json['mes_nombre']?.toString() ?? _obtenerMesNombre(rawMes, rawAnio);
+
+    return ConsumoPeriodoModel(
+      periodo: rawPeriodo,
+      mes: rawMes,
+      mesNombre: rawMesNombre,
+      anio: rawAnio,
+      consumoM3: _parseDouble(json['consumo_m3'] ?? json['consumo'] ?? json['CONSUMO'] ?? json['volumen']),
+      montoBs: _parseDouble(json['monto_bs'] ?? json['monto'] ?? json['MONTO'] ?? json['montototal']),
+      lecturaAnterior: _parseDouble(json['lectura_anterior'] ?? json['lect_ant'] ?? json['LECTURA_ANTERIOR']),
+      lecturaActual: _parseDouble(json['lectura_actual'] ?? json['lect_act'] ?? json['LECTURA_ACTUAL']),
+      fechaLectura: json['fecha_lectura']?.toString() ?? json['fecha']?.toString() ?? json['FECHA']?.toString(),
+      estadoLectura: (json['estado_lectura'] ?? json['estado'] ?? json['ESTADO'] ?? 'NORMAL').toString().trim().toUpperCase(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'CODIGO': codigo,
-      'NOMBRE': nombre,
-      'MES': mes.toString(),
-      'ANIO': anio.toString(),
-      'MONTO': monto.toStringAsFixed(2),
-      'ESTADO': estado,
-      'CONSUMO': consumo.toStringAsFixed(0),
-      if (fecha != null) 'FECHA': fecha,
+      'periodo': periodo,
+      'mes': mes,
+      'mes_nombre': mesNombre,
+      'anio': anio,
+      'consumo_m3': consumoM3,
+      'monto_bs': montoBs,
+      'lectura_anterior': lecturaAnterior,
+      'lectura_actual': lecturaActual,
+      if (fechaLectura != null) 'fecha_lectura': fechaLectura,
+      'estado_lectura': estadoLectura,
     };
   }
 
@@ -69,13 +82,28 @@ class ConsumoFacturaModel {
     return defaultValue;
   }
 
-  /// Indica si la factura fue pagada
-  bool get isPagado =>
-      estado == '1' ||
-      estado.toLowerCase() == 'pagado' ||
-      estado.toUpperCase() == 'NORMAL';
+  static String _obtenerMesNombre(int mes, int anio) {
+    const meses = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    if (mes >= 1 && mes <= 12) {
+      return '${meses[mes - 1]} $anio';
+    }
+    return 'Mes $mes $anio';
+  }
 
-  /// Nombre abreviado del mes en español (Ene, Feb, Mar, etc.)
+  // Getters auxiliares y de compatibilidad
+  double get consumo => consumoM3;
+  double get monto => montoBs;
+  String get estado => estadoLectura;
+  String? get fecha => fechaLectura;
+
+  bool get isPagado =>
+      estadoLectura == '1' ||
+      estadoLectura == 'NORMAL' ||
+      estadoLectura.toLowerCase() == 'pagado';
+
   String get mesNombreCorto {
     const meses = [
       'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun',
@@ -84,10 +112,9 @@ class ConsumoFacturaModel {
     if (mes >= 1 && mes <= 12) {
       return meses[mes - 1];
     }
-    return 'Mes $mes';
+    return 'M$mes';
   }
 
-  /// Nombre completo del mes (Enero, Febrero, etc.)
   String get mesNombreCompleto {
     const meses = [
       'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -99,51 +126,153 @@ class ConsumoFacturaModel {
     return 'Mes $mes';
   }
 
-  /// Etiqueta combinada: "Oct 2026"
   String get mesAnioCorto => '$mesNombreCorto $anio';
-
-  /// Etiqueta combinada completa: "Octubre 2026"
   String get mesAnioCompleto => '$mesNombreCompleto $anio';
 
-  /// Monto formateado en moneda boliviana: "Bs 58.01"
   String get montoFormateado {
     final format = NumberFormat.currency(locale: 'es_BO', symbol: 'Bs ', decimalDigits: 2);
-    return format.format(monto);
+    return format.format(montoBs);
   }
 
-  /// Volumen formateado: "15 m³"
   String get consumoFormateado {
-    if (consumo == consumo.roundToDouble()) {
-      return '${consumo.toInt()} m³';
+    if (consumoM3 == consumoM3.roundToDouble()) {
+      return '${consumoM3.toInt()} m³';
     }
-    return '${consumo.toStringAsFixed(1)} m³';
+    return '${consumoM3.toStringAsFixed(1)} m³';
   }
 
-  /// Tarifa calculada por m³ (si consumo > 0)
-  double get tarifaPorM3 => consumo > 0 ? (monto / consumo) : 0.0;
+  int get litrosMedidos => (consumoM3 * 1000).toInt();
+
+  double get tarifaPorM3 => consumoM3 > 0 ? (montoBs / consumoM3) : 0.0;
 }
 
-/// Respuesta de la API de historial de facturas y consumo
-class ConsumoHistorialResponse {
-  final String estado;
-  final String mensaje;
-  final List<ConsumoFacturaModel> datos;
+// Alias de retrocompatibilidad
+typedef ConsumoFacturaModel = ConsumoPeriodoModel;
 
-  const ConsumoHistorialResponse({
-    required this.estado,
-    required this.mensaje,
-    required this.datos,
+/// Métricas analíticas calculadas sobre el historial de consumos del socio.
+class EstadisticasConsumoModel {
+  final double promedioM3;
+  final double consumoMaximoM3;
+  final String mesConsumoMaximo;
+  final double consumoMinimoM3;
+  final String mesConsumoMinimo;
+  final double consumoUltimoMesM3;
+  final bool consumoAtipico;
+  final double? porcentajeVariacionUltimoMes;
+  final String? mensajeAlerta;
+  final String tendencia; // SUBIENDO, BAJANDO, ESTABLE
+
+  const EstadisticasConsumoModel({
+    required this.promedioM3,
+    required this.consumoMaximoM3,
+    required this.mesConsumoMaximo,
+    required this.consumoMinimoM3,
+    required this.mesConsumoMinimo,
+    required this.consumoUltimoMesM3,
+    this.consumoAtipico = false,
+    this.porcentajeVariacionUltimoMes,
+    this.mensajeAlerta,
+    this.tendencia = 'ESTABLE',
   });
 
-  factory ConsumoHistorialResponse.fromJson(Map<String, dynamic> json) {
-    final rawDatos = json['periodos'] ?? json['datos'] as List<dynamic>? ?? [];
-    return ConsumoHistorialResponse(
-      estado: json['estado']?.toString() ?? 'exito',
-      mensaje: json['mensaje']?.toString() ?? '',
-      datos: (rawDatos as List<dynamic>)
-          .whereType<Map<String, dynamic>>()
-          .map((item) => ConsumoFacturaModel.fromJson(item))
-          .toList(),
+  factory EstadisticasConsumoModel.fromJson(Map<String, dynamic> json) {
+    return EstadisticasConsumoModel(
+      promedioM3: ConsumoPeriodoModel._parseDouble(json['promedio_m3']),
+      consumoMaximoM3: ConsumoPeriodoModel._parseDouble(json['consumo_maximo_m3']),
+      mesConsumoMaximo: (json['mes_consumo_maximo'] ?? 'N/A').toString(),
+      consumoMinimoM3: ConsumoPeriodoModel._parseDouble(json['consumo_minimo_m3']),
+      mesConsumoMinimo: (json['mes_consumo_minimo'] ?? 'N/A').toString(),
+      consumoUltimoMesM3: ConsumoPeriodoModel._parseDouble(json['consumo_ultimo_mes_m3']),
+      consumoAtipico: json['consumo_atipico'] == true,
+      porcentajeVariacionUltimoMes: json['porcentaje_variacion_ultimo_mes'] != null
+          ? ConsumoPeriodoModel._parseDouble(json['porcentaje_variacion_ultimo_mes'])
+          : null,
+      mensajeAlerta: json['mensaje_alerta']?.toString(),
+      tendencia: (json['tendencia'] ?? 'ESTABLE').toString().toUpperCase(),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'promedio_m3': promedioM3,
+      'consumo_maximo_m3': consumoMaximoM3,
+      'mes_consumo_maximo': mesConsumoMaximo,
+      'consumo_minimo_m3': consumoMinimoM3,
+      'mes_consumo_minimo': mesConsumoMinimo,
+      'consumo_ultimo_mes_m3': consumoUltimoMesM3,
+      'consumo_atipico': consumoAtipico,
+      if (porcentajeVariacionUltimoMes != null)
+        'porcentaje_variacion_ultimo_mes': porcentajeVariacionUltimoMes,
+      if (mensajeAlerta != null) 'mensaje_alerta': mensajeAlerta,
+      'tendencia': tendencia,
+    };
+  }
 }
+
+/// Respuesta integral con el historial mensual y métricas analíticas del suministro.
+class HistorialConsumoModel {
+  final String codSocio;
+  final String alias;
+  final String rolAcceso; // TITULAR, CONSULTA_PAGO
+  final String? nroMedidor;
+  final int totalPeriodos;
+  final List<ConsumoPeriodoModel> periodos;
+  final EstadisticasConsumoModel estadisticas;
+
+  const HistorialConsumoModel({
+    required this.codSocio,
+    required this.alias,
+    required this.rolAcceso,
+    this.nroMedidor,
+    required this.totalPeriodos,
+    required this.periodos,
+    required this.estadisticas,
+  });
+
+  factory HistorialConsumoModel.fromJson(Map<String, dynamic> json) {
+    final rawPeriodos = json['periodos'] ?? json['datos'] as List<dynamic>? ?? [];
+    final parsedPeriodos = (rawPeriodos as List<dynamic>)
+        .whereType<Map<String, dynamic>>()
+        .map((item) => ConsumoPeriodoModel.fromJson(item))
+        .toList();
+
+    EstadisticasConsumoModel parsedStats;
+    if (json['estadisticas'] is Map<String, dynamic>) {
+      parsedStats = EstadisticasConsumoModel.fromJson(json['estadisticas'] as Map<String, dynamic>);
+    } else {
+      // Cálculo de contingencia si el backend no entregó el nodo estadístico
+      final totalM3 = parsedPeriodos.fold<double>(0.0, (sum, p) => sum + p.consumoM3);
+      final avg = parsedPeriodos.isNotEmpty ? (totalM3 / parsedPeriodos.length) : 0.0;
+      final ult = parsedPeriodos.isNotEmpty ? parsedPeriodos.last.consumoM3 : 0.0;
+      parsedStats = EstadisticasConsumoModel(
+        promedioM3: double.parse(avg.toStringAsFixed(2)),
+        consumoMaximoM3: parsedPeriodos.isNotEmpty
+            ? parsedPeriodos.map((p) => p.consumoM3).reduce((a, b) => a > b ? a : b)
+            : 0.0,
+        mesConsumoMaximo: parsedPeriodos.isNotEmpty ? parsedPeriodos.last.periodo : 'N/A',
+        consumoMinimoM3: parsedPeriodos.isNotEmpty
+            ? parsedPeriodos.map((p) => p.consumoM3).reduce((a, b) => a < b ? a : b)
+            : 0.0,
+        mesConsumoMinimo: parsedPeriodos.isNotEmpty ? parsedPeriodos.first.periodo : 'N/A',
+        consumoUltimoMesM3: ult,
+        consumoAtipico: avg > 0 && ult >= (avg * 1.30),
+        tendencia: 'ESTABLE',
+      );
+    }
+
+    return HistorialConsumoModel(
+      codSocio: (json['cod_socio'] ?? json['codigo'] ?? '').toString().trim(),
+      alias: (json['alias'] ?? json['nombre'] ?? 'Mi Suministro').toString().trim(),
+      rolAcceso: (json['rol_acceso'] ?? json['rol'] ?? 'TITULAR').toString().trim().toUpperCase(),
+      nroMedidor: json['nro_medidor']?.toString(),
+      totalPeriodos: parsedPeriodos.length,
+      periodos: parsedPeriodos,
+      estadisticas: parsedStats,
+    );
+  }
+
+  bool get isTitular => rolAcceso == 'TITULAR';
+}
+
+// Alias de retrocompatibilidad
+typedef ConsumoHistorialResponse = HistorialConsumoModel;

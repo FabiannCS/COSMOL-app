@@ -10,6 +10,8 @@ import '../../features/auth/presentation/screens/onboarding_step2_screen.dart';
 import '../../features/home/presentation/screens/dashboard_screen.dart';
 import '../../features/multicuenta/presentation/screens/supplies_list_screen.dart';
 import '../../features/multicuenta/presentation/screens/bind_supply_screen.dart';
+import '../../features/documentos/data/models/documento_model.dart';
+import '../../features/documentos/presentation/screens/pdf_viewer_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -81,6 +83,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const BindSupplyScreen(),
           ),
         ],
+      ),
+      GoRoute(
+        path: '/documentos/visor',
+        name: 'visor-documento',
+        builder: (context, state) {
+          final documento = state.extra as DocumentoModel?;
+          if (documento == null) {
+            return const Scaffold(
+              body: Center(child: Text('Documento no especificado')),
+            );
+          }
+          return PdfViewerScreen(documento: documento);
+        },
       ),
     ],
   );

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
 
-/// Tarjeta con información de cajas y puntos de atención habilitados de COSMOL R.L.
+/// Tarjeta de Puntos de Atención y Cajas de Pago físicas de COSMOL R.L.
 class PaymentChannelsCard extends StatelessWidget {
   const PaymentChannelsCard({super.key});
 
@@ -19,30 +19,26 @@ class PaymentChannelsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
+              const Icon(Icons.location_on_outlined,
+                  size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
               Expanded(
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Expanded(
                       child: Text(
-                        'Cajas y Puntos de Atención',
+                        'Puntos de Atención',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: AppTextStyles.subtitle2.copyWith(
                           fontWeight: FontWeight.bold,
+                          color: AppColors.darkNavy,
                         ),
                       ),
                     ),
                   ],
-                ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                'HABILITADOS',
-                style: AppTextStyles.caption.copyWith(
-                  color: AppColors.successGreen,
-                  fontWeight: FontWeight.bold,
                 ),
               ),
             ],
@@ -54,27 +50,35 @@ class PaymentChannelsCard extends StatelessWidget {
               color: AppColors.surfaceContainerLow,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(
+            child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Cajas Centrales COSMOL R.L.',
-                  style: AppTextStyles.subtitle2.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'Calle Bolívar esq. Sucre · Montero, Bolivia',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.onSurfaceVariant,
-                  ),
-                ),
-                Text(
-                  'Lunes a Viernes 07:30 a 15:30',
-                  style: AppTextStyles.caption.copyWith(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Cajas COSMOL R.L.',
+                        style: AppTextStyles.subtitle2.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Calle Isaías Parada #219 · Montero, Bolivia',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Lunes a Viernes 08:30 a 16:30',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

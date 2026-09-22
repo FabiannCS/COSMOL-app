@@ -127,7 +127,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           // Campo 1: Código de Socio
                           CosmolTextField(
                             label: 'Código de Socio',
-                            hint: 'Ej: 540, 104523',
                             controller: _socioCodeController,
                             keyboardType: TextInputType.number,
                             prefixIcon: Icons.badge_outlined,
