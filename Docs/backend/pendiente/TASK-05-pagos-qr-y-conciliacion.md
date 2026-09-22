@@ -107,7 +107,7 @@ sequenceDiagram
 ### 4.1 Entregables de DEV 1 (Aireyu): Configuración, Caché Redis y Persistencia
 
 #### A. Variables de Configuración Oficiales (`backend/app/core/config.py`):
-- [ ] Incorporar parámetros de pasarelas y control de tiempos:
+- [x] Incorporar parámetros de pasarelas y control de tiempos:
   ```python
   URL_MULTIPAGO_COSMOL: str = "https://multipago.com/service/cosmol_payment/first"
   URL_PAGO_AL_PASO_COSMOL: str = "https://red.pagoalpaso247.net/servicio/cosmol"
@@ -116,17 +116,17 @@ sequenceDiagram
   ```
 
 #### B. Servicio de Caché en Redis (`backend/app/services/servicio_cache_pagos.py`):
-- [ ] `activar_ventana_verificacion(redis: Redis, cod_socio: str, ttl: int = 900) -> bool`:
+- [x] `activar_ventana_verificacion(redis: Redis, cod_socio: str, ttl: int = 900) -> bool`:
   - Ejecuta `SET pago_en_proceso:{cod_socio} "activo" EX ttl NX`.
   - Invalida la clave de deuda `deuda:{cod_socio}`.
   - Retorna `True` si activó la ventana por primera vez o `False` si ya estaba activa (idempotente).
-- [ ] `esta_en_ventana_verificacion(redis: Redis, cod_socio: str) -> bool`:
+- [x] `esta_en_ventana_verificacion(redis: Redis, cod_socio: str) -> bool`:
   - Comprueba si existe la clave en Redis.
-- [ ] `cerrar_ventana_verificacion(redis: Redis, cod_socio: str) -> None`:
+- [x] `cerrar_ventana_verificacion(redis: Redis, cod_socio: str) -> None`:
   - Elimina `pago_en_proceso:{cod_socio}` al constatar deuda saldada.
 
 #### C. Modelo en PostgreSQL (`backend/app/db/models/pago.py`):
-- [ ] Tabla `auditoria_pagos_redireccion`:
+- [x] Tabla `auditoria_pagos_redireccion`:
   - `id`: UUID (PK)
   - `usuario_id`: UUID (FK a `usuarios.id`)
   - `cod_socio`: String (indexado)
@@ -134,12 +134,13 @@ sequenceDiagram
   - `monto_deuda_bs`: Numeric(10, 2)
   - `ip_origen`: String opcional
   - `creado_en`: DateTime(timezone=True, default=utcnow)
-- [ ] Exportar modelo en `backend/app/db/models/__init__.py`.
+- [x] Exportar modelo en `backend/app/db/models/__init__.py`.
 
 #### D. Batería de Pruebas DEV 1 (`backend/tests/test_cache_pagos.py`):
-- [ ] Prueba de activación atómica de ventana con opción `NX=True`.
-- [ ] Prueba de no alteración ni bugeo ante doble clic consecutivo.
-- [ ] Prueba de expiración de ventana por TTL (900s) y cierre manual.
+- [x] Prueba de activación atómica de ventana con opción `NX=True`.
+- [x] Prueba de no alteración ni bugeo ante doble clic consecutivo.
+- [x] Prueba de expiración de ventana por TTL (900s) y cierre manual.
+
 
 ---
 
