@@ -63,7 +63,7 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
     final deudaState = ref.watch(deudaProvider);
     final detalle = deudaState.resumenDeuda?.suministro;
 
-    final nombreTitular = detalle?.nombreTitular ?? 'Socio Digital COSMOL';
+    final nombreTitular = detalle?.nombreTitular ?? '';
     final isTitular = detalle?.rolUsuario == 'TITULAR';
 
     return SingleChildScrollView(
@@ -97,9 +97,9 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
           
           const SizedBox(height: 32),
           
-          // Información del Suministro
+          // Información del Socio
           if (detalle != null) ...[
-            Text('Información del Suministro', style: AppTextStyles.subtitle1),
+            Text('Información del Socio', style: AppTextStyles.subtitle1),
             const SizedBox(height: 16),
             Container(
               padding: const EdgeInsets.all(20),
@@ -112,9 +112,9 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
                 children: [
                   _InfoRow(label: 'Rol de Usuario', value: isTitular ? 'Titular' : 'Consulta y Pago'),
                   const Divider(height: 24, color: AppColors.borderSubtle),
-                  _InfoRow(label: 'CI / NIT', value: detalle.ciNit.isNotEmpty ? detalle.ciNit : 'No registrado'),
+                  _InfoRow(label: 'Teléfono', value: detalle.telefonoCelular.isNotEmpty ? detalle.telefonoCelular : 'No registrado'),
                   const Divider(height: 24, color: AppColors.borderSubtle),
-                  _InfoRow(label: 'Categoría', value: detalle.categoria),
+                  _InfoRow(label: 'CI', value: detalle.ciNit.isNotEmpty ? detalle.ciNit : 'No registrado'),
                   const Divider(height: 24, color: AppColors.borderSubtle),
                   _InfoRow(label: 'Dirección', value: detalle.direccion.isNotEmpty ? detalle.direccion : 'No registrada'),
                 ],

@@ -19,7 +19,6 @@ class DocumentEmptyWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     String title;
     String description;
-    IconData icon;
 
     if (isInquilino && (tabIndex == 0 || tabIndex == 2)) {
       title = tabIndex == 0
@@ -27,31 +26,26 @@ class DocumentEmptyWidget extends StatelessWidget {
           : 'Avisos de corte no disponibles';
       description =
           'Este suministro está configurado en Modo Consulta y Pago. Las facturas oficiales y avisos de corte están reservados para el titular verificado.';
-      icon = Icons.lock_outline_rounded;
     } else {
       switch (tabIndex) {
         case 0:
-          title = 'No hay facturas registradas';
+          title = 'Sin facturas registradas';
           description =
               'Aún no se han emitido facturas digitales para este suministro.';
-          icon = Icons.receipt_long_outlined;
           break;
         case 1:
-          title = 'Sin avisos de cobranza pendientes';
+          title = 'Sin avisos de cobranza';
           description =
               'No tienes avisos de cobranza emitidos en este momento.';
-          icon = Icons.mark_email_read_outlined;
           break;
         case 2:
-          title = '¡Excelente! Sin avisos de corte';
+          title = 'Sin avisos de corte';
           description =
               'Tu cuenta se encuentra al día y no presenta ninguna notificación de corte.';
-          icon = Icons.verified_user_outlined;
           break;
         default:
           title = 'No hay documentos';
           description = 'No se encontraron registros de documentos.';
-          icon = Icons.folder_open_outlined;
       }
     }
 
@@ -70,15 +64,6 @@ class DocumentEmptyWidget extends StatelessWidget {
                         ? const Color(0xFFE8F8F5)
                         : const Color(0xFFEFF6FF),
                 shape: BoxShape.circle,
-              ),
-              child: Icon(
-                icon,
-                size: 48,
-                color: (isInquilino && (tabIndex == 0 || tabIndex == 2))
-                    ? Colors.grey.shade600
-                    : tabIndex == 2
-                        ? const Color(0xFF00A86B)
-                        : AppColors.primary,
               ),
             ),
             const SizedBox(height: 18),

@@ -128,3 +128,47 @@ async def test_obtener_o_generar_aviso_corte(db_session: AsyncSession):
 
     assert isinstance(pdf_corte, bytes)
     assert pdf_corte.startswith(b"%PDF")
+
+
+@pytest.mark.asyncio
+async def test_fechas_emision_vencimiento_distintas_por_periodo(db_session: AsyncSession):
+    """
+    Verifica que dos facturas de periodos distintos (ej. 07/2026 y 08/2026)
+    generen fechas de emisión y vencimiento distintas y deterministas,
+    sin caer en fallback compartido a today().
+    """
+    from datetime import date
+    from sqlalchemy import select
+    from app.db.models import Documento
+
+    cod_socio = "TEST_FECHAS_01"
+    datos_socio = {"CODIGO": cod_socio, "NOMBRE": "Socio Prueba Fechas"}
+    service = ServicioStorageDocumentos(db=db_session)
+
+    fac_julio = {"ANIO": 2026, "NMES": 7, "MONTOTOTAL": 85.50, "NROFACTURA": "FAC-JUL"}
+    fac_agosto = {"ANIO": 2026, "NMES": 8, "MONTOTOTAL": 92.00, "NROFACTURA": "FAC-AGO"}
+
+    await service.obtener_o_generar_pdf_factura(cod_socio, fac_julio, datos_socio)
+    await service.obtener_o_generar_pdf_factura(cod_socio, fac_agosto, datos_socio)
+
+    stmt = select(Documento).where(Documento.cod_socio == cod_socio).order_by(Documento.mes.asc())
+    res = await db_session.execute(stmt)
+    docs = list(res.scalars().all())
+
+    assert len(docs) == 2
+    doc_jul = docs[0]
+    doc_ago = docs[1]
+
+    # Verificar que no comparten la misma fecha de emisión
+    assert doc_jul.fecha_emision != doc_ago.fecha_emision
+    assert doc_jul.fecha_emision == date(2026, 7, 1)
+    assert doc_jul.fecha_vencimiento == date(2026, 7, 31)
+
+    assert doc_ago.fecha_emision == date(2026, 8, 1)
+    assert doc_ago.fecha_vencimiento == date(2026, 8, 31)
+
+    # Limpieza
+    for d in docs:
+        await db_session.delete(d)
+    await db_session.commit()
+

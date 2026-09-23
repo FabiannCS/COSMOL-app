@@ -282,13 +282,13 @@ class ConsumoHistoryTable extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(
-                          Icons.file_download_outlined,
+                          Icons.receipt_long_outlined,
                           size: 16,
                           color: AppColors.primary,
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Exportar PDF',
+                          'Ver Facturas PDF',
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,

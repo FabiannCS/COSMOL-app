@@ -86,7 +86,8 @@ class GeneradorPdfDocumento:
     def generar_pdf_factura(
         self,
         datos_factura: Dict[str, Any],
-        datos_socio: Dict[str, Any]
+        datos_socio: Dict[str, Any],
+        fecha_emision: Optional[date] = None,
     ) -> bytes:
         """
         Genera una Factura Oficial con valor legal y derecho a crédito fiscal.
@@ -115,6 +116,16 @@ class GeneradorPdfDocumento:
         periodo = str(datos_factura.get("periodo") or f"{nmes:02d}/{anio}").strip()
         monto_bs = float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or 0.0)
 
+        # Fecha de emisión coherente con el ciclo comercial
+        if fecha_emision is not None:
+            fecha_emision_str = fecha_emision.strftime('%d/%m/%Y')
+        elif datos_factura.get("fecha_emision"):
+            fecha_emision_str = str(datos_factura["fecha_emision"]).strip()
+        elif anio > 0 and 1 <= nmes <= 12:
+            fecha_emision_str = f"01/{nmes:02d}/{anio}"
+        else:
+            fecha_emision_str = date.today().strftime('%d/%m/%Y')
+
         tabla_fiscal_data = [
             [
                 Paragraph("<b>FACTURA CON DERECHO A CRÉDITO FISCAL</b>", self.estilo_celda_negrita),
@@ -122,7 +133,7 @@ class GeneradorPdfDocumento:
             ],
             [
                 Paragraph(f"<b>CÓD. AUTORIZACIÓN:</b><br/>{cod_autorizacion}", self.estilo_celda),
-                Paragraph(f"<b>FECHA EMISIÓN:</b> {date.today().strftime('%d/%m/%Y')}<br/><b>PERIODO:</b> {periodo}", self.estilo_celda)
+                Paragraph(f"<b>FECHA EMISIÓN:</b> {fecha_emision_str}<br/><b>PERIODO:</b> {periodo}", self.estilo_celda)
             ]
         ]
         tabla_fiscal = Table(tabla_fiscal_data, colWidths=[4.0 * inch, 3.5 * inch])
@@ -228,7 +239,9 @@ class GeneradorPdfDocumento:
     def generar_pdf_aviso_cobranza(
         self,
         datos_deuda: Dict[str, Any],
-        datos_socio: Dict[str, Any]
+        datos_socio: Dict[str, Any],
+        fecha_emision: Optional[date] = None,
+        fecha_vencimiento: Optional[date] = None,
     ) -> bytes:
         """
         Genera un Aviso Mensual de Cobranza preventivo.
@@ -253,11 +266,24 @@ class GeneradorPdfDocumento:
         nombre = str(datos_socio.get("NOMBRE") or datos_socio.get("nombre_titular") or "").strip()
         periodo = str(datos_deuda.get("periodo") or "Actual").strip()
         monto_bs = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
-        fecha_vencimiento = str(datos_deuda.get("fecha_vencimiento") or "Fin de mes").strip()
+
+        if fecha_emision is not None:
+            fecha_emision_str = fecha_emision.strftime('%d/%m/%Y')
+        else:
+            fecha_emision_str = str(datos_deuda.get("fecha_emision") or "").strip()
+
+        if fecha_vencimiento is not None:
+            fecha_venc_str = fecha_vencimiento.strftime('%d/%m/%Y')
+        else:
+            fecha_venc_str = str(datos_deuda.get("fecha_vencimiento") or "Fin de mes").strip()
+
+        info_fechas = f"<b>VENCIMIENTO:</b> {fecha_venc_str}"
+        if fecha_emision_str:
+            info_fechas = f"<b>EMISIÓN:</b> {fecha_emision_str}<br/>" + info_fechas
 
         datos_aviso = [
             [Paragraph(f"<b>CÓDIGO DE SOCIO:</b> {cod_socio}", self.estilo_celda), Paragraph(f"<b>PERIODO:</b> {periodo}", self.estilo_celda)],
-            [Paragraph(f"<b>TITULAR:</b> {nombre}", self.estilo_celda), Paragraph(f"<b>VENCIMIENTO:</b> {fecha_vencimiento}", self.estilo_celda)],
+            [Paragraph(f"<b>TITULAR:</b> {nombre}", self.estilo_celda), Paragraph(info_fechas, self.estilo_celda)],
             [Paragraph("<b>TOTAL A PAGAR:</b>", self.estilo_celda_negrita), Paragraph(f"<b>Bs {monto_bs:.2f}</b>", self.estilo_celda_negrita)],
         ]
         tabla = Table(datos_aviso, colWidths=[4.0 * inch, 3.5 * inch])

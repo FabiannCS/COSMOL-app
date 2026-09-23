@@ -151,7 +151,28 @@ class ServicioDocumentos:
             except Exception as exc:
                 logger.warning(f"[DOCUMENTOS] Auto-sincronización con sistema comercial no ejecutada: {exc}")
 
-        # 4. Estructurar DTOs de respuesta por pestañas
+        # 4. Auto-remediación de fechas históricas registradas previamente con fallback a today()
+        modificado = False
+        for doc in documentos_db:
+            if doc.anio and doc.mes:
+                emision_esperada = self.storage._determinar_fecha_emision(doc.anio, doc.mes, {})
+                vencimiento_esperado = self.storage._determinar_fecha_vencimiento(doc.anio, doc.mes, {})
+                if doc.fecha_emision != emision_esperada:
+                    doc.fecha_emision = emision_esperada
+                    modificado = True
+                    try:
+                        await self.storage.regenerar_pdf_desde_documento(doc)
+                    except Exception as exc:
+                        logger.warning(f"[DOCUMENTOS] No se pudo regenerar PDF en auto-remediación: {exc}")
+                if doc.fecha_vencimiento is None or doc.fecha_vencimiento != vencimiento_esperado:
+                    doc.fecha_vencimiento = vencimiento_esperado
+                    modificado = True
+        if modificado:
+            await self.db.commit()
+            for doc in documentos_db:
+                await self.db.refresh(doc)
+
+        # 5. Estructurar DTOs de respuesta por pestañas
         facturas_list: List[DocumentoResponse] = []
         avisos_cobranza_list: List[DocumentoResponse] = []
         avisos_corte_list: List[DocumentoResponse] = []
@@ -204,7 +225,7 @@ class ServicioDocumentos:
         - Si el documento no existe -> 404 NOT_FOUND.
         - Si el suministro no pertenece al usuario -> 403 FORBIDDEN.
         - Si el rol es 'CONSULTA_PAGO' y se solicita 'FACTURA' o 'AVISO_CORTE' -> 403 FORBIDDEN (DOCUMENT_ACCESS_DENIED).
-        - Si el archivo físico no está en S3, intenta auto-generarlo.
+        - Si el archivo físico no está en S3, lo genera automáticamente con sus metadatos.
         - Retorna (stream_generador, nombre_archivo_descarga, objeto_documento).
         """
         # 1. Obtener documento de la base de datos
@@ -237,22 +258,21 @@ class ServicioDocumentos:
                 error_code="DOCUMENT_ACCESS_DENIED"
             )
 
-        # 4. Asegurar existencia del objeto en MinIO S3
+        # 4. Asegurar que el archivo en MinIO S3 exista, regenerándolo si fuera necesario
         if not self.s3.existe_archivo(doc.s3_key):
-            logger.warning(f"[STORAGE] Archivo S3 '{doc.s3_key}' no hallado. Intentando regenerar...")
             try:
                 datos_socio = await self.cosmol.obtener_datos_socio(doc.cod_socio) or {}
-                facturas = await self.cosmol.obtener_deudas_socio(doc.cod_socio) or []
-                fac_match = next((f for f in facturas if f.get("NROFACTURA") == doc.nro_factura or f.get("periodo") == doc.periodo), None) or (facturas[0] if facturas else {})
+            except Exception:
+                datos_socio = {}
 
-                if doc.tipo_documento == "FACTURA":
-                    await self.storage.obtener_o_generar_pdf_factura(doc.cod_socio, fac_match, datos_socio)
-                elif doc.tipo_documento == "AVISO_COBRANZA":
-                    await self.storage.obtener_o_generar_pdf_aviso_cobranza(doc.cod_socio, fac_match, datos_socio)
-                elif doc.tipo_documento == "AVISO_CORTE":
-                    await self.storage.obtener_o_generar_pdf_aviso_corte(doc.cod_socio, datos_socio, facturas)
+            try:
+                await self.storage.regenerar_pdf_desde_documento(doc, datos_socio)
             except Exception as exc:
-                logger.error(f"[STORAGE] Error al regenerar documento faltante en S3: {exc}")
+                logger.error(f"[STORAGE] Error al regenerar documento faltante para descarga: {exc}")
+                raise NotFoundException(
+                    message="No se pudo generar ni recuperar el archivo PDF solicitado.",
+                    error_code="PDF_GENERATION_FAILED"
+                )
 
         # 5. Obtener stream desde MinIO
         stream = self.s3.obtener_archivo_stream(doc.s3_key)

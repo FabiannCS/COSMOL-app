@@ -392,12 +392,7 @@ class BalanceCardWidget extends ConsumerWidget {
         decoration: BoxDecoration(
           color: AppColors.cardSurface,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: deuda!.alertaCorte
-                ? AppColors.errorRed.withValues(alpha: 0.5)
-                : AppColors.borderSubtle,
-            width: deuda!.alertaCorte ? 1.5 : 1.0,
-          ),
+          border: Border.all(color: AppColors.borderSubtle),
           boxShadow: const [
             BoxShadow(
               color: AppColors.shadowColor,
