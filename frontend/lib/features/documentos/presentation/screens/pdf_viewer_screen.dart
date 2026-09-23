@@ -47,7 +47,8 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
       final bytes = await notifier.obtenerBytesDocumento(widget.documento.id);
 
       final tempDir = await getTemporaryDirectory();
-      final tempFile = File('${tempDir.path}/${widget.documento.nombreArchivoSugerido}');
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final tempFile = File('${tempDir.path}/${timestamp}_${widget.documento.nombreArchivoSugerido}');
       await tempFile.writeAsBytes(bytes, flush: true);
 
       if (mounted) {

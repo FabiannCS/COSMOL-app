@@ -82,7 +82,8 @@ void main() {
       expect(notifier.state.saldoTotal, 164.50);
       expect(notifier.state.cantidadFacturas, 2);
       expect(notifier.state.hasDebt, true);
-      expect(notifier.state.alertaCorte, true);
+      // Con 2 facturas pendientes la regla de COSMOL indica que NO hay alerta de corte (solo con 3 o más)
+      expect(notifier.state.alertaCorte, false);
       expect(notifier.state.facturas.length, 2);
     });
 

@@ -131,15 +131,27 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
           children: [
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              padding: const EdgeInsets.all(4),
               decoration: BoxDecoration(
                 color: AppColors.surfaceContainerLow,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: TabBar(
                 controller: _tabController,
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
+                splashFactory: NoSplash.splashFactory,
+                overlayColor: WidgetStateProperty.all(Colors.transparent),
                 indicator: BoxDecoration(
                   color: AppColors.primary,
                   borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withAlpha(60),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 labelColor: Colors.white,
                 unselectedLabelColor: AppColors.textSecondary,
@@ -191,7 +203,6 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
                           CosmolTextField(
                             controller: _codSocioTitularController,
                             label: 'Código de Socio',
-                            hint: 'Ej. 104523',
                             prefixIcon: Icons.water_drop_outlined,
                             keyboardType: TextInputType.number,
                             validator: (val) {
@@ -204,12 +215,11 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
                           const SizedBox(height: 16),
                           CosmolTextField(
                             controller: _ciMedidorController,
-                            label: 'CI o N° Medidor del Titular',
-                            hint: 'Ej. 8392019 o M-4091',
+                            label: 'Numero de CI',
                             prefixIcon: Icons.badge_outlined,
                             validator: (val) {
                               if (val == null || val.trim().isEmpty) {
-                                return 'Ingrese la CI o número de medidor del titular';
+                                return 'Ingrese el número de carnet valido';
                               }
                               return null;
                             },
@@ -218,7 +228,6 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
                           CosmolTextField(
                             controller: _aliasTitularController,
                             label: 'Alias Personalizado',
-                            hint: 'Ej. Casa Principal, Negocio Norte',
                             prefixIcon: Icons.label_outline_rounded,
                           ),
                           const SizedBox(height: 28),
@@ -255,7 +264,7 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    'Modo Inquilino / Pagador: Podrás consultar la deuda y pagar mediante QR sin exponer datos confidenciales ni CI del titular.',
+                                    'Modo Consultor / Pagador: Podrás consultar la deuda y pagar sin exponer datos personales del titular.',
                                     style: AppTextStyles.caption.copyWith(
                                       color: AppColors.textPrimary,
                                     ),
@@ -268,7 +277,6 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
                           CosmolTextField(
                             controller: _codSocioConsultaController,
                             label: 'Código de Socio',
-                            hint: 'Ej. 104523',
                             prefixIcon: Icons.water_drop_outlined,
                             keyboardType: TextInputType.number,
                             validator: (val) {
@@ -282,7 +290,6 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
                           CosmolTextField(
                             controller: _aliasConsultaController,
                             label: 'Alias Personalizado',
-                            hint: 'Ej. Departamento Alquiler, Local Comercial',
                             prefixIcon: Icons.label_outline_rounded,
                           ),
                           const SizedBox(height: 28),

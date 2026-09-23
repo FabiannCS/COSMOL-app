@@ -54,7 +54,27 @@ class DocumentosState {
 
   List<DocumentoModel> get facturas => documentosResponse?.facturas ?? [];
   List<DocumentoModel> get avisosCobranza => documentosResponse?.avisosCobranza ?? [];
-  List<DocumentoModel> get avisosCorte => documentosResponse?.avisosCorte ?? [];
+  
+  /// Regla Oficial de Negocio COSMOL R.L.:
+  /// Un aviso de corte únicamente aplica y se notifica cuando el socio tiene 3 o más facturas pendientes (NO cuando debe 1 o 2).
+  List<DocumentoModel> get avisosCorte {
+    final rawAvisos = documentosResponse?.avisosCorte ?? [];
+    if (rawAvisos.isEmpty) return [];
+
+    final facturasPendientesCount = facturas.where((doc) => doc.isPendiente).length;
+    final cobranzasPendientesCount = avisosCobranza.where((doc) => doc.isPendiente).length;
+
+    final cantidadFacturasPendientes = facturasPendientesCount > 0
+        ? facturasPendientesCount
+        : cobranzasPendientesCount;
+
+    // Si el socio debe menos de 3 facturas (1 o 2), se filtra y NO se muestra el aviso de corte.
+    if (cantidadFacturasPendientes < 3) {
+      return [];
+    }
+
+    return rawAvisos;
+  }
   List<DocumentoModel> get todosDocumentos => documentosResponse?.documentos ?? [];
 
   List<DocumentoModel> get documentosTabActual {
