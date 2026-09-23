@@ -47,13 +47,16 @@ class ReportesApiClient(BaseApiClient):
     def _resolver_url_destino(self) -> Optional[str]:
         """
         Resuelve la URL destino previniendo discrepancias entre entornos:
-        Soporta tanto URLs base ("http://host:8080") como URLs completas ("http://host:8080/api/consultas").
+        Soporta URLs base ("http://host:8082"), con "/api" ("http://host:8082/api")
+        o completas ("http://host:8082/api/consultas").
         """
         raw_url = (settings.REPORTES_API_URL or "").strip().rstrip("/")
         if not raw_url:
             return None
-        if raw_url.endswith("/api/consultas"):
+        if raw_url.endswith("/api/consultas") or raw_url.endswith("/consultas"):
             return raw_url
+        if raw_url.endswith("/api"):
+            return f"{raw_url}/consultas"
         return f"{raw_url}/api/consultas"
 
     async def enviar_payload_directo(self, payload: Dict[str, Any]) -> bool:
