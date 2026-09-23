@@ -28,12 +28,12 @@ class SuppliesListScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Contratos Vinculados',
+            'Socios Vinculados',
             style: AppTextStyles.h2,
           ),
           const SizedBox(height: 6),
           Text(
-            'Administra todos los contratos de agua asociados a tu cuenta digital.',
+            'Administra todos los socios vinculados a tu cuenta.',
             style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 16),
@@ -51,12 +51,12 @@ class SuppliesListScreen extends ConsumerWidget {
                         size: 64, color: AppColors.textMuted),
                     const SizedBox(height: 16),
                     Text(
-                      'No tienes suministros vinculados',
+                      'No tienes algún socio vinculado',
                       style: AppTextStyles.subtitle1,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Agrega tu primer contrato para comenzar.',
+                      'Agrega tu primer socio para comenzar.',
                       style: AppTextStyles.body2
                           .copyWith(color: AppColors.textSecondary),
                     ),
@@ -108,7 +108,7 @@ class SuppliesListScreen extends ConsumerWidget {
                                 child: Text(
                                   item.alias.isNotEmpty
                                       ? item.alias
-                                      : 'Suministro ${item.codSocio}',
+                                      : 'Socio ${item.codSocio}',
                                   style: AppTextStyles.h3,
                                 ),
                               ),
@@ -123,8 +123,8 @@ class SuppliesListScreen extends ConsumerWidget {
                                 ),
                                 child: Text(
                                   isTitular
-                                      ? 'MODO TITULAR'
-                                      : 'CONSULTA Y PAGO',
+                                      ? 'TITULAR'
+                                      : 'CONSULTA',
                                   style: const TextStyle(
                                     color: Colors.white,
                                     fontSize: 10,
@@ -137,9 +137,6 @@ class SuppliesListScreen extends ConsumerWidget {
                           const SizedBox(height: 8),
                           Row(
                             children: [
-                              const Icon(Icons.pin_outlined,
-                                  size: 16, color: AppColors.textSecondary),
-                              const SizedBox(width: 4),
                               Text(
                                 'Código de Socio: ${item.codSocio}',
                                 style: AppTextStyles.body2.copyWith(
@@ -161,7 +158,7 @@ class SuppliesListScreen extends ConsumerWidget {
                                         color: AppColors.successGreen),
                                     const SizedBox(width: 4),
                                     Text(
-                                      'Suministro Activo',
+                                      'Socio Activo',
                                       style: AppTextStyles.caption.copyWith(
                                         color: AppColors.successGreen,
                                         fontWeight: FontWeight.bold,
@@ -190,7 +187,7 @@ class SuppliesListScreen extends ConsumerWidget {
             ),
           const SizedBox(height: 16),
           CosmolButton(
-            text: 'Vincular Nuevo Suministro',
+            text: 'Vincular Nuevo Socio',
             icon: Icons.add_rounded,
             onPressed: () => context.push('/suministros/vincular'),
           ),
@@ -205,7 +202,7 @@ class SuppliesListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: CosmolAppBar(
         title: 'COSMOL R.L.',
-        subtitle: 'Mis Suministros',
+        subtitle: 'Mis Cuentas Vinculadas',
         showBackButton: true,
         onBackPressed: () => context.pop(),
       ),

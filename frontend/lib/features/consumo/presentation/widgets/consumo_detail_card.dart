@@ -283,7 +283,7 @@ class ConsumoDetailCard extends StatelessWidget {
                 children: [        
                   Expanded(
                     child: Text(
-                      '¡Este fue su mes con menor consumo del período analizado!',
+                      'Este fue su mes con menor consumo del período analizado.',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w600,

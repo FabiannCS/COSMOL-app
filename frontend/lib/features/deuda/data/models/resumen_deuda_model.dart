@@ -63,6 +63,7 @@ class DetalleSuministroModel {
   final String ubicacion;
   final String categoria;
   final String rolUsuario;
+  final String telefonoCelular;
 
   const DetalleSuministroModel({
     required this.codSocio,
@@ -72,6 +73,7 @@ class DetalleSuministroModel {
     required this.ubicacion,
     this.categoria = 'DOMESTICA',
     this.rolUsuario = 'TITULAR',
+    this.telefonoCelular = '',
   });
 
   factory DetalleSuministroModel.fromJson(Map<String, dynamic> json) {
@@ -83,6 +85,7 @@ class DetalleSuministroModel {
       ubicacion: json['ubicacion']?.toString() ?? '',
       categoria: json['categoria']?.toString() ?? 'DOMESTICA',
       rolUsuario: json['rol_usuario']?.toString() ?? 'TITULAR',
+      telefonoCelular: json['telefono_celular']?.toString() ?? json['telefono']?.toString() ?? json['celular']?.toString() ?? '',
     );
   }
 
@@ -95,6 +98,7 @@ class DetalleSuministroModel {
       'ubicacion': ubicacion,
       'categoria': categoria,
       'rol_usuario': rolUsuario,
+      'telefono_celular': telefonoCelular,
     };
   }
 }

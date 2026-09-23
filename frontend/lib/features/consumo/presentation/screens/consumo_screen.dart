@@ -13,7 +13,12 @@ import '../widgets/consumo_period_selector.dart';
 /// Pantalla principal de Consumo Analítico e Historial de Facturas (Fase 4 / 2).
 /// Conectada directamente al backend FastAPI y a los datos reales de COSMOL R.L.
 class ConsumoScreen extends ConsumerStatefulWidget {
-  const ConsumoScreen({super.key});
+  final VoidCallback? onVerFacturas;
+
+  const ConsumoScreen({
+    super.key,
+    this.onVerFacturas,
+  });
 
   @override
   ConsumerState<ConsumoScreen> createState() => _ConsumoScreenState();
@@ -289,13 +294,17 @@ class _ConsumoScreenState extends ConsumerState<ConsumoScreen> {
                   consumoNotifier.seleccionarMes(index);
                 },
                 onExportarPdf: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'El historial de facturas está disponible para descarga en la pestaña Documentos.',
+                  if (widget.onVerFacturas != null) {
+                    widget.onVerFacturas!();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'El historial de facturas está disponible para descarga en la pestaña Documentos.',
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  }
                 },
               ),
             ],

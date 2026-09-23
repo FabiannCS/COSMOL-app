@@ -23,10 +23,7 @@ class DisruptionNoticeCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.cardSurface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.errorRed.withValues(alpha: 0.4),
-          width: 1.2,
-        ),
+        border: Border.all(color: AppColors.borderSubtle),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,7 +79,7 @@ class DisruptionNoticeCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   mensajeCustom ??
-                      'Con 2 o más facturas pendientes se emite orden de corte según normativa de COSMOL R.L. Regularice su pago a tiempo para evitar la suspensión del servicio.',
+                      'Con 3 o más facturas pendientes se emite orden de corte según normativa de COSMOL R.L. Regularice su pago a tiempo para evitar la suspensión del servicio.',
                   style: AppTextStyles.caption.copyWith(
                     color: AppColors.onSurfaceVariant,
                   ),

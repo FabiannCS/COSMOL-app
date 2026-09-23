@@ -77,7 +77,13 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
 
             // Tab 1: Consumo Analítico (Fase 2)
-            const ConsumoScreen(),
+            ConsumoScreen(
+              onVerFacturas: () {
+                setState(() {
+                  _currentIndex = 2; // Ir a Documentos
+                });
+              },
+            ),
 
             // Tab 2: Documentos y Facturas PDF (Fase 2)
             const DocumentosScreen(),
@@ -143,7 +149,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             BottomNavigationBarItem(
               icon: Icon(Icons.layers_outlined),
               activeIcon: Icon(Icons.layers_rounded),
-              label: 'Suministros',
+              label: 'Socios',
             ),
             BottomNavigationBarItem(
               icon: Icon(Icons.person_outline_rounded),

@@ -7,6 +7,7 @@ import '../providers/deuda_provider.dart';
 import '../widgets/balance_card_widget.dart';
 import '../widgets/disruption_notice_card.dart';
 import '../widgets/payment_channels_card.dart';
+import '../widgets/support_contact_card.dart';
 
 /// Pantalla principal de Consulta de Deuda e Inicio del Dashboard conectada al backend FastAPI.
 class DeudaScreen extends ConsumerStatefulWidget {
@@ -114,20 +115,6 @@ class _DeudaScreenState extends ConsumerState<DeudaScreen> {
                             color: AppColors.surfaceContainerLow,
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: Row(
-                            children: const [
-                              Icon(Icons.bolt, size: 12, color: AppColors.primary),
-                              SizedBox(width: 2),
-                              Text(
-                                'Caché',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.primary,
-                                ),
-                              ),
-                            ],
-                          ),
                         ),
                       ],
                     ],
@@ -161,7 +148,7 @@ class _DeudaScreenState extends ConsumerState<DeudaScreen> {
                       CircularProgressIndicator(strokeWidth: 3),
                       SizedBox(height: 16),
                       Text(
-                        'Consultando saldo en tiempo real con COSMOL...',
+                        'Consultando saldo...',
                         style: TextStyle(
                           fontSize: 13,
                           color: AppColors.textSecondary,
@@ -179,8 +166,7 @@ class _DeudaScreenState extends ConsumerState<DeudaScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.cardSurface,
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: AppColors.errorRed.withValues(alpha: 0.3)),
+                  border: Border.all(color: AppColors.borderSubtle),
                 ),
                 child: Column(
                   children: [
@@ -232,6 +218,10 @@ class _DeudaScreenState extends ConsumerState<DeudaScreen> {
 
             // Canales de Atención
             const PaymentChannelsCard(),
+            const SizedBox(height: 14),
+
+            // Contactar con soporte / Asistente WhatsApp
+            const SupportContactCard(),
           ],
         ),
       ),
