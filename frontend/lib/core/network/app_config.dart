@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 
 /// Configuración global de entorno y URLs de conexión.
@@ -24,7 +23,7 @@ class AppConfig {
     }
 
     // 3. Web local en desarrollo:
-    if (kIsWeb) {
+    if (kIsWeb && kDebugMode) {
       return 'http://localhost:8000/api/v1';
     }
 
