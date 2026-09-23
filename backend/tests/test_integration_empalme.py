@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Usuario, Suministro, Dispositivo
+from app.db.models import Usuario, Suministro, Dispositivo, Documento
 from app.services.servicio_autenticacion import ServicioAutenticacion
 from app.services.servicio_suministros import ServicioSuministros
 
@@ -18,15 +18,15 @@ async def test_empalme_persistencia_real_postgresql(redis_override, db_session: 
     Valida el flujo completo de autenticación y confirma que Usuario y Suministro
     se persistan físicamente en PostgreSQL mediante SQLAlchemy AsyncSession.
     """
-    cod_socio = "205566"
-    ci = "4920192"
+    cod_socio = "23807"
+    ci = "6259185"
     telefono = "+59178899001"
     pin = "1234"
     device_id = "hardware-empalme-device-01"
     modelo = "Samsung Galaxy S24"
 
     # 1. Limpieza de registros previos
-    await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_socio, "104523"])))
+    await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_socio, "540"])))
     await db_session.execute(delete(Usuario).where(Usuario.telefono == telefono))
     await db_session.commit()
     await redis_override.delete(
@@ -42,7 +42,7 @@ async def test_empalme_persistencia_real_postgresql(redis_override, db_session: 
     # 2. Paso 1: Verificar socio en sistema legado
     verif = await auth_service.verificar_primer_acceso(cod_socio, ci)
     assert verif["cod_socio"] == cod_socio
-    assert "MARIA ELENA" in verif["nombre_titular"]
+    assert "MISERICORDIA AGUANTA" in verif["nombre_titular"]
 
     # 3. Paso 2: Solicitar OTP por WhatsApp
     solicitud = await auth_service.solicitar_otp(cod_socio, telefono, "WHATSAPP")
@@ -97,8 +97,8 @@ async def test_empalme_persistencia_real_postgresql(redis_override, db_session: 
     # 7. Multicuenta: Vincular suministro adicional en PostgreSQL
     from app.schemas.suministro import VincularSuministroRequest
     req_vincular = VincularSuministroRequest(
-        cod_socio="104523",
-        ci_o_medidor="8392019",
+        cod_socio="540",
+        ci_o_medidor="2823231",
         alias="Casa de mis Padres"
     )
     sum_adicional = await suministro_service.vincular_suministro(cod_socio, req_vincular)
@@ -110,7 +110,7 @@ async def test_empalme_persistencia_real_postgresql(redis_override, db_session: 
     assert len(lista) == 2
     codigos = [s.cod_socio for s in lista]
     assert cod_socio in codigos
-    assert "104523" in codigos
+    assert "540" in codigos
 
 
 @pytest.mark.asyncio
@@ -139,7 +139,12 @@ async def test_empalme_e2e_fase1_y_fase2(
     await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_principal, cod_secundario])))
     await db_session.execute(delete(Usuario).where(Usuario.telefono == telefono))
     await db_session.commit()
-    await redis_override.delete(f"deuda:{cod_principal}", f"deuda:{cod_secundario}")
+    await redis_override.delete(
+        f"deuda:{cod_principal}",
+        f"deuda:{cod_secundario}",
+        f"rate_otp:{telefono}",
+        f"otp:{telefono}"
+    )
 
     auth_service = ServicioAutenticacion(redis_override, db=db_session)
     suministro_service = ServicioSuministros(redis_override, db=db_session)
@@ -201,4 +206,112 @@ async def test_empalme_e2e_fase1_y_fase2(
     resp_inv = await client.post(f"/api/v1/deuda/{cod_secundario}/invalidar-cache", headers=headers)
     assert resp_inv.status_code == 200
     assert resp_inv.json()["cache_invalidada"] is True
+
+
+@pytest.mark.asyncio
+async def test_empalme_e2e_fase1_fase2_y_fase3(
+    client: AsyncClient, redis_override, db_session: AsyncSession
+):
+    """
+    Certificación de Empalme Total E2E: Fases 1, 2 y 3:
+    1. Onboarding & Login (Fase 1) para emitir JWT Bearer real.
+    2. Vinculación multicuenta de 2 suministros (Fase 1):
+       - Suministro principal '556' (rol TITULAR, al día).
+       - Suministro secundario '540' (rol CONSULTA_PAGO, inquilino, en mora).
+    3. Consulta de Deuda y Dashboard (Fase 2):
+       - GET /api/v1/deuda/dashboard/resumen -> consolidado multicuenta en Bs.
+       - GET /api/v1/deuda/540 -> enmascaramiento activo para CONSULTA_PAGO.
+    4. Repositorio Digital de Documentos y Descarga Streaming PDF (Fase 3):
+       - GET /api/v1/documentos/556 -> Rol TITULAR: facturas, avisos_cobranza estructurados.
+       - GET /api/v1/documentos/540 -> Rol CONSULTA_PAGO: facturas y avisos_corte vacíos ([]),
+         únicamente avisos_cobranza accesibles para el inquilino.
+       - Intento forzado de inquilino por ?tipo=FACTURA -> 403 Forbidden (DOCUMENT_ACCESS_DENIED).
+       - Descarga Streaming de Aviso de Cobranza para inquilino:
+         GET /api/v1/documentos/{aviso_id}/descargar -> 200 OK con cabeceras Content-Disposition y bytes %PDF.
+    """
+    cod_principal = "556"
+    cod_secundario = "540"
+    telefono = "+59176655443"
+    pin = "4321"
+
+    # 1. Limpieza de datos
+    await db_session.execute(delete(Documento).where(Documento.cod_socio.in_([cod_principal, cod_secundario])))
+    await db_session.execute(delete(Suministro).where(Suministro.cod_socio.in_([cod_principal, cod_secundario])))
+    await db_session.execute(delete(Usuario).where(Usuario.telefono == telefono))
+    await db_session.commit()
+    await redis_override.delete(
+        f"deuda:{cod_principal}",
+        f"deuda:{cod_secundario}",
+        f"rate_otp:{telefono}",
+        f"otp:{telefono}"
+    )
+
+    auth_service = ServicioAutenticacion(redis_override, db=db_session)
+    suministro_service = ServicioSuministros(redis_override, db=db_session)
+
+    # 2. Onboarding del socio titular
+    verif = await auth_service.verificar_primer_acceso(cod_principal, "4638847")
+    assert verif["cod_socio"] == cod_principal
+
+    sol = await auth_service.solicitar_otp(cod_principal, telefono, "WHATSAPP")
+    otp_code = sol["debug_codigo_otp"]
+
+    verif_otp = await auth_service.verificar_otp(telefono, otp_code)
+    token_otp = verif_otp["token_otp_valido"]
+
+    await auth_service.establecer_pin(telefono, token_otp, pin)
+
+    # 3. Login para obtener JWT Bearer
+    login_resp = await auth_service.autenticar_socio(
+        cod_socio=cod_principal,
+        pin_password=pin,
+        device_id="empalme-device-fase3-01",
+        modelo_dispositivo="Pixel 8 Pro"
+    )
+    access_token = login_resp.access_token
+    headers = {"Authorization": f"Bearer {access_token}"}
+
+    # 4. Vincular segundo suministro en modo CONSULTA_PAGO (Inquilino)
+    from app.schemas.suministro import VincularSuministroRequest
+    await suministro_service.vincular_suministro(
+        cod_principal,
+        VincularSuministroRequest(
+            cod_socio=cod_secundario,
+            alias="Tienda Alquilada"
+        )
+    )
+
+    # 5. Fase 2: Consulta Deuda y Dashboard
+    resp_dash = await client.get("/api/v1/deuda/dashboard/resumen", headers=headers)
+    assert resp_dash.status_code == 200
+    assert resp_dash.json()["cantidad_suministros"] == 2
+
+    # 6. Fase 3: Consulta de Documentos para Suministro Secundario (CONSULTA_PAGO)
+    resp_docs_inq = await client.get(f"/api/v1/documentos/{cod_secundario}", headers=headers)
+    assert resp_docs_inq.status_code == 200
+    docs_inq_data = resp_docs_inq.json()
+
+    assert docs_inq_data["cod_socio"] == cod_secundario
+    assert docs_inq_data["rol_acceso"] == "CONSULTA_PAGO"
+    # Privacidad fiscal: facturas y avisos de corte deben ser estrictamente listas vacías
+    assert docs_inq_data["facturas"] == []
+    assert docs_inq_data["avisos_corte"] == []
+    # Debe contener avisos de cobranza auto-sincronizados
+    assert len(docs_inq_data["avisos_cobranza"]) >= 1
+    aviso_item = docs_inq_data["avisos_cobranza"][0]
+    aviso_id = aviso_item["id"]
+    assert aviso_item["tipo_documento"] == "AVISO_COBRANZA"
+
+    # 7. Fase 3: Bloqueo de seguridad al intentar forzar consulta de facturas
+    resp_prohibido = await client.get(f"/api/v1/documentos/{cod_secundario}?tipo=FACTURA", headers=headers)
+    assert resp_prohibido.status_code == 403
+    assert resp_prohibido.json()["error"]["code"] == "DOCUMENT_ACCESS_DENIED"
+
+    # 8. Fase 3: Descarga por Streaming del Aviso de Cobranza
+    resp_download = await client.get(f"/api/v1/documentos/{aviso_id}/descargar", headers=headers)
+    assert resp_download.status_code == 200
+    assert resp_download.headers["content-type"] == "application/pdf"
+    assert "attachment; filename=" in resp_download.headers["content-disposition"]
+    assert resp_download.content.startswith(b"%PDF")
+
 

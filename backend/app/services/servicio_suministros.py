@@ -11,9 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestException, NotFoundException
 from app.db.models import Suministro, Usuario
+from app.integrations.cosmol_client import cosmol_client, CosmolLegacyClient
 from app.schemas.suministro import SuministroResponse, VincularSuministroRequest
 from app.services.servicio_autenticacion import (
-    SOCIOS_MOCK_LEGADO,
     USUARIOS_REGISTRADOS_DB,
 )
 
@@ -26,9 +26,15 @@ class ServicioSuministros:
     Integrado con PostgreSQL (AsyncSession) y modelos ORM.
     """
 
-    def __init__(self, redis_client: aioredis.Redis, db: Optional[AsyncSession] = None):
+    def __init__(
+        self,
+        redis_client: aioredis.Redis,
+        db: Optional[AsyncSession] = None,
+        cliente_cosmol: Optional[CosmolLegacyClient] = None,
+    ):
         self.redis = redis_client
         self.db = db
+        self.cosmol_client = cliente_cosmol or cosmol_client
 
     async def vincular_suministro(
         self,
@@ -43,8 +49,8 @@ class ServicioSuministros:
         cod_socio = datos.cod_socio.strip()
 
         # 1. Verificar si el suministro existe en COSMOL
-        datos_legado = SOCIOS_MOCK_LEGADO.get(cod_socio)
-        if not datos_legado:
+        datos_socio = await self.cosmol_client.obtener_datos_socio(cod_socio)
+        if not datos_socio:
             raise NotFoundException(
                 message=f"El código de suministro '{cod_socio}' no fue encontrado en los registros de COSMOL.",
                 error_code="SUMINISTRO_NOT_FOUND"
@@ -54,7 +60,8 @@ class ServicioSuministros:
         rol = "CONSULTA_PAGO"
         if datos.ci_o_medidor:
             ci_med = datos.ci_o_medidor.strip()
-            if ci_med == datos_legado.get("ci") or ci_med == datos_legado.get("medidor"):
+            ci_oficial = str(datos_socio.get("NROCIONIT", "")).strip()
+            if ci_med == ci_oficial:
                 rol = "TITULAR"
                 logger.info(f"Suministro '{cod_socio}' vinculado en modo TITULAR con validación exitosa.")
             else:

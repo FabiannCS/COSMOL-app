@@ -94,3 +94,37 @@ def test_vincular_suministro_request():
         alias="Oficina"
     )
     assert req_inquilino.ci_o_medidor is None
+
+
+def test_solicitar_otp_normaliza_canal_case_insensitive():
+    # Minúsculas
+    req1 = SolicitarOtpRequest(cod_socio="104523", telefono="71029384", canal="whatsapp")
+    assert req1.canal == "WHATSAPP"
+
+    # CamelCase / Mixto
+    req2 = SolicitarOtpRequest(cod_socio="104523", telefono="71029384", canal="WhatsApp")
+    assert req2.canal == "WHATSAPP"
+
+    # SMS en minúsculas
+    req3 = SolicitarOtpRequest(cod_socio="104523", telefono="71029384", canal="sms")
+    assert req3.canal == "SMS"
+
+
+def test_crear_pin_tolera_campos_extras_y_contextuales():
+    # Envío de campos contextuales que Flutter suele incluir (cod_socio, ci, username, etc.)
+    data = {
+        "telefono": "+59171029384",
+        "token_otp_valido": "tok_seguro_123",
+        "nuevo_pin": "1234",
+        "cod_socio": "104523",
+        "ci": "8392019",
+        "username": "usuario_flutter",
+        "campo_desconocido": "ignorado_por_extra_ignore"
+    }
+    req = CrearPinPasswordRequest(**data)
+    assert req.telefono == "+59171029384"
+    assert req.token_otp_valido == "tok_seguro_123"
+    assert req.nuevo_pin == "1234"
+    assert req.cod_socio == "104523"
+    assert req.ci == "8392019"
+

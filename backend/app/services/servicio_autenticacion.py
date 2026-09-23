@@ -27,6 +27,7 @@ from app.core.security import (
     verify_password,
 )
 from app.db.models import Dispositivo, Suministro, Usuario
+from app.integrations.cosmol_client import cosmol_client, CosmolLegacyClient
 from app.integrations.sms_client import sms_client
 from app.integrations.whatsapp_client import whatsapp_client
 from app.schemas.suministro import SuministroResponse
@@ -34,37 +35,33 @@ from app.schemas.usuario import TokenResponse
 
 logger = logging.getLogger(__name__)
 
-# Mock temporal de validación para el sistema comercial legado de COSMOL
-# Permite probar el onboarding de socios existentes antes de la conexión SOAP/REST con Informix
-SOCIOS_MOCK_LEGADO: Dict[str, Dict[str, str]] = {
-    "104523": {"ci": "8392019", "nombre": "CARLOS EDUARDO PEREZ", "medidor": "M-50211"},
-    "205566": {"ci": "4920192", "nombre": "MARIA ELENA ROJAS", "medidor": "M-88902"},
-    "301144": {"ci": "6102938", "nombre": "JUAN PABLO SUAREZ", "medidor": "M-12490"},
-    "556": {"ci": "4638847", "nombre": "SUAREZ BALTAZAR VICTOR HUGO,CAROLINA", "medidor": "M-00556"},
-    "540": {"ci": "2823231", "nombre": "DURAN ELOISA RIVERA DE", "medidor": "M-00540"},
-}
-
-# Base de datos simulada en memoria para usuarios registrados (modo fallback)
+# Base de datos simulada en memoria para usuarios registrados (modo fallback testing)
 USUARIOS_REGISTRADOS_DB: Dict[str, Dict[str, Any]] = {}
 
 
 class ServicioAutenticacion:
     """
     Controlador de negocio para el flujo completo de autenticación y seguridad.
-    Integrado con PostgreSQL (AsyncSession), Redis y Gateways de Mensajería (WhatsApp / SMS).
+    Integrado con PostgreSQL (AsyncSession), Redis, API Comercial de COSMOL y Gateways de Mensajería.
     """
 
-    def __init__(self, redis_client: aioredis.Redis, db: Optional[AsyncSession] = None):
+    def __init__(
+        self,
+        redis_client: aioredis.Redis,
+        db: Optional[AsyncSession] = None,
+        client_legado: Optional[CosmolLegacyClient] = None
+    ):
         self.redis = redis_client
         self.db = db
+        self.cosmol_client = client_legado or cosmol_client
 
     # --------------------------------------------------------------------------
-    # PASO 1: VERIFICACIÓN INICIAL EN SISTEMA LEGADO
+    # PASO 1: VERIFICACIÓN INICIAL EN SISTEMA OFICIAL DE COSMOL
     # --------------------------------------------------------------------------
     async def verificar_primer_acceso(self, cod_socio: str, ci: str) -> Dict[str, Any]:
         """
-        Valida que el socio exista en el sistema comercial legado de COSMOL
-        mediante su Código de Socio y Carnet de Identidad.
+        Valida que el socio exista en el sistema comercial oficial de COSMOL
+        mediante su Código de Socio y Carnet de Identidad (NROCIONIT).
         """
         cod_socio = cod_socio.strip()
         ci = ci.strip()
@@ -85,19 +82,21 @@ class ServicioAutenticacion:
                 error_code="ACCOUNT_ALREADY_EXISTS"
             )
 
-        # 2. Validar contra el sistema comercial legado
-        datos_legado = SOCIOS_MOCK_LEGADO.get(cod_socio)
-        if not datos_legado or datos_legado["ci"] != ci:
-            logger.warning(f"Intento de verificación fallido para socio '{cod_socio}' con CI '{ci}'")
+        # 2. Validar contra el sistema comercial oficial de COSMOL (vía POST /socios/validar)
+        datos_socio = await self.cosmol_client.validar_credenciales_socio(cod_socio, ci)
+        if not datos_socio:
+            logger.warning(f"Validación de credenciales rechazada para socio '{cod_socio}' con CI provisto")
             raise UnauthorizedException(
                 message="El código de socio o carnet de identidad no coinciden con los registros oficiales de COSMOL.",
                 error_code="SOCIO_NOT_FOUND"
             )
 
-        logger.info(f"Socio verificado exitosamente en sistema legado: {cod_socio} ({datos_legado['nombre']})")
+        nombre_oficial = str(datos_socio.get("NOMBRE") or datos_socio.get("nombre") or "Socio COSMOL").strip()
+
+        logger.info(f"Socio verificado exitosamente en COSMOL: {cod_socio} ({nombre_oficial})")
         return {
             "cod_socio": cod_socio,
-            "nombre_titular": datos_legado["nombre"],
+            "nombre_titular": nombre_oficial,
             "mensaje": "Socio verificado correctamente. Proceda a asociar su teléfono celular."
         }
 
@@ -225,11 +224,20 @@ class ServicioAutenticacion:
             )
 
         tel_almacenado, cod_socio = valor_token.split(":")
-        if tel_almacenado != telefono:
+
+        def _norm_tel(t: str) -> str:
+            clean = t.strip().replace(" ", "").replace("-", "")
+            if len(clean) == 8 and clean.isdigit():
+                return f"+591{clean}"
+            return clean if clean.startswith("+") else f"+{clean}"
+
+        if _norm_tel(tel_almacenado) != _norm_tel(telefono):
+            logger.warning(f"Discrepancia de teléfono en establecer-pin: almacenado='{tel_almacenado}' vs enviado='{telefono}'")
             raise UnauthorizedException(
                 message="El teléfono no corresponde al token de validación.",
                 error_code="PHONE_MISMATCH"
             )
+        telefono = _norm_tel(telefono)
 
         # Generar hash seguro con bcrypt
         password_hash = get_password_hash(nuevo_pin)
@@ -279,12 +287,13 @@ class ServicioAutenticacion:
             await self.db.commit()
 
         # Mantener réplica en memoria para pruebas y compatibilidad
-        datos_socio = SOCIOS_MOCK_LEGADO.get(cod_socio, {"nombre": "SOCIO COSMOL"})
+        datos_socio = await self.cosmol_client.obtener_datos_socio(cod_socio) or {}
+        nombre_socio = datos_socio.get("NOMBRE", "Socio COSMOL")
         USUARIOS_REGISTRADOS_DB[cod_socio] = {
             "user_id": user_id_str,
             "telefono": telefono,
             "password_hash": password_hash,
-            "nombre": datos_socio["nombre"],
+            "nombre": nombre_socio,
             "suministros": [
                 {
                     "id": suministro_id,
@@ -364,8 +373,10 @@ class ServicioAutenticacion:
 
                 password_hash = usuario_db.password_hash
                 user_id = str(usuario_db.id)
-                datos_legado = SOCIOS_MOCK_LEGADO.get(cod_socio, {"nombre": "SOCIO COSMOL"})
-                nombre_socio = datos_legado.get("nombre", "SOCIO COSMOL")
+                nombre_socio = "Socio COSMOL"
+                datos_socio_real = await self.cosmol_client.obtener_datos_socio(cod_socio)
+                if datos_socio_real and datos_socio_real.get("NOMBRE"):
+                    nombre_socio = datos_socio_real["NOMBRE"]
                 suministros_lista = [
                     SuministroResponse(
                         id=s.id,
