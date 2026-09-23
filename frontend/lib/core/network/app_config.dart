@@ -7,6 +7,13 @@ class AppConfig {
 
   /// Detecta la URL base según la plataforma o entorno de ejecución
   static String get baseUrl {
+    // 1. Si se define explícitamente en tiempo de compilación o ejecución:
+    // flutter run --dart-define=API_BASE_URL=https://chatbot.cosmol.com.bo:8083/api/v1
+    const String customBaseUrl = String.fromEnvironment('API_BASE_URL');
+    if (customBaseUrl.isNotEmpty) {
+      return customBaseUrl;
+    }
+
     if (kIsWeb) {
       return 'http://localhost:8000/api/v1';
     }
