@@ -64,14 +64,14 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Suministro vinculado correctamente en Modo Titular'),
+          content: Text('Socio vinculado correctamente en Modo Titular'),
           backgroundColor: AppColors.successGreen,
         ),
       );
       context.pop();
     } else {
       final errorMsg = ref.read(multicuentaProvider).errorMessage ??
-          'No se pudo vincular el suministro.';
+          'No se pudo vincular el Socio.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMsg),
@@ -90,7 +90,7 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
               ciOMedidor: null, // Sin CI = CONSULTA_PAGO
               alias: _aliasConsultaController.text.trim().isNotEmpty
                   ? _aliasConsultaController.text.trim()
-                  : 'Suministro Consulta',
+                  : 'Socio de Consulta',
             );
 
     if (!mounted) return;
@@ -98,14 +98,14 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Suministro vinculado correctamente en Modo Consulta y Pago'),
+          content: Text('Socio vinculado correctamente en Modo Consulta'),
           backgroundColor: AppColors.successGreen,
         ),
       );
       context.pop();
     } else {
       final errorMsg = ref.read(multicuentaProvider).errorMessage ??
-          'No se pudo vincular el suministro.';
+          'No se pudo vincular el Socio.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMsg),
@@ -122,7 +122,7 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
     return Scaffold(
       appBar: CosmolAppBar(
         title: 'COSMOL R.L.',
-        subtitle: 'Vincular Suministro',
+        subtitle: 'Vincular Socio',
         showBackButton: true,
         onBackPressed: () => context.pop(),
       ),
@@ -159,7 +159,7 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
                     AppTextStyles.subtitle2.copyWith(fontWeight: FontWeight.bold),
                 tabs: const [
                   Tab(text: 'Modo Titular'),
-                  Tab(text: 'Consulta y Pago'),
+                  Tab(text: 'Modo Consulta'),
                 ],
               ),
             ),
@@ -190,7 +190,7 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    'Al validar tu CI o N° Medidor de Titular, tendrás acceso completo a facturas oficiales en PDF y avisos de corte.',
+                                    'Al validar tu CI o Código de Socio de Titular, tendrás acceso completo a facturas oficiales en PDF y avisos de corte.',
                                     style: AppTextStyles.caption.copyWith(
                                       color: AppColors.textPrimary,
                                     ),
@@ -264,7 +264,7 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    'Modo Consultor / Pagador: Podrás consultar la deuda y pagar sin exponer datos personales del titular.',
+                                    'Modo Consulta: Podrás consultar la deuda y pagar sin exponer datos personales del socio.',
                                     style: AppTextStyles.caption.copyWith(
                                       color: AppColors.textPrimary,
                                     ),
@@ -294,7 +294,7 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
                           ),
                           const SizedBox(height: 28),
                           CosmolButton(
-                            text: 'Vincular para Consulta y Pago',
+                            text: 'Vincular para Consulta',
                             isLoading: state.isLoading,
                             onPressed: _vincularConsulta,
                           ),

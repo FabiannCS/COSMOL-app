@@ -517,15 +517,49 @@ class ServicioAutenticacion:
                 error_code="SESSION_REVOKED_NEW_DEVICE"
             )
 
-        # Emitir nuevo access token
+        # Recuperar suministro principal y lista de suministros del usuario
+        cod_socio = ""
+        nombre_socio = ""
+        suministros_lista: List[SuministroResponse] = []
+
+        if self.db:
+            try:
+                u_uuid = uuid.UUID(str(user_id))
+                stmt = (
+                    select(Suministro)
+                    .where(Suministro.usuario_id == u_uuid)
+                    .order_by(Suministro.es_suministro_principal.desc(), Suministro.created_at.asc())
+                )
+                res = await self.db.execute(stmt)
+                suministros_db = res.scalars().all()
+                if suministros_db:
+                    cod_socio = suministros_db[0].cod_socio
+                    for s in suministros_db:
+                        suministros_lista.append(
+                            SuministroResponse(
+                                cod_socio=s.cod_socio,
+                                alias=s.alias,
+                                rol=s.rol,
+                                es_suministro_principal=s.es_suministro_principal
+                            )
+                        )
+            except Exception as e:
+                logger.warning(f"No se pudieron cargar suministros en renovación de token: {e}")
+
+        # Emitir nuevo access token con claims completos
+        extra_claims = {
+            "device_id": device_id,
+            "cod_socio": cod_socio,
+            "nombre": nombre_socio
+        }
         nuevo_access_token = create_access_token(
             subject=user_id,
-            extra_claims={"device_id": device_id}
+            extra_claims=extra_claims
         )
 
         return TokenResponse(
             access_token=nuevo_access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            suministros=[]
+            suministros=suministros_lista
         )

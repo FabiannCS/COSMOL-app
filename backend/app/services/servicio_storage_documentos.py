@@ -3,7 +3,8 @@ Servicio de almacenamiento y recuperación de documentos digitales (COSMOL R.L. 
 Orquesta la generación on-demand de PDFs con ReportLab, su persistencia en MinIO Object Storage
 y el registro de metadatos en la tabla 'documentos' de PostgreSQL.
 """
-from datetime import date
+import calendar
+from datetime import date, datetime
 import logging
 from typing import Any, Dict, List, Optional
 import uuid
@@ -32,6 +33,75 @@ class ServicioStorageDocumentos:
         self.db = db
         self.s3 = s3_client or minio_client
         self.pdf = pdf_engine or generador_pdf
+
+    def _determinar_fecha_emision(self, anio: int, mes: int, datos: Dict[str, Any]) -> date:
+        """
+        Determina la fecha de emisión del documento:
+        1. Si viene en los datos del sistema comercial (FECHA_EMISION, FECHA_LECTURA, FECHA, etc.), la parsea.
+        2. De lo contrario, asigna el primer día del mes del periodo correspondiente (ej: 01/08/2026 para periodo 08/2026).
+           Esto garantiza que dos facturas de periodos distintos nunca compartan la misma fecha de emisión.
+        """
+        raw = (
+            datos.get("FECHA_EMISION")
+            or datos.get("fecha_emision")
+            or datos.get("FECHA_LECTURA")
+            or datos.get("fecha_lectura")
+            or datos.get("FECHA")
+            or datos.get("fecha")
+        )
+        if raw:
+            if isinstance(raw, date):
+                return raw
+            if isinstance(raw, datetime):
+                return raw.date()
+            raw_str = str(raw).strip()
+            try:
+                return date.fromisoformat(raw_str[:10])
+            except ValueError:
+                pass
+            if "/" in raw_str:
+                parts = raw_str.split("/")
+                if len(parts) == 3:
+                    try:
+                        return date(int(parts[2]), int(parts[1]), int(parts[0]))
+                    except (ValueError, TypeError):
+                        pass
+
+        if anio > 0 and 1 <= mes <= 12:
+            return date(anio, mes, 1)
+
+        return date.today()
+
+    def _determinar_fecha_vencimiento(self, anio: int, mes: int, datos: Dict[str, Any]) -> date:
+        """
+        Calcula la fecha reglamentaria de vencimiento:
+        1. Si viene en los datos (FECHA_VENCIMIENTO), la parsea.
+        2. De lo contrario, aplica la regla oficial de COSMOL: último día del mes del ciclo comercial.
+        """
+        raw = datos.get("FECHA_VENCIMIENTO") or datos.get("fecha_vencimiento")
+        if raw:
+            if isinstance(raw, date):
+                return raw
+            if isinstance(raw, datetime):
+                return raw.date()
+            raw_str = str(raw).strip()
+            try:
+                return date.fromisoformat(raw_str[:10])
+            except ValueError:
+                pass
+            if "/" in raw_str:
+                parts = raw_str.split("/")
+                if len(parts) == 3:
+                    try:
+                        return date(int(parts[2]), int(parts[1]), int(parts[0]))
+                    except (ValueError, TypeError):
+                        pass
+
+        if anio > 0 and 1 <= mes <= 12:
+            ultimo_dia = calendar.monthrange(anio, mes)[1]
+            return date(anio, mes, ultimo_dia)
+
+        return date.today()
 
     def construir_s3_key(
         self,
@@ -77,6 +147,9 @@ class ServicioStorageDocumentos:
         identificador = nro_factura or nro_facip or uuid.uuid4().hex[:8]
         s3_key = self.construir_s3_key(cod_socio, tipo_documento, periodo, identificador)
 
+        fecha_emi = fecha_emision or self._determinar_fecha_emision(anio, mes, {})
+        fecha_venc = fecha_vencimiento or self._determinar_fecha_vencimiento(anio, mes, {})
+
         # 1. Almacenar en MinIO S3
         self.s3.subir_archivo_bytes(
             object_name=s3_key,
@@ -105,7 +178,8 @@ class ServicioStorageDocumentos:
             doc_db.nro_factura = nro_factura or doc_db.nro_factura
             doc_db.nro_facip = nro_facip or doc_db.nro_facip
             doc_db.cod_autorizacion = cod_autorizacion or doc_db.cod_autorizacion
-            doc_db.fecha_vencimiento = fecha_vencimiento or doc_db.fecha_vencimiento
+            doc_db.fecha_emision = fecha_emi
+            doc_db.fecha_vencimiento = fecha_venc
             if suministro_id:
                 doc_db.suministro_id = suministro_id
         else:
@@ -120,8 +194,8 @@ class ServicioStorageDocumentos:
                 mes=mes,
                 monto_bs=monto_bs,
                 s3_key=s3_key,
-                fecha_emision=fecha_emision or date.today(),
-                fecha_vencimiento=fecha_vencimiento,
+                fecha_emision=fecha_emi,
+                fecha_vencimiento=fecha_venc,
                 estado_pago="PENDIENTE",
                 suministro_id=suministro_id
             )
@@ -147,6 +221,9 @@ class ServicioStorageDocumentos:
         periodo = str(datos_factura.get("periodo") or f"{nmes:02d}/{anio}").strip()
         s3_key = self.construir_s3_key(cod_socio, "FACTURA", periodo, nro_factura)
 
+        fecha_emision = self._determinar_fecha_emision(anio, nmes, datos_factura)
+        fecha_vencimiento = self._determinar_fecha_vencimiento(anio, nmes, datos_factura)
+
         # 1. Comprobar si ya existe en MinIO
         if self.s3.existe_archivo(s3_key):
             try:
@@ -159,8 +236,6 @@ class ServicioStorageDocumentos:
                 )
                 res = await self.db.execute(stmt)
                 if not res.scalar_one_or_none():
-                    anio = int(datos_factura.get("ANIO") or datos_factura.get("anio") or date.today().year)
-                    mes = int(datos_factura.get("NMES") or datos_factura.get("mes") or date.today().month)
                     monto_bs = float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or 0.0)
                     cod_aut = str(datos_factura.get("CODAUTORIZACION") or datos_factura.get("cod_autorizacion") or "")
                     await self.guardar_documento(
@@ -168,23 +243,27 @@ class ServicioStorageDocumentos:
                         tipo_documento="FACTURA",
                         periodo=periodo,
                         anio=anio,
-                        mes=mes,
+                        mes=nmes,
                         monto_bs=monto_bs,
                         pdf_bytes=pdf_bytes,
                         nro_factura=nro_factura,
-                        cod_autorizacion=cod_aut
+                        cod_autorizacion=cod_aut,
+                        fecha_emision=fecha_emision,
+                        fecha_vencimiento=fecha_vencimiento
                     )
                 return pdf_bytes
             except Exception as exc:
                 logger.warning(f"[STORAGE] Error al recuperar '{s3_key}' de MinIO: {exc}. Regenerando...")
 
-        # 2. Generar on-demand
-        pdf_bytes = self.pdf.generar_pdf_factura(datos_factura=datos_factura, datos_socio=datos_socio)
+        # 2. Generar on-demand con fecha_emision del ciclo
+        pdf_bytes = self.pdf.generar_pdf_factura(
+            datos_factura=datos_factura,
+            datos_socio=datos_socio,
+            fecha_emision=fecha_emision
+        )
 
         # 3. Persistir en MinIO y PostgreSQL
         try:
-            anio = int(datos_factura.get("ANIO") or datos_factura.get("anio") or date.today().year)
-            mes = int(datos_factura.get("NMES") or datos_factura.get("mes") or date.today().month)
             monto_bs = float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or 0.0)
             cod_aut = str(datos_factura.get("CODAUTORIZACION") or datos_factura.get("cod_autorizacion") or "")
 
@@ -193,11 +272,13 @@ class ServicioStorageDocumentos:
                 tipo_documento="FACTURA",
                 periodo=periodo,
                 anio=anio,
-                mes=mes,
+                mes=nmes,
                 monto_bs=monto_bs,
                 pdf_bytes=pdf_bytes,
                 nro_factura=nro_factura,
-                cod_autorizacion=cod_aut
+                cod_autorizacion=cod_aut,
+                fecha_emision=fecha_emision,
+                fecha_vencimiento=fecha_vencimiento
             )
         except Exception as exc:
             logger.error(f"[STORAGE] Fallo al indexar factura generada en BD: {exc}")
@@ -219,6 +300,9 @@ class ServicioStorageDocumentos:
         periodo = str(datos_deuda.get("periodo") or f"{nmes:02d}/{anio}").strip()
         s3_key = self.construir_s3_key(cod_socio, "AVISO_COBRANZA", periodo, nro_facip)
 
+        fecha_emision = self._determinar_fecha_emision(anio, nmes, datos_deuda)
+        fecha_vencimiento = self._determinar_fecha_vencimiento(anio, nmes, datos_deuda)
+
         if self.s3.existe_archivo(s3_key):
             try:
                 pdf_bytes = self.s3.obtener_archivo_bytes(s3_key)
@@ -229,28 +313,30 @@ class ServicioStorageDocumentos:
                 )
                 res = await self.db.execute(stmt)
                 if not res.scalar_one_or_none():
-                    anio_val = int(datos_deuda.get("ANIO") or datos_deuda.get("anio") or date.today().year)
-                    mes_val = int(datos_deuda.get("NMES") or datos_deuda.get("mes") or date.today().month)
                     monto_val = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
                     await self.guardar_documento(
                         cod_socio=cod_socio,
                         tipo_documento="AVISO_COBRANZA",
                         periodo=periodo,
-                        anio=anio_val,
-                        mes=mes_val,
+                        anio=anio,
+                        mes=nmes,
                         monto_bs=monto_val,
                         pdf_bytes=pdf_bytes,
-                        nro_facip=nro_facip
+                        nro_facip=nro_facip,
+                        fecha_emision=fecha_emision,
+                        fecha_vencimiento=fecha_vencimiento
                     )
                 return pdf_bytes
             except Exception as exc:
                 logger.warning(f"[STORAGE] Error al recuperar '{s3_key}': {exc}. Regenerando...")
 
-        pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(datos_deuda=datos_deuda, datos_socio=datos_socio)
+        datos_deuda_pdf = dict(datos_deuda)
+        if not datos_deuda_pdf.get("fecha_vencimiento"):
+            datos_deuda_pdf["fecha_vencimiento"] = fecha_vencimiento.strftime("%d/%m/%Y")
+
+        pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(datos_deuda=datos_deuda_pdf, datos_socio=datos_socio)
 
         try:
-            anio = int(datos_deuda.get("ANIO") or datos_deuda.get("anio") or date.today().year)
-            mes = int(datos_deuda.get("NMES") or datos_deuda.get("mes") or date.today().month)
             monto_bs = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
 
             await self.guardar_documento(
@@ -258,10 +344,12 @@ class ServicioStorageDocumentos:
                 tipo_documento="AVISO_COBRANZA",
                 periodo=periodo,
                 anio=anio,
-                mes=mes,
+                mes=nmes,
                 monto_bs=monto_bs,
                 pdf_bytes=pdf_bytes,
-                nro_facip=nro_facip
+                nro_facip=nro_facip,
+                fecha_emision=fecha_emision,
+                fecha_vencimiento=fecha_vencimiento
             )
         except Exception as exc:
             logger.error(f"[STORAGE] Fallo al indexar aviso de cobranza en BD: {exc}")
@@ -302,4 +390,62 @@ class ServicioStorageDocumentos:
         except Exception as exc:
             logger.error(f"[STORAGE] Fallo al indexar aviso de corte en BD: {exc}")
 
+        return pdf_bytes
+
+    async def regenerar_pdf_desde_documento(
+        self,
+        doc: Documento,
+        datos_socio: Optional[Dict[str, Any]] = None
+    ) -> bytes:
+        """
+        Regenera el archivo PDF a partir de los metadatos persistidos en el modelo Documento,
+        garantizando que la fecha de emisión y vencimiento impresas coincidan al 100% con
+        los datos de la base de datos y la vista de la app.
+        Guarda y actualiza el binario en MinIO S3 en 'doc.s3_key'.
+        """
+        datos_socio = datos_socio or {"cod_socio": doc.cod_socio}
+
+        if doc.tipo_documento == "FACTURA":
+            datos_factura = {
+                "NROFACTURA": doc.nro_factura or "",
+                "CODAUTORIZACION": doc.cod_autorizacion or "N/A",
+                "NMES": doc.mes,
+                "ANIO": doc.anio,
+                "periodo": doc.periodo,
+                "MONTOTOTAL": float(doc.monto_bs)
+            }
+            pdf_bytes = self.pdf.generar_pdf_factura(
+                datos_factura=datos_factura,
+                datos_socio=datos_socio,
+                fecha_emision=doc.fecha_emision
+            )
+        elif doc.tipo_documento == "AVISO_COBRANZA":
+            datos_deuda = {
+                "NROFACIP": doc.nro_facip or "",
+                "periodo": doc.periodo,
+                "MONTOTOTAL": float(doc.monto_bs),
+            }
+            pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
+                datos_deuda=datos_deuda,
+                datos_socio=datos_socio,
+                fecha_emision=doc.fecha_emision,
+                fecha_vencimiento=doc.fecha_vencimiento
+            )
+        elif doc.tipo_documento == "AVISO_CORTE":
+            facturas_pendientes = [{
+                "NMES": doc.mes,
+                "ANIO": doc.anio,
+                "periodo": doc.periodo,
+                "NROFACTURA": doc.nro_factura or "",
+                "MONTOTOTAL": float(doc.monto_bs)
+            }]
+            pdf_bytes = self.pdf.generar_pdf_aviso_corte(
+                datos_socio=datos_socio,
+                facturas_pendientes=facturas_pendientes
+            )
+        else:
+            raise ValueError(f"Tipo de documento desconocido: {doc.tipo_documento}")
+
+        # Guardar en MinIO sobrescribiendo el archivo previo
+        self.s3.subir_archivo_bytes(doc.s3_key, pdf_bytes, "application/pdf")
         return pdf_bytes

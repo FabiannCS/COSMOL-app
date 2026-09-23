@@ -128,13 +128,6 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
                           color: AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Repositorio digital oficial de COSMOL RL.',
-                        style: AppTextStyles.body2.copyWith(
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
                     ],
                   ),
                 ),

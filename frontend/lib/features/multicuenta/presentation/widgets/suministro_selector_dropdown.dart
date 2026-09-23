@@ -30,7 +30,7 @@ class SuministroSelectorDropdown extends ConsumerWidget {
               const Icon(Icons.water_drop_outlined,
                   size: 18, color: AppColors.primary),
               const SizedBox(width: 8),
-              Text('Seleccionar suministro', style: AppTextStyles.body2),
+              Text('Seleccionar socio', style: AppTextStyles.body2),
               const Icon(Icons.keyboard_arrow_down_rounded,
                   color: AppColors.textSecondary),
             ],
@@ -76,7 +76,7 @@ class SuministroSelectorDropdown extends ConsumerWidget {
                 Row(
                   children: [
                     Text(
-                      active.alias.isNotEmpty ? active.alias : 'Mi Suministro',
+                      active.alias.isNotEmpty ? active.alias : 'Socio',
                       style: AppTextStyles.subtitle2.copyWith(
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary,
@@ -169,7 +169,7 @@ class _SuministrosBottomSheet extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Tus Suministros Vinculados',
+                'Tus Socios Vinculados',
                 style: AppTextStyles.h3,
               ),
               IconButton(
@@ -180,7 +180,7 @@ class _SuministrosBottomSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Selecciona el medidor que deseas consultar o administrar.',
+            'Selecciona el contrato que deseas consultar o administrar.',
             style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 16),
@@ -244,7 +244,7 @@ class _SuministrosBottomSheet extends ConsumerWidget {
                                     Text(
                                       item.alias.isNotEmpty
                                           ? item.alias
-                                          : 'Suministro ${item.codSocio}',
+                                          : 'Socio ${item.codSocio}',
                                       style: AppTextStyles.subtitle1.copyWith(
                                         fontWeight: FontWeight.bold,
                                       ),
@@ -260,7 +260,7 @@ class _SuministrosBottomSheet extends ConsumerWidget {
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        isTitular ? 'TITULAR' : 'CONSULTA / PAGO',
+                                        isTitular ? 'TITULAR' : 'CONSULTA',
                                         style: const TextStyle(
                                           color: Colors.white,
                                           fontSize: 9,
@@ -297,7 +297,7 @@ class _SuministrosBottomSheet extends ConsumerWidget {
               },
               icon: const Icon(Icons.add_rounded, color: AppColors.primary),
               label: Text(
-                'Vincular nuevo suministro',
+                'Vincular nuevo socio',
                 style: AppTextStyles.button.copyWith(color: AppColors.primary),
               ),
               style: OutlinedButton.styleFrom(

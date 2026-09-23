@@ -27,7 +27,7 @@ class CosmolApp extends ConsumerWidget {
     final router = ref.watch(appRouterProvider);
 
     return MaterialApp.router(
-      title: 'COSMOL R.L. - App de Socios',
+      title: 'COSMOL RL.',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.lightTheme,
       routerConfig: router,
