@@ -5,7 +5,7 @@ Provee endpoints de alto rendimiento (<20ms con Redis) protegidos con JWT Bearer
 from typing import Any, Dict
 from uuid import UUID
 import logging
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from app.schemas.deuda import (
     ResumenDeudaResponse,
 )
 from app.services.servicio_deuda import ServicioDeuda
+from app.tasks.auditoria_reportes import despachar_auditoria_reportes
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +51,7 @@ async def obtener_dashboard_resumen(
 )
 async def obtener_deuda_suministro(
     cod_socio: str,
+    background_tasks: BackgroundTasks,
     forzar_refresco: bool = Query(
         False,
         description="Si es true, ignora la caché de Redis y consulta en vivo al sistema comercial legado."
@@ -88,6 +90,26 @@ async def obtener_deuda_suministro(
     # Si la deuda ya fue liquidada (saldo 0 Bs), cerrar ventana de verificación
     if resumen.saldo_pendiente_bs <= 0.0 or resumen.cantidad_facturas_pendientes == 0:
         await cerrar_ventana_verificacion(redis_client, cod_socio)
+
+    # Despachar evento de Consulta de Deuda a COSMOL-Reportes en segundo plano
+    try:
+        cod_socio_int = int(str(cod_socio).strip())
+    except (ValueError, TypeError):
+        cod_socio_int = 0
+
+    nombre_titular = (
+        resumen.suministro.nombre_titular
+        if hasattr(resumen, "suministro") and resumen.suministro and hasattr(resumen.suministro, "nombre_titular")
+        else None
+    ) or f"SOCIO {cod_socio_int}"
+
+    background_tasks.add_task(
+        despachar_auditoria_reportes,
+        codigo_socio=cod_socio_int,
+        nombres=nombre_titular,
+        id_tipo=2,
+        tipo_consulta="Consulta de Deuda",
+    )
 
     return resumen
 

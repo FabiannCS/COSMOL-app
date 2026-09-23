@@ -2,7 +2,7 @@
 Rutas y Endpoints REST para Autenticación, Onboarding Dual OTP y Multicuenta.
 """
 from typing import Any, Dict, List
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, status
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +19,7 @@ from app.schemas.usuario import (
 )
 from app.services.servicio_autenticacion import ServicioAutenticacion
 from app.services.servicio_suministros import ServicioSuministros
+from app.tasks.auditoria_reportes import despachar_auditoria_reportes
 
 router = APIRouter()
 
@@ -86,15 +87,31 @@ async def verificar_otp(
 )
 async def establecer_pin(
     datos: CrearPinPasswordRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> Dict[str, Any]:
     servicio = ServicioAutenticacion(redis, db=db)
-    return await servicio.establecer_pin(
+    resultado = await servicio.establecer_pin(
         telefono=datos.telefono,
         token_otp_valido=datos.token_otp_valido,
         nuevo_pin=datos.nuevo_pin
     )
+    # Despachar evento de Onboarding exitoso a COSMOL-Reportes en segundo plano
+    cod_socio_val = resultado.get("cod_socio", 0)
+    try:
+        cod_socio_int = int(str(cod_socio_val).strip())
+    except (ValueError, TypeError):
+        cod_socio_int = 0
+    background_tasks.add_task(
+        despachar_auditoria_reportes,
+        codigo_socio=cod_socio_int,
+        nombres=f"SOCIO {cod_socio_int}" if cod_socio_int else "NUEVO SOCIO",
+        telefono=datos.telefono,
+        id_tipo=1,
+        tipo_consulta="Autenticación / Acceso",
+    )
+    return resultado
 
 
 @router.post(
@@ -106,16 +123,30 @@ async def establecer_pin(
 )
 async def login(
     datos: LoginRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> TokenResponse:
     servicio = ServicioAutenticacion(redis, db=db)
-    return await servicio.autenticar_socio(
+    respuesta = await servicio.autenticar_socio(
         cod_socio=datos.cod_socio,
         pin_password=datos.pin_password,
         device_id=datos.device_id,
         modelo_dispositivo=datos.modelo_dispositivo
     )
+    # Despachar evento de Login exitoso a COSMOL-Reportes en segundo plano
+    try:
+        cod_socio_int = int(str(datos.cod_socio).strip())
+    except (ValueError, TypeError):
+        cod_socio_int = 0
+    background_tasks.add_task(
+        despachar_auditoria_reportes,
+        codigo_socio=cod_socio_int,
+        nombres=f"SOCIO {cod_socio_int}",
+        id_tipo=1,
+        tipo_consulta="Autenticación / Acceso",
+    )
+    return respuesta
 
 
 @router.post(

@@ -16,6 +16,7 @@ from app.schemas.pago import (
     EstadoVerificacionPagoResponse,
 )
 from app.services.servicio_pagos import ServicioPagos
+from app.tasks.auditoria_reportes import despachar_auditoria_reportes
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +69,29 @@ async def registrar_intento_pago(
     """
     servicio = ServicioPagos(db=db, redis=redis)
     ip_origen = request.client.host if request.client else None
-    return await servicio.registrar_intento_pago(
+    respuesta = await servicio.registrar_intento_pago(
         usuario_id=UUID(current_user_id),
         cod_socio=cod_socio,
         canal_id=payload.canal_id,
         background_tasks=background_tasks,
         ip_origen=ip_origen
     )
+
+    # Despachar evento de Intento de Pago a COSMOL-Reportes en segundo plano (Contrato § 4)
+    try:
+        cod_socio_int = int(str(cod_socio).strip())
+    except (ValueError, TypeError):
+        cod_socio_int = 0
+
+    background_tasks.add_task(
+        despachar_auditoria_reportes,
+        codigo_socio=cod_socio_int,
+        nombres=f"SOCIO {cod_socio_int}",
+        id_tipo=10,
+        tipo_consulta="Intento de Pago",
+    )
+
+    return respuesta
 
 
 @router.get(

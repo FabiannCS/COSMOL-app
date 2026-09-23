@@ -17,17 +17,27 @@ logging.basicConfig(
 )
 
 
+import asyncio
+from app.tasks.auditoria_reportes import worker_flusher_auditoria
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Ciclo de vida de la aplicación FastAPI:
-    - Inicializa conexiones al arrancar.
-    - Cierra recursos ordenadamente al terminar.
+    - Inicializa conexiones y worker de reintentos en segundo plano al arrancar.
+    - Cierra recursos y cancela workers ordenadamente al terminar.
     """
     # Startup
     await init_redis_pool()
+    flusher_task = asyncio.create_task(worker_flusher_auditoria(intervalo_segundos=30))
     yield
     # Shutdown
+    flusher_task.cancel()
+    try:
+        await flusher_task
+    except asyncio.CancelledError:
+        pass
     await close_redis_pool()
 
 

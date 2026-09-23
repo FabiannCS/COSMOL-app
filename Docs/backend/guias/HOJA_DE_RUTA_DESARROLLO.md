@@ -327,16 +327,20 @@ gantt
 
 ---
 
-### **Fase 6: Auditoría a ChatbotReportes, Rate Limiting y Seguridad Avanzada**
+### **Fase 6: Auditoría a COSMOL-Reportes, Rate Limiting y Seguridad Avanzada**
 > **Meta:** Cumplir con las políticas de auditoría corporativa y blindar la app contra ataques.
 
-- [ ] **6.1 Despacho de Auditoría Asíncrono hacia `ChatbotReportes`:**
-  - Conexión asíncrona de solo escritura a la base de datos de ChatbotReportes.
-  - Envío en segundo plano (`BackgroundTasks` de FastAPI o cola Redis) de eventos:
-    - `USER_LOGIN_SUCCESS` / `USER_LOGIN_FAILED`
-    - `OTP_REQUESTED` / `OTP_VERIFIED`
-    - `DOCUMENT_DOWNLOADED` (id_documento, cod_socio)
-    - `PAYMENT_INITIATED` / `PAYMENT_COMPLETED`
+- [ ] **6.1 Despacho de Auditoría Asíncrono hacia `COSMOL-Reportes`:**
+  - Integración desacoplada vía REST API consumiendo `POST {REPORTES_API_URL}/api/consultas` con header `X-Reportes-Token`.
+  - Despacho en segundo plano (`BackgroundTasks` de FastAPI) con 0 ms de impacto en la latencia del socio.
+  - Identificación del canal: **`id_usuario = 3`** (App de Socios) y **`tipo_ubicacion = 'APP_MOVIL'`** para distinguirse del Chatbot (`id_usuario = 2`).
+  - Eventos despachados:
+    - `id_tipo = 1`: `Autenticación / Acceso` (Login diario y Onboarding).
+    - `id_tipo = 2`: `Consulta de Deuda` (Dashboard principal).
+    - `id_tipo = 3`: `Historial de Facturas` (Consumos de 12 meses).
+    - `id_tipo = 9`: `Descarga de Documento PDF` (Facturas oficiales y avisos).
+    - `id_tipo = 10`: `Intento de Pago Pasarela` (Multipago / Pago al Paso).
+  - Documentos de soporte: `Docs/backend/pendiente/TASK-06-auditoria-reportes.md` y `Docs/reportes/GUIA_VISTA_APP_SOCIOS_COSMOL_REPORTES.md`.
 - [ ] **6.2 Política de Bloqueo por Intentos Fallidos:**
   - Implementar `slowapi` en FastAPI para rate limiting por IP (previene ataques distribuidos).
   - Bloqueo progresivo por cuenta tras **3 intentos fallidos consecutivos**:
