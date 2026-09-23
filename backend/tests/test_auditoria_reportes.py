@@ -1,10 +1,16 @@
+import json
 import pytest
 from unittest.mock import AsyncMock, patch, MagicMock
 import httpx
 
 from app.core.config import settings
 from app.integrations.reportes_client import ReportesApiClient
-from app.tasks.auditoria_reportes import despachar_auditoria_reportes
+from app.tasks.auditoria_reportes import (
+    despachar_auditoria_reportes,
+    encolar_evento_en_redis,
+    vaciar_cola_pendientes,
+    REDIS_KEY_COLA_PENDIENTES,
+)
 
 
 @pytest.mark.asyncio
@@ -69,6 +75,7 @@ async def test_envio_exitoso_auditoria_payload_y_headers():
         )
 
         assert resultado is True
+        assert client.esta_servidor_offline() is False
         mock_http_client.post.assert_called_once()
         args, kwargs = mock_http_client.post.call_args
         assert args[0] == "http://reportes.cosmol.local/api/consultas"
@@ -87,11 +94,12 @@ async def test_envio_exitoso_auditoria_payload_y_headers():
 
         headers = kwargs["headers"]
         assert headers["X-Reportes-Token"] == "token_secreto_reportes_xyz"
+        assert headers["ngrok-skip-browser-warning"] == "true"
 
 
 @pytest.mark.asyncio
 async def test_resiliencia_servidor_offline():
-    """Si el servidor de Reportes está fuera de línea (ConnectError), atrapa la excepción y retorna False."""
+    """Si el servidor de Reportes está fuera de línea (ConnectError), atrapa la excepción y marca offline."""
     client = ReportesApiClient()
     mock_http_client = AsyncMock()
     mock_http_client.post.side_effect = httpx.ConnectError("Connection refused")
@@ -105,11 +113,12 @@ async def test_resiliencia_servidor_offline():
             nombres="TEST SOCIO",
         )
         assert resultado is False
+        assert client.esta_servidor_offline() is True
 
 
 @pytest.mark.asyncio
 async def test_resiliencia_servidor_timeout():
-    """Si el servidor de Reportes agota el tiempo de espera (Timeout), no propaga el error."""
+    """Si el servidor de Reportes agota el tiempo de espera (Timeout), marca offline y no propaga error."""
     client = ReportesApiClient()
     mock_http_client = AsyncMock()
     mock_http_client.post.side_effect = httpx.TimeoutException("Read timeout")
@@ -123,14 +132,101 @@ async def test_resiliencia_servidor_timeout():
             nombres="TEST SOCIO",
         )
         assert resultado is False
+        assert client.esta_servidor_offline() is True
 
 
 @pytest.mark.asyncio
-async def test_tarea_despacho_background():
-    """Valida que la función asíncrona despachar_auditoria_reportes se ejecute sin excepciones."""
-    with patch("app.tasks.auditoria_reportes.ReportesApiClient") as MockClient:
+async def test_encolado_en_redis_ante_fallo_reportes():
+    """Valida que si Reportes está caído, el evento se guarde en la cola de Redis."""
+    mock_redis = AsyncMock()
+    mock_redis.rpush = AsyncMock(return_value=1)
+
+    payload = {
+        "codigo_socio": 23807,
+        "nombres": "TEST SOCIO",
+        "id_usuario": 3,
+        "id_tipo": 2,
+        "tipo_consulta": "Consulta de Deuda",
+        "tipo_ubicacion": "APP_MOVIL",
+        "fecha_consulta": "2026-09-23",
+        "hora_consulta": "10:00:00",
+    }
+
+    with patch("app.tasks.auditoria_reportes.get_redis", return_value=mock_redis), \
+         patch.object(settings, "REPORTES_ENABLED", True), \
+         patch.object(settings, "REPORTES_API_URL", "http://reportes.cosmol.local"):
+
+        resultado = await encolar_evento_en_redis(payload)
+        assert resultado is True
+        mock_redis.rpush.assert_called_once()
+        args, kwargs = mock_redis.rpush.call_args
+        assert args[0] == REDIS_KEY_COLA_PENDIENTES
+        guardado = json.loads(args[1])
+        assert guardado["codigo_socio"] == 23807
+
+
+@pytest.mark.asyncio
+async def test_vaciar_cola_pendientes_exitosa():
+    """Valida que los eventos en la cola de Redis se expulsen hacia Reportes cuando esté activo."""
+    evento1 = json.dumps({"codigo_socio": 101, "tipo_consulta": "Login"})
+    evento2 = json.dumps({"codigo_socio": 102, "tipo_consulta": "Deuda"})
+
+    mock_redis = AsyncMock()
+    mock_redis.llen = AsyncMock(side_effect=[2, 0])
+    mock_redis.lpop = AsyncMock(side_effect=[evento1, evento2, None])
+
+    with patch("app.tasks.auditoria_reportes.get_redis", return_value=mock_redis), \
+         patch("app.tasks.auditoria_reportes.ReportesApiClient") as MockClient, \
+         patch.object(settings, "REPORTES_ENABLED", True), \
+         patch.object(settings, "REPORTES_API_URL", "http://reportes.cosmol.local"):
+
         instance = MockClient.return_value
-        instance.enviar_evento_auditoria = AsyncMock(return_value=True)
+        instance.enviar_payload_directo = AsyncMock(return_value=True)
+
+        sincronizados = await vaciar_cola_pendientes(limite=10)
+        assert sincronizados == 2
+        assert instance.enviar_payload_directo.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_vaciar_cola_se_detiene_si_servidor_offline():
+    """Si durante el vaciado el servidor vuelve a caer, reinserta el evento y suspende la iteración."""
+    evento1 = json.dumps({"codigo_socio": 101, "tipo_consulta": "Login"})
+
+    mock_redis = AsyncMock()
+    mock_redis.llen = AsyncMock(return_value=1)
+    mock_redis.lpop = AsyncMock(return_value=evento1)
+    mock_redis.lpush = AsyncMock(return_value=1)
+
+    with patch("app.tasks.auditoria_reportes.get_redis", return_value=mock_redis), \
+         patch("app.tasks.auditoria_reportes.ReportesApiClient") as MockClient, \
+         patch.object(settings, "REPORTES_ENABLED", True), \
+         patch.object(settings, "REPORTES_API_URL", "http://reportes.cosmol.local"):
+
+        instance = MockClient.return_value
+        instance.enviar_payload_directo = AsyncMock(return_value=False)
+        instance.esta_servidor_offline = MagicMock(return_value=True)
+
+        sincronizados = await vaciar_cola_pendientes(limite=5)
+        assert sincronizados == 0
+        mock_redis.lpush.assert_called_once_with(REDIS_KEY_COLA_PENDIENTES, evento1)
+
+
+@pytest.mark.asyncio
+async def test_tarea_despacho_background_exitosa_y_fallida():
+    """Valida el flujo de despacho en segundo plano: directo si está activo, encolado si falla."""
+    mock_redis = AsyncMock()
+    mock_redis.llen = AsyncMock(return_value=0)
+    mock_redis.rpush = AsyncMock(return_value=1)
+
+    # 1. Caso Exitoso
+    with patch("app.tasks.auditoria_reportes.ReportesApiClient") as MockClient, \
+         patch("app.tasks.auditoria_reportes.get_redis", return_value=mock_redis), \
+         patch.object(settings, "REPORTES_ENABLED", True), \
+         patch.object(settings, "REPORTES_API_URL", "http://reportes.cosmol.local"):
+
+        instance = MockClient.return_value
+        instance.enviar_payload_directo = AsyncMock(return_value=True)
 
         await despachar_auditoria_reportes(
             codigo_socio=1470,
@@ -140,11 +236,21 @@ async def test_tarea_despacho_background():
             tipo_consulta="Autenticación / Acceso",
         )
 
-        instance.enviar_evento_auditoria.assert_awaited_once_with(
+        instance.enviar_payload_directo.assert_awaited_once()
+
+    # 2. Caso Caído (debe encolar en Redis)
+    with patch("app.tasks.auditoria_reportes.ReportesApiClient") as MockClient, \
+         patch("app.tasks.auditoria_reportes.get_redis", return_value=mock_redis), \
+         patch.object(settings, "REPORTES_ENABLED", True), \
+         patch.object(settings, "REPORTES_API_URL", "http://reportes.cosmol.local"):
+
+        instance = MockClient.return_value
+        instance.enviar_payload_directo = AsyncMock(return_value=False)
+
+        await despachar_auditoria_reportes(
             codigo_socio=1470,
-            nombres="SOCIO BACKGROUND",
-            telefono="+59177000000",
-            id_tipo=1,
-            tipo_consulta="Autenticación / Acceso",
-            tipo_ubicacion="APP_MOVIL",
+            nombres="SOCIO CAIDO",
+            id_tipo=2,
         )
+
+        mock_redis.rpush.assert_called_once()
