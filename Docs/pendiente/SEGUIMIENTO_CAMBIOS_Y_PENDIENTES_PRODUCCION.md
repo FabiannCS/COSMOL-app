@@ -160,3 +160,5 @@ docker compose restart backend-api
 |---|---|---|---|
 | **1.0.0** | 23/09/2026 | Equipo de Desarrollo / Antigravity | Creación de bitácora inicial: resolución de dependencias, compilación Android release, enrutamiento Caddy y tablas Alembic. |
 | **1.1.0** | 23/09/2026 | Equipo de Desarrollo / Antigravity | Diagnóstico de colapso de auditoría: sanitización de URL `/api/consultas`, Circuit Breaker de 15s en `ReportesApiClient`, `extra_hosts` en Compose y guía de purga de Redis. |
+| **1.2.0** | 01/10/2026 | Equipo de Desarrollo / Antigravity | Blindaje de lógica de negocio y estabilidad: admisión para desbloqueo/recuperación de PIN vía OTP, resolución de colisión multicuenta titular/inquilino, normalización telefónica, endpoint `POST /logout`, caché síncrona en memoria para `StorageService` (eliminando fallo post-logout en Android), desacoplamiento de generación pesada de PDFs en listado GET, aumento de timeout Informix a 8s, matcher Caddy `/api/v1*` y endpoint raíz `/api/v1/`. |
+

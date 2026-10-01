@@ -89,7 +89,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             backgroundColor: AppColors.secondary,
           ),
         );
-        context.push('/onboarding');
       } else if (next.errorMessage != null &&
           next.errorMessage != previous?.errorMessage &&
           next.status != AuthStatus.locked) {

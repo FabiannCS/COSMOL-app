@@ -4,6 +4,17 @@ from app.api.v1.health import router as health_router
 # Router agregador principal para la versión 1 de la API
 api_router = APIRouter()
 
+
+@api_router.get("/", tags=["Salud del Sistema"])
+async def root_v1():
+    return {
+        "status": "ok",
+        "version": "v1",
+        "service": "COSMOL R.L. - App de Socios API",
+        "docs": "/docs"
+    }
+
+
 from app.api.v1.autenticacion import router as autenticacion_router
 from app.api.v1.deuda import router as deuda_router
 

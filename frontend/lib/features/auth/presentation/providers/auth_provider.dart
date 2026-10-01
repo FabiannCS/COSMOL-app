@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/app_exception.dart';
@@ -271,6 +272,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> logout() async {
+    try {
+      final token = await storageService.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        await authInterceptor.refreshDio.post(
+          '/autenticacion/logout',
+          options: Options(headers: {'Authorization': 'Bearer $token'}),
+        );
+      }
+    } catch (_) {}
     await storageService.clearAuthData();
     state = const AuthState(status: AuthStatus.unauthenticated);
     onLogout?.call();
