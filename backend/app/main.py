@@ -51,11 +51,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configuración de CORS
+# Configuración de CORS conforme al estándar W3C (previene errores con allow_credentials=True)
 if settings.BACKEND_CORS_ORIGINS:
+    usar_regex = "*" in settings.BACKEND_CORS_ORIGINS
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.BACKEND_CORS_ORIGINS,
+        allow_origins=[] if usar_regex else settings.BACKEND_CORS_ORIGINS,
+        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.cosmol\.com\.bo)(:\d+)?$" if usar_regex else None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

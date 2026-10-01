@@ -39,9 +39,11 @@ A continuación se detalla cada cambio aplicado, su impacto directo en el sistem
 
 ### B. Proyecto: `COSMOL-app` (Backend FastAPI y Base de Datos)
 
-| Componente | Acción Ejecutada | Causa Raíz | Influencia / Impacto |
+| Componente / Archivo | Cambio / Acción | Causa Raíz | Influencia / Impacto |
 |---|---|---|---|
 | **Base de Datos PostgreSQL** (`cosmol-db-postgres`) | Ejecución de `docker exec -it cosmol-backend-api alembic upgrade head` | El contenedor PostgreSQL se levantó limpio, pero nunca se habían ejecutado las migraciones iniciales de Alembic. | **Eliminó el error HTTP 500:** Se crearon las tablas `usuarios`, `suministros`, `dispositivos`, `otps`, `documentos` y `auditoria_pagos`. La app ya puede verificar socios (`11543`) y autenticarse. |
+| [`backend/app/integrations/reportes_client.py`](file:///d:/COSMOL-app/backend/app/integrations/reportes_client.py#L48-L80) | Sanitización de URL en `_resolver_url_destino` y Circuit Breaker con cooldown de 15s | Error en producción: la URL configurada tenía `/api/v1`, produciendo `/api/v1/api/consultas` con timeout de 3s en ráfagas que congelaban las peticiones de la app móvil. | **Blindaje y Cero Latencia:** Sanea automáticamente `/api/v1` a `/api/consultas`. Si Reportes está offline, el cooldown de 15s descarta la espera de 3s y encola de inmediato en Redis sin congelar la app. |
+| [`docker-compose.yml`](file:///d:/COSMOL-app/docker-compose.yml#L18) | Agregado `extra_hosts: ["host.docker.internal:host-gateway"]` a `backend-api` | En Linux, los contenedores Docker no resuelven `host.docker.internal` salvo que se declare explícitamente en el Compose. | **Conectividad Inter-Contenedores:** Permite que `cosmol-backend-api` alcance servicios en puertos del host como `cosmol_reportes_app:8082` de forma limpia. |
 
 ---
 
@@ -90,21 +92,18 @@ A partir de este punto, se deben abordar los siguientes elementos identificados 
 * **Problema:** En [`Cosmol-Chatbot/Caddyfile`](file:///d:/Cosmol-Chatbot/Caddyfile#L33) está configurado el puerto 8083 como respaldo para la API de la app, pero en su `docker-compose.yml` el contenedor `caddy` no tiene mapeado el puerto `8083:8083`.
 * **Acción requerida:** Decidir si se expone `"8083:8083"` en `docker-compose.yml` para habilitar el respaldo, o si se retira ese bloque de Caddy manteniendo exclusivamente el puerto estándar 443.
 
-#### 2. Conflicto de CORS en FastAPI ([`COSMOL-app/backend/app/main.py`](file:///d:/COSMOL-app/backend/app/main.py#L55))
-* **Problema:** `BACKEND_CORS_ORIGINS` tiene como valor por defecto `["*"]` y `CORSMiddleware` se inicializa con `allow_credentials=True`. La especificación W3C prohíbe el comodín `*` cuando se habilitan credenciales, lo cual bloqueará peticiones web cross-origin desde navegadores en producción.
-* **Acción requerida:** Definir la lista explícita de orígenes permitidos (ej. `https://chatbot.cosmol.com.bo`, orígenes locales de desarrollo) en `BACKEND_CORS_ORIGINS`.
+#### 2. Conflicto de CORS en FastAPI ([`COSMOL-app/backend/app/main.py`](file:///d:/COSMOL-app/backend/app/main.py#L55)) — ✅ RESUELTO
+* **Resolución:** Se definió la lista explícita de orígenes en `config.py` (`https://chatbot.cosmol.com.bo`, `localhost`, etc.) y se implementó `allow_origin_regex` en `main.py` para cumplir estrictamente con la especificación W3C cuando `allow_credentials=True`.
 
-#### 3. Falta de Migración Defensiva para `trabajo_seguimiento` en COSMOL-Reportes
-* **Problema:** La tabla `trabajo_seguimiento` (usada en `OperadorController` y `AdministradorController` para marcar trabajos como `NO CONCLUIDO` o `NO PROCEDENTE`) solo existe en `init.sql`. En bases de datos que ya tienen su volumen Docker creado, `init.sql` no se reejecuta, lo que provocará un error 500 (`relation "trabajo_seguimiento" does not exist`) al acceder al módulo de operadores.
-* **Acción requerida:** Incorporar en [`TrabajoSeguimiento.php`](file:///d:/COSMOL-Reportes/app/Models/TrabajoSeguimiento.php) un bloque de creación defensiva idempotente (`CREATE TABLE IF NOT EXISTS trabajo_seguimiento ...`), idéntico al que ya tiene `Reporte.php`.
+#### 3. Migración Defensiva para `trabajo_seguimiento` en COSMOL-Reportes ([`app/Models/TrabajoSeguimiento.php`](file:///d:/COSMOL-Reportes/app/Models/TrabajoSeguimiento.php)) — ✅ RESUELTO
+* **Resolución:** Se incorporó el constructor `__construct()` con `CREATE TABLE IF NOT EXISTS trabajo_seguimiento (...)` e índice, garantizando la creación de la tabla de forma automática e idempotente en cualquier entorno o volumen preexistente sin errores 500.
 
 ---
 
 ### 🟡 Prioridad Media
 
-#### 4. Ausencia de Exportación CSV en Pantalla de App de Socios ([`COSMOL-Reportes`](file:///d:/COSMOL-Reportes))
-* **Problema:** El endpoint `/reportes/exportar` excluye explícitamente los registros de la App Móvil (`id_usuario != 3`). En la vista [`/reportes/app-socios`](file:///d:/COSMOL-Reportes/app/Views/reportes/app_socios.php) no existe botón ni método para descargar los registros de auditoría de los socios en formato CSV/Excel.
-* **Acción requerida:** Crear el método `exportarAppSocios()` en `ReporteController.php` y agregar el botón de descarga en la cabecera de la vista `app_socios.php`.
+#### 4. Exportación CSV en Pantalla de App de Socios ([`COSMOL-Reportes`](file:///d:/COSMOL-Reportes)) — ✅ RESUELTO
+* **Resolución:** Se implementó `getAllConsultasAppExport()` en `Reporte.php`, el método `exportarAppSocios()` en `ReporteController.php`, la ruta `/reportes/app-socios/exportar` en `routes.php` y el botón *"Exportar CSV"* con preservación de filtros en la vista `app_socios.php`.
 
 #### 5. Riesgo de Colisión de Puerto PostgreSQL en Host (`COSMOL-app`)
 * **Problema:** [`COSMOL-app/docker-compose.yml`](file:///d:/COSMOL-app/docker-compose.yml#L33) expone `5432:5432` en el host. Si en la máquina host o servidor corre otro PostgreSQL nativo, el contenedor no podrá iniciar.
@@ -116,8 +115,48 @@ A partir de este punto, se deben abordar los siguientes elementos identificados 
 
 ---
 
-## 5. Control de Revisiones
+## 5. Diagnóstico de Incidencia en Vivo: Timeouts de Auditoría y Visualización en la App
+
+### A. Causa Raíz de "Reportes aún no recibe los datos"
+En los logs del servidor se detectó:
+`[AUDITORIA TIMEOUT] Tiempo de espera agotado (3.0s) al enviar auditoría a http://chatbot.cosmol.com.bo:8082/api/v1/api/consultas.`
+
+1. **Ruta con doble `/api` y sufijo `/v1`:**
+   En el `.env` del servidor se configuró la URL con `/api/v1`. La lógica previa de `reportes_client.py` concatenó `/api/consultas` dando como resultado `/api/v1/api/consultas`. La API de COSMOL-Reportes solo expone `POST /api/consultas`.
+2. **Puerto 8082 inaccesible por el dominio de Internet:**
+   El puerto `8082` es el puerto de red interna de Docker en el servidor Ubuntu (`cosmol_reportes_app: 8082:80`). El dominio `chatbot.cosmol.com.bo` solo entra por Caddy (puertos 80, 443, 8081). Al consultar por el dominio externo, el firewall del servidor descarta la conexión y se produce el **timeout de 3 segundos**.
+3. **Conexión interna correcta:**
+   Como ambos servicios corren en el mismo servidor Ubuntu, la conexión debe ser directa sin salir a Internet:
+   `REPORTES_API_URL=http://172.17.0.1:8082/api` (usando el host gateway del bridge Docker de Ubuntu).
+
+### B. Causa de "Fue bien al comienzo hasta que colapsó y no vemos nada"
+1. **Comportamiento del Socio 556:**
+   Al consultar directamente la API comercial de COSMOL (`api.cosmol.com.bo`):
+   - El socio **556** (Suárez Baltazar Víctor Hugo) tiene `deudas: []` (está 100% **al día**, saldo Bs 0.00).
+   - Por esta razón, la app muestra legítimamente *Bs 0.00 / Al día con tus pagos* y 0 facturas pendientes. No es un error, es el estado real del socio.
+   - Para validar pantallas con facturas activas, el socio **11543** tiene 2 facturas pendientes (Agosto y Septiembre 2026, total Bs 150.34).
+2. **Degradación por cola de eventos acumulados:**
+   Cada petición de la app móvil disparaba un background task que quedaba congelado 3 segundos esperando a Reportes. Esos eventos fallidos se acumularon en Redis (60 eventos en cola), y el worker periódico intentaba reintentarlos concurrentemente, agotando sockets y ralentizando las respuestas generales.
+
+### C. Procedimiento Inmediato de Remediación en el Servidor Ubuntu (`10.129.1.105`)
+
+```bash
+# 1. En el archivo .env de COSMOL-app en el servidor, corregir la URL de reportes:
+# Editar .env y colocar exactamente:
+REPORTES_API_URL=http://172.17.0.1:8082/api
+
+# 2. Purgar los 60 eventos atascados con timeout en Redis:
+docker exec -it cosmol-cache-redis redis-cli del auditoria:cola_pendientes
+
+# 3. Reiniciar el contenedor de FastAPI para aplicar cambios de entorno y de red:
+docker compose restart backend-api
+```
+
+---
+
+## 6. Control de Revisiones
 
 | Versión | Fecha | Autor / Responsable | Descripción |
 |---|---|---|---|
 | **1.0.0** | 23/09/2026 | Equipo de Desarrollo / Antigravity | Creación de bitácora inicial: resolución de dependencias, compilación Android release, enrutamiento Caddy y tablas Alembic. |
+| **1.1.0** | 23/09/2026 | Equipo de Desarrollo / Antigravity | Diagnóstico de colapso de auditoría: sanitización de URL `/api/consultas`, Circuit Breaker de 15s en `ReportesApiClient`, `extra_hosts` en Compose y guía de purga de Redis. |

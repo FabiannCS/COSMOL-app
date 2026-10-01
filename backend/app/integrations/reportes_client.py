@@ -25,6 +25,10 @@ class ReportesApiClient(BaseApiClient):
         10: "Intento de Pago",
     }
 
+    # Control de circuito / cooldown preventivo para no bloquear la app ante caídas de Reportes
+    _ultimo_fallo_timestamp: float = 0.0
+    _COOLDOWN_OFFLINE_SEGUNDOS: float = 15.0
+
     def __init__(self):
         default_headers = {
             "Content-Type": "application/json; charset=utf-8",
@@ -49,10 +53,18 @@ class ReportesApiClient(BaseApiClient):
         Resuelve la URL destino previniendo discrepancias entre entornos:
         Soporta URLs base ("http://host:8082"), con "/api" ("http://host:8082/api")
         o completas ("http://host:8082/api/consultas").
+        Sanea automáticamente si se configuró erróneamente con "/api/v1".
         """
         raw_url = (settings.REPORTES_API_URL or "").strip().rstrip("/")
         if not raw_url:
             return None
+
+        # Sanear si alguien configuró /v1 o /api/v1 por confusión con la API de socios
+        if "/api/v1" in raw_url:
+            raw_url = raw_url.replace("/api/v1", "/api")
+        elif raw_url.endswith("/v1"):
+            raw_url = raw_url[:-3].rstrip("/")
+
         if raw_url.endswith("/api/consultas") or raw_url.endswith("/consultas"):
             return raw_url
         if raw_url.endswith("/api"):
@@ -72,6 +84,13 @@ class ReportesApiClient(BaseApiClient):
             logger.debug("[AUDITORIA OMITIDA] Reportes sin URL configurada.")
             return False
 
+        # Circuit-breaker / Cooldown preventivo: si falló recientemente, no esperar 3s en cada tarea
+        import time
+        ahora = time.time()
+        if (ahora - ReportesApiClient._ultimo_fallo_timestamp) < ReportesApiClient._COOLDOWN_OFFLINE_SEGUNDOS:
+            self.servidor_offline = True
+            return False
+
         try:
             client = await self.get_client()
             headers = {
@@ -88,6 +107,7 @@ class ReportesApiClient(BaseApiClient):
                 follow_redirects=True,
             )
             if response.status_code in (200, 201):
+                ReportesApiClient._ultimo_fallo_timestamp = 0.0
                 self.servidor_offline = False
                 logger.info(
                     f"[AUDITORIA EXITOSA] Evento '{payload.get('tipo_consulta')}' (id={payload.get('id_tipo')}) "
@@ -102,6 +122,8 @@ class ReportesApiClient(BaseApiClient):
                 )
                 return False
         except httpx.TimeoutException:
+            import time
+            ReportesApiClient._ultimo_fallo_timestamp = time.time()
             self.servidor_offline = True
             logger.warning(
                 f"[AUDITORIA TIMEOUT] Tiempo de espera agotado ({settings.REPORTES_TIMEOUT_SECONDS}s) "
@@ -109,6 +131,8 @@ class ReportesApiClient(BaseApiClient):
             )
             return False
         except httpx.RequestError as exc:
+            import time
+            ReportesApiClient._ultimo_fallo_timestamp = time.time()
             self.servidor_offline = True
             logger.warning(
                 f"[AUDITORIA RED OFFLINE] No se pudo conectar con COSMOL-Reportes en {url_destino} ({exc}). "
