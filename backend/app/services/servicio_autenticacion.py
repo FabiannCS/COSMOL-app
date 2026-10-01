@@ -39,6 +39,16 @@ logger = logging.getLogger(__name__)
 USUARIOS_REGISTRADOS_DB: Dict[str, Dict[str, Any]] = {}
 
 
+def normalizar_telefono(t: str) -> str:
+    """Normaliza números bolivianos a formato estándar internacional (+591XXXXXXXX)."""
+    clean = str(t or "").strip().replace(" ", "").replace("-", "")
+    if len(clean) == 8 and clean.isdigit():
+        return f"+591{clean}"
+    if clean.startswith("+"):
+        return clean
+    return f"+{clean}" if clean else ""
+
+
 class ServicioAutenticacion:
     """
     Controlador de negocio para el flujo completo de autenticación y seguridad.
@@ -62,25 +72,21 @@ class ServicioAutenticacion:
         """
         Valida que el socio exista en el sistema comercial oficial de COSMOL
         mediante su Código de Socio y Carnet de Identidad (NROCIONIT).
+        Si el socio ya cuenta con PIN registrado, esta acción habilita la
+        recuperación/desbloqueo de su cuenta mediante OTP.
         """
         cod_socio = cod_socio.strip()
         ci = ci.strip()
 
-        # 1. Verificar si el usuario ya completó el onboarding previamente en BD o memoria
+        # 1. Comprobar si es un primer ingreso o una recuperación/desbloqueo de PIN
+        es_recuperacion = False
         if self.db:
             stmt = select(Suministro).where(Suministro.cod_socio == cod_socio)
             res = await self.db.execute(stmt)
-            suministro_existente = res.scalars().first()
-            if suministro_existente:
-                raise BadRequestException(
-                    message="Este código de socio ya tiene una cuenta activa y un PIN configurado. Inicie sesión directamente.",
-                    error_code="ACCOUNT_ALREADY_EXISTS"
-                )
+            if res.scalars().first():
+                es_recuperacion = True
         elif cod_socio in USUARIOS_REGISTRADOS_DB:
-            raise BadRequestException(
-                message="Este código de socio ya tiene una cuenta activa y un PIN configurado. Inicie sesión directamente.",
-                error_code="ACCOUNT_ALREADY_EXISTS"
-            )
+            es_recuperacion = True
 
         # 2. Validar contra el sistema comercial oficial de COSMOL (vía POST /socios/validar)
         datos_socio = await self.cosmol_client.validar_credenciales_socio(cod_socio, ci)
@@ -93,11 +99,17 @@ class ServicioAutenticacion:
 
         nombre_oficial = str(datos_socio.get("NOMBRE") or datos_socio.get("nombre") or "Socio COSMOL").strip()
 
-        logger.info(f"Socio verificado exitosamente en COSMOL: {cod_socio} ({nombre_oficial})")
+        logger.info(f"Socio verificado exitosamente en COSMOL: {cod_socio} ({nombre_oficial}) [es_recuperacion={es_recuperacion}]")
+        mensaje = (
+            "Socio verificado correctamente. Proceda a confirmar su celular para restablecer su PIN y desbloquear su cuenta."
+            if es_recuperacion else
+            "Socio verificado correctamente. Proceda a asociar su teléfono celular."
+        )
         return {
             "cod_socio": cod_socio,
             "nombre_titular": nombre_oficial,
-            "mensaje": "Socio verificado correctamente. Proceda a asociar su teléfono celular."
+            "es_recuperacion": es_recuperacion,
+            "mensaje": mensaje
         }
 
     # --------------------------------------------------------------------------
@@ -108,6 +120,8 @@ class ServicioAutenticacion:
         Genera un código OTP de 6 dígitos con TTL de 5 minutos, lo persiste en Redis
         y despacha la notificación a través de WhatsApp Cloud API o SMS.
         """
+        telefono = normalizar_telefono(telefono)
+
         # Rate limit preventivo: máximo 3 solicitudes por teléfono en 1 hora
         rate_key = f"rate_otp:{telefono}"
         solicitudes = await self.redis.incr(rate_key)
@@ -158,6 +172,7 @@ class ServicioAutenticacion:
         Valida el código de 6 dígitos contra Redis. Al coincidir, invalida el OTP (un solo uso)
         y emite un token de paso temporal para autorizar la creación del PIN.
         """
+        telefono = normalizar_telefono(telefono)
         otp_key = f"otp:{telefono}"
         valor_almacenado = await self.redis.get(otp_key)
 
@@ -213,6 +228,7 @@ class ServicioAutenticacion:
         """
         Registra el nuevo PIN hasheado (bcrypt). A partir de este momento,
         la CI queda invalidada como contraseña para siempre.
+        Desbloquea inmediatamente la cuenta si estaba bloqueada por intentos fallidos.
         """
         token_key = f"token_otp_valido:{token_otp_valido}"
         valor_token = await self.redis.get(token_key)
@@ -224,20 +240,15 @@ class ServicioAutenticacion:
             )
 
         tel_almacenado, cod_socio = valor_token.split(":")
+        telefono = normalizar_telefono(telefono)
+        tel_almacenado = normalizar_telefono(tel_almacenado)
 
-        def _norm_tel(t: str) -> str:
-            clean = t.strip().replace(" ", "").replace("-", "")
-            if len(clean) == 8 and clean.isdigit():
-                return f"+591{clean}"
-            return clean if clean.startswith("+") else f"+{clean}"
-
-        if _norm_tel(tel_almacenado) != _norm_tel(telefono):
+        if tel_almacenado != telefono:
             logger.warning(f"Discrepancia de teléfono en establecer-pin: almacenado='{tel_almacenado}' vs enviado='{telefono}'")
             raise UnauthorizedException(
                 message="El teléfono no corresponde al token de validación.",
                 error_code="PHONE_MISMATCH"
             )
-        telefono = _norm_tel(telefono)
 
         # Generar hash seguro con bcrypt
         password_hash = get_password_hash(nuevo_pin)
@@ -308,6 +319,10 @@ class ServicioAutenticacion:
         # Consumir y borrar el token temporal
         await self.redis.delete(token_key)
 
+        # Desbloquear inmediatamente la cuenta en Redis si estaba bloqueada
+        await self.redis.delete(f"bloqueado:{cod_socio}")
+        await self.redis.delete(f"intentos_fallidos:{cod_socio}")
+
         logger.info(f"PIN establecido y cuenta asegurada para socio '{cod_socio}'. CI invalidada como credencial.")
         return {
             "mensaje": "¡Registro completado exitosamente! Ahora puede iniciar sesión con su Código de Socio y su PIN personal.",
@@ -352,7 +367,12 @@ class ServicioAutenticacion:
         suministros_lista: List[SuministroResponse] = []
 
         if self.db:
-            stmt_sum = select(Suministro).where(Suministro.cod_socio == cod_socio)
+            # Priorizar siempre el suministro principal (Titular) para resolver colisiones multicuenta
+            stmt_sum = (
+                select(Suministro)
+                .where(Suministro.cod_socio == cod_socio)
+                .order_by(Suministro.es_suministro_principal.desc(), Suministro.created_at.asc())
+            )
             res_sum = await self.db.execute(stmt_sum)
             suministro_db = res_sum.scalars().first()
 
@@ -563,3 +583,16 @@ class ServicioAutenticacion:
             token_type="bearer",
             suministros=suministros_lista
         )
+
+    # --------------------------------------------------------------------------
+    # CIERRE DE SESIÓN LIMPIO
+    # --------------------------------------------------------------------------
+    async def cerrar_sesion(self, user_id: str, device_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Revoca la sesión activa en Redis asociada al usuario y hardware.
+        """
+        sesion_key = f"sesion_activa:{user_id}"
+        await self.redis.delete(sesion_key)
+        logger.info(f"Sesión cerrada en servidor para usuario {user_id} (dispositivo: {device_id})")
+        return {"mensaje": "Sesión cerrada exitosamente en el servidor.", "status": "ok"}
+

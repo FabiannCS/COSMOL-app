@@ -119,39 +119,94 @@ class ServicioDocumentos:
         res_docs = await self.db.execute(stmt_docs)
         documentos_db = list(res_docs.scalars().all())
 
-        # 3. Auto-sincronización on-demand si no hay documentos registrados aún
+        # 3. Auto-sincronización ligera de metadatos si no hay documentos registrados aún
         if not documentos_db:
             try:
-                datos_socio = await self.cosmol.obtener_datos_socio(cod_socio) or {}
+                import uuid as py_uuid
                 facturas_pendientes = await self.cosmol.obtener_deudas_socio(cod_socio) or []
 
                 for fac in facturas_pendientes:
-                    await self.storage.obtener_o_generar_pdf_aviso_cobranza(
-                        cod_socio=cod_socio,
-                        datos_deuda=fac,
-                        datos_socio=datos_socio
-                    )
-                    if rol_acceso == "TITULAR":
-                        await self.storage.obtener_o_generar_pdf_factura(
+                    try:
+                        anio = int(fac.get("ANIO") or fac.get("anio") or 2026)
+                        mes = int(fac.get("NMES") or fac.get("mes") or 1)
+                        periodo = f"{mes:02d}/{anio}"
+                        monto_bs = round(float(fac.get("MONTOTOTAL") or fac.get("monto_bs") or 0.0), 2)
+                        nro_factura = str(fac.get("NROFACTURA") or "").strip() or None
+                        nro_facip = str(fac.get("NROFACIP") or "").strip() or None
+                        cod_autorizacion = str(fac.get("CODAUTORIZACION") or "").strip() or None
+                        fecha_emi = self.storage._determinar_fecha_emision(anio, mes, fac)
+                        fecha_venc = self.storage._determinar_fecha_vencimiento(anio, mes, fac)
+                        identificador = nro_factura or nro_facip or py_uuid.uuid4().hex[:8]
+
+                        # 1. Metadato de Aviso de Cobranza
+                        s3_key_aviso = self.storage.construir_s3_key(cod_socio, "AVISO_COBRANZA", periodo, identificador)
+                        doc_aviso = Documento(
                             cod_socio=cod_socio,
-                            datos_factura=fac,
-                            datos_socio=datos_socio
+                            tipo_documento="AVISO_COBRANZA",
+                            nro_factura=nro_factura,
+                            nro_facip=nro_facip,
+                            cod_autorizacion=cod_autorizacion,
+                            periodo=periodo,
+                            anio=anio,
+                            mes=mes,
+                            monto_bs=monto_bs,
+                            s3_key=s3_key_aviso,
+                            fecha_emision=fecha_emi,
+                            fecha_vencimiento=fecha_venc,
+                            estado_pago="PENDIENTE",
+                            suministro_id=suministro.id
                         )
+                        self.db.add(doc_aviso)
+
+                        # 2. Metadato de Factura (solo si es titular)
+                        if rol_acceso == "TITULAR":
+                            s3_key_fac = self.storage.construir_s3_key(cod_socio, "FACTURA", periodo, identificador)
+                            doc_fac = Documento(
+                                cod_socio=cod_socio,
+                                tipo_documento="FACTURA",
+                                nro_factura=nro_factura,
+                                nro_facip=nro_facip,
+                                cod_autorizacion=cod_autorizacion,
+                                periodo=periodo,
+                                anio=anio,
+                                mes=mes,
+                                monto_bs=monto_bs,
+                                s3_key=s3_key_fac,
+                                fecha_emision=fecha_emi,
+                                fecha_vencimiento=fecha_venc,
+                                estado_pago="PENDIENTE",
+                                suministro_id=suministro.id
+                            )
+                            self.db.add(doc_fac)
+                    except Exception as err_item:
+                        logger.warning(f"[DOCUMENTOS] Error al normalizar metadato de factura: {err_item}")
 
                 if len(facturas_pendientes) >= 2 and rol_acceso == "TITULAR":
-                    await self.storage.obtener_o_generar_pdf_aviso_corte(
+                    s3_key_corte = self.storage.construir_s3_key(cod_socio, "AVISO_CORTE", "MORA", py_uuid.uuid4().hex[:8])
+                    doc_corte = Documento(
                         cod_socio=cod_socio,
-                        datos_socio=datos_socio,
-                        facturas_pendientes=facturas_pendientes
+                        tipo_documento="AVISO_CORTE",
+                        periodo="AVISO DE CORTE",
+                        anio=date.today().year,
+                        mes=date.today().month,
+                        monto_bs=round(sum(float(f.get("MONTOTOTAL", 0.0)) for f in facturas_pendientes), 2),
+                        s3_key=s3_key_corte,
+                        fecha_emision=date.today(),
+                        fecha_vencimiento=None,
+                        estado_pago="PENDIENTE",
+                        suministro_id=suministro.id
                     )
+                    self.db.add(doc_corte)
 
-                # Re-consultar documentos tras sincronización
+                await self.db.commit()
+
+                # Re-consultar documentos tras sincronización rápida
                 res_sync = await self.db.execute(stmt_docs)
                 documentos_db = list(res_sync.scalars().all())
             except Exception as exc:
-                logger.warning(f"[DOCUMENTOS] Auto-sincronización con sistema comercial no ejecutada: {exc}")
+                logger.warning(f"[DOCUMENTOS] Auto-sincronización ligera no ejecutada: {exc}")
 
-        # 4. Auto-remediación de fechas históricas registradas previamente con fallback a today()
+        # 4. Auto-remediación rápida de fechas en BD (sin regeneración síncrona de archivos)
         modificado = False
         for doc in documentos_db:
             if doc.anio and doc.mes:
@@ -160,10 +215,6 @@ class ServicioDocumentos:
                 if doc.fecha_emision != emision_esperada:
                     doc.fecha_emision = emision_esperada
                     modificado = True
-                    try:
-                        await self.storage.regenerar_pdf_desde_documento(doc)
-                    except Exception as exc:
-                        logger.warning(f"[DOCUMENTOS] No se pudo regenerar PDF en auto-remediación: {exc}")
                 if doc.fecha_vencimiento is None or doc.fecha_vencimiento != vencimiento_esperado:
                     doc.fecha_vencimiento = vencimiento_esperado
                     modificado = True

@@ -169,6 +169,22 @@ async def renovar_token(
 
 
 @router.post(
+    "/logout",
+    status_code=status.HTTP_200_OK,
+    summary="Cerrar sesión activa",
+    description="Revoca la sesión del usuario en Redis y limpia el registro de hardware activo."
+)
+async def logout(
+    token_payload: Dict[str, Any] = Depends(get_token_payload),
+    redis: Redis = Depends(get_redis)
+) -> Dict[str, Any]:
+    user_id = str(token_payload.get("sub", ""))
+    device_id = token_payload.get("device_id")
+    servicio = ServicioAutenticacion(redis)
+    return await servicio.cerrar_sesion(user_id=user_id, device_id=device_id)
+
+
+@router.post(
     "/suministros/vincular",
     response_model=SuministroResponse,
     status_code=status.HTTP_201_CREATED,
@@ -181,11 +197,13 @@ async def vincular_suministro(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> SuministroResponse:
-    cod_socio_principal = token_payload.get("cod_socio", "")
+    cod_socio_principal = str(token_payload.get("cod_socio", ""))
+    usuario_id = str(token_payload.get("sub", ""))
     servicio = ServicioSuministros(redis, db=db)
     return await servicio.vincular_suministro(
         cod_socio_principal=cod_socio_principal,
-        datos=datos
+        datos=datos,
+        usuario_id_token=usuario_id
     )
 
 
@@ -201,6 +219,11 @@ async def listar_suministros(
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> List[SuministroResponse]:
-    cod_socio_principal = token_payload.get("cod_socio", "")
+    cod_socio_principal = str(token_payload.get("cod_socio", ""))
+    usuario_id = str(token_payload.get("sub", ""))
     servicio = ServicioSuministros(redis, db=db)
-    return await servicio.listar_suministros(cod_socio_principal=cod_socio_principal)
+    return await servicio.listar_suministros(
+        cod_socio_principal=cod_socio_principal,
+        usuario_id_token=usuario_id
+    )
+

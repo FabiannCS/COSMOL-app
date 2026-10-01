@@ -39,7 +39,8 @@ class ServicioSuministros:
     async def vincular_suministro(
         self,
         cod_socio_principal: str,
-        datos: VincularSuministroRequest
+        datos: VincularSuministroRequest,
+        usuario_id_token: Optional[str] = None
     ) -> SuministroResponse:
         """
         Vincula un nuevo código de suministro a la cuenta del socio autenticado.
@@ -70,23 +71,19 @@ class ServicioSuministros:
         # 3. Registrar en PostgreSQL si hay sesión activa
         suministro_id = uuid.uuid4()
         if self.db:
-            stmt = select(Suministro).where(Suministro.cod_socio == cod_socio_principal)
-            res = await self.db.execute(stmt)
-            sum_principal = res.scalars().first()
             usuario_id = None
-
-            if sum_principal:
-                usuario_id = sum_principal.usuario_id
-            else:
+            if usuario_id_token:
                 try:
-                    u_uuid = uuid.UUID(cod_socio_principal)
-                    stmt_u = select(Usuario).where(Usuario.id == u_uuid)
-                    res_u = await self.db.execute(stmt_u)
-                    user = res_u.scalars().first()
-                    if user:
-                        usuario_id = user.id
+                    usuario_id = uuid.UUID(str(usuario_id_token))
                 except Exception:
                     usuario_id = None
+
+            if not usuario_id and cod_socio_principal:
+                stmt = select(Suministro).where(Suministro.cod_socio == cod_socio_principal)
+                res = await self.db.execute(stmt)
+                sum_principal = res.scalars().first()
+                if sum_principal:
+                    usuario_id = sum_principal.usuario_id
 
             if usuario_id:
                 stmt_dup = select(Suministro).where(
@@ -139,28 +136,28 @@ class ServicioSuministros:
             es_suministro_principal=False
         )
 
-    async def listar_suministros(self, cod_socio_principal: str) -> List[SuministroResponse]:
+    async def listar_suministros(
+        self,
+        cod_socio_principal: str,
+        usuario_id_token: Optional[str] = None
+    ) -> List[SuministroResponse]:
         """
         Retorna todos los contratos vinculados al socio actual.
         """
         if self.db:
-            stmt = select(Suministro).where(Suministro.cod_socio == cod_socio_principal)
-            res = await self.db.execute(stmt)
-            sum_principal = res.scalars().first()
             usuario_id = None
-
-            if sum_principal:
-                usuario_id = sum_principal.usuario_id
-            else:
+            if usuario_id_token:
                 try:
-                    u_uuid = uuid.UUID(cod_socio_principal)
-                    stmt_u = select(Usuario).where(Usuario.id == u_uuid)
-                    res_u = await self.db.execute(stmt_u)
-                    user = res_u.scalars().first()
-                    if user:
-                        usuario_id = user.id
+                    usuario_id = uuid.UUID(str(usuario_id_token))
                 except Exception:
                     usuario_id = None
+
+            if not usuario_id and cod_socio_principal:
+                stmt = select(Suministro).where(Suministro.cod_socio == cod_socio_principal)
+                res = await self.db.execute(stmt)
+                sum_principal = res.scalars().first()
+                if sum_principal:
+                    usuario_id = sum_principal.usuario_id
 
             if usuario_id:
                 stmt_all = (

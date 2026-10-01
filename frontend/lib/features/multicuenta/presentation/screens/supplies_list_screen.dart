@@ -71,7 +71,7 @@ class SuppliesListScreen extends ConsumerWidget {
                     ref.read(multicuentaProvider.notifier).cargarSuministros(),
                 child: ListView.separated(
                   itemCount: state.suministros.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 14),
+                  separatorBuilder: (_, __) => const SizedBox(height: 14),
                   itemBuilder: (context, index) {
                     final item = state.suministros[index];
                     final isSelected =

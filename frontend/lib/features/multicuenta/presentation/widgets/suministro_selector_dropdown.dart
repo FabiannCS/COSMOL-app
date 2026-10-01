@@ -196,7 +196,7 @@ class _SuministrosBottomSheet extends ConsumerWidget {
               child: ListView.separated(
                 shrinkWrap: true,
                 itemCount: state.suministros.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 10),
+                separatorBuilder: (_, __) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final item = state.suministros[index];
                   final isSelected = item.codSocio == state.activeSuministro?.codSocio;

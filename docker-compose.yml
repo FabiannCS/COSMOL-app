@@ -16,6 +16,10 @@ services:
       - .env
     environment:
       - PYTHONUNBUFFERED=1
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: >
+      sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     depends_on:
       db-postgres:
         condition: service_healthy
@@ -37,6 +41,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-cosmol_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cosmol_user} -d ${POSTGRES_DB:-cosmol_db}"]
       interval: 5s

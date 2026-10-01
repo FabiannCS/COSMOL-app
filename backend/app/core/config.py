@@ -20,8 +20,18 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["*"]
+    # CORS (Orígenes autorizados conformes con estándar W3C para allow_credentials=True)
+    BACKEND_CORS_ORIGINS: List[str] = [
+        "https://chatbot.cosmol.com.bo",
+        "https://chatbot.cosmol.com.bo:8081",
+        "https://chatbot.cosmol.com.bo:8083",
+        "http://localhost",
+        "http://localhost:8000",
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://127.0.0.1",
+        "http://127.0.0.1:8000",
+    ]
 
     # Base de Datos (PostgreSQL)
     POSTGRES_SERVER: str = "db-postgres"
@@ -60,7 +70,7 @@ class Settings(BaseSettings):
 
     # Integración con Sistema Comercial Legado de COSMOL
     COSMOL_LEGACY_URL: str = "http://api.cosmol.com.bo/api-consultas"
-    COSMOL_LEGACY_TIMEOUT_SECONDS: float = 4.0
+    COSMOL_LEGACY_TIMEOUT_SECONDS: float = 8.0
     MOCK_COSMOL_LEGACY: bool = False
     MOCK_COSMOL_CONSUMO: bool = False
     DEBT_CACHE_TTL_SECONDS: int = 600  # 10 minutos (600 segundos)
