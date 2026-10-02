@@ -122,61 +122,52 @@ class SuppliesListScreen extends ConsumerWidget {
     }).join(' ');
   }
 
+  bool _hasCustomAlias(String alias, String codSocio) {
+    final clean = alias.trim();
+    if (clean.isEmpty) return false;
+    final cleanLower = clean.toLowerCase();
+
+    if (clean == 'Socio: $codSocio' ||
+        clean == 'Socio $codSocio' ||
+        clean == 'Suministro $codSocio' ||
+        clean == 'Suministro: $codSocio' ||
+        clean == 'Mi Casa' ||
+        clean == 'Mi casa' ||
+        clean == 'Mi Suministro' ||
+        clean == 'Casa Principal' ||
+        clean == 'Socio de Titular' ||
+        clean == 'Socio de Titularidad' ||
+        clean == 'Suministro Consulta' ||
+        clean == 'Socio de Consulta' ||
+        clean == 'Socio de Consulta y Pago' ||
+        clean == 'Cuenta de Consulta' ||
+        cleanLower.startsWith('suministro consulta') ||
+        cleanLower.startsWith('socio de consulta') ||
+        cleanLower.startsWith('socio: ') ||
+        cleanLower.startsWith('suministro: ')) {
+      return false;
+    }
+    return true;
+  }
+
   String _getAliasDisplay(SuministroModel item) {
     final isTitular = item.rol.toUpperCase() == 'TITULAR';
 
     // Para modo consulta (CONSULTA_PAGO / Inquilino):
-    // Mostrar la inicial de cada palabra y lo demás con ****** para evitar redundancia y proteger datos
+    // Mostrar la inicial de cada palabra y asteriscos para proteger datos
     if (!isTitular) {
       if (item.nombre != null && item.nombre!.trim().isNotEmpty) {
         return _enmascararNombre(item.nombre!);
       }
-
-      final alias = item.alias.trim();
-      final aliasLower = alias.toLowerCase();
-
-      if (alias.isEmpty ||
-          alias == 'Mi Casa' ||
-          alias == 'Mi casa' ||
-          alias == 'Mi Suministro' ||
-          alias == 'Casa Principal' ||
-          alias == 'Socio de Titular' ||
-          alias == 'Socio de Titularidad' ||
-          alias == 'Suministro Consulta' ||
-          alias == 'Socio de Consulta' ||
-          alias == 'Socio de Consulta y Pago' ||
-          alias == 'Cuenta de Consulta' ||
-          aliasLower.contains('suministro consulta') ||
-          aliasLower.contains('socio de consulta')) {
-        return 'Socio: ${item.codSocio}';
-      }
-      return alias;
+      return 'Socio: ${item.codSocio}';
     }
 
-    // Para modo TITULAR sí se puede mostrar el nombre completo o el alias
+    // Para modo TITULAR: mostrar el nombre completo del titular
     if (item.nombre != null && item.nombre!.trim().isNotEmpty) {
       return item.nombre!.trim();
     }
 
-    final alias = item.alias.trim();
-
-    if (alias.isEmpty ||
-        alias == 'Mi Casa' ||
-        alias == 'Mi casa' ||
-        alias == 'Mi Suministro' ||
-        alias == 'Casa Principal' ||
-        alias == 'Socio de Titular' ||
-        alias == 'Socio de Titularidad' ||
-        alias == 'Suministro Consulta' ||
-        alias == 'Socio de Consulta' ||
-        alias == 'Socio de Consulta y Pago' ||
-        alias == 'Cuenta de Consulta' ||
-        alias.toLowerCase().contains('suministro consulta') ||
-        alias.toLowerCase().contains('socio de consulta')) {
-      return 'Socio: ${item.codSocio}';
-    }
-
-    return alias;
+    return 'Socio: ${item.codSocio}';
   }
 
   @override
@@ -284,7 +275,34 @@ class SuppliesListScreen extends ConsumerWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          if (_hasCustomAlias(item.alias, item.codSocio)) ...[
+                            const SizedBox(height: 4),
+                            Text.rich(
+                              TextSpan(
+                                style: AppTextStyles.body2.copyWith(
+                                  color: AppColors.primary,
+                                ),
+                                children: [
+                                  const TextSpan(
+                                    text: 'Alias: ',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: item.alias.trim(),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          const SizedBox(height: 6),
                           Row(
                             children: [
                               Text(

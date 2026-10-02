@@ -18,6 +18,34 @@ String _enmascararNombre(String nombreCompleto) {
   }).join(' ');
 }
 
+bool _hasCustomAlias(String alias, String codSocio) {
+  final clean = alias.trim();
+  if (clean.isEmpty) return false;
+  final cleanLower = clean.toLowerCase();
+
+  if (clean == 'Socio: $codSocio' ||
+      clean == 'Socio $codSocio' ||
+      clean == 'Suministro $codSocio' ||
+      clean == 'Suministro: $codSocio' ||
+      clean == 'Mi Casa' ||
+      clean == 'Mi casa' ||
+      clean == 'Mi Suministro' ||
+      clean == 'Casa Principal' ||
+      clean == 'Socio de Titular' ||
+      clean == 'Socio de Titularidad' ||
+      clean == 'Suministro Consulta' ||
+      clean == 'Socio de Consulta' ||
+      clean == 'Socio de Consulta y Pago' ||
+      clean == 'Cuenta de Consulta' ||
+      cleanLower.startsWith('suministro consulta') ||
+      cleanLower.startsWith('socio de consulta') ||
+      cleanLower.startsWith('socio: ') ||
+      cleanLower.startsWith('suministro: ')) {
+    return false;
+  }
+  return true;
+}
+
 String _formatAlias(String alias, String codSocio, {String? nombre, bool isTitular = true}) {
   // En modo TITULAR: mostrar el nombre completo si existe
   if (isTitular) {
@@ -31,26 +59,7 @@ String _formatAlias(String alias, String codSocio, {String? nombre, bool isTitul
     }
   }
 
-  final cleanAlias = alias.trim();
-  final aliasLower = cleanAlias.toLowerCase();
-
-  if (cleanAlias.isEmpty ||
-      cleanAlias == 'Mi Casa' ||
-      cleanAlias == 'Mi casa' ||
-      cleanAlias == 'Mi Suministro' ||
-      cleanAlias == 'Casa Principal' ||
-      cleanAlias == 'Socio de Titular' ||
-      cleanAlias == 'Socio de Titularidad' ||
-      cleanAlias == 'Suministro Consulta' ||
-      cleanAlias == 'Socio de Consulta' ||
-      cleanAlias == 'Socio de Consulta y Pago' ||
-      cleanAlias == 'Cuenta de Consulta' ||
-      aliasLower.contains('suministro consulta') ||
-      aliasLower.contains('socio de consulta')) {
-    return 'Socio: $codSocio';
-  }
-
-  return cleanAlias;
+  return 'Socio: $codSocio';
 }
 
 class SuministroSelectorDropdown extends ConsumerWidget {
@@ -135,6 +144,15 @@ class SuministroSelectorDropdown extends ConsumerWidget {
                     _buildRolBadge(active.rol),
                   ],
                 ),
+                if (_hasCustomAlias(active.alias, active.codSocio)) ...[
+                  Text(
+                    active.alias.trim(),
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
                 Text(
                   'Cód: ${active.codSocio}',
                   style: AppTextStyles.caption.copyWith(
@@ -303,6 +321,16 @@ class _SuministrosBottomSheet extends ConsumerWidget {
                                     ),
                                   ],
                                 ),
+                                if (_hasCustomAlias(item.alias, item.codSocio)) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    item.alias.trim(),
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
                                 const SizedBox(height: 2),
                                 Text(
                                   'Código de Socio: ${item.codSocio}',
