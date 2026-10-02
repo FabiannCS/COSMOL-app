@@ -11,6 +11,14 @@ from app.schemas.suministro import SuministroResponse, VincularSuministroRequest
 from app.schemas.usuario import (
     CrearPinPasswordRequest,
     LoginRequest,
+    RecuperarCambiarPinRequest,
+    RecuperarCambiarPinResponse,
+    RecuperarSolicitarOtpRequest,
+    RecuperarSolicitarOtpResponse,
+    RecuperarValidarTitularRequest,
+    RecuperarValidarTitularResponse,
+    RecuperarVerificarOtpRequest,
+    RecuperarVerificarOtpResponse,
     RenovarTokenRequest,
     SolicitarOtpRequest,
     TokenResponse,
@@ -226,4 +234,102 @@ async def listar_suministros(
         cod_socio_principal=cod_socio_principal,
         usuario_id_token=usuario_id
     )
+
+
+# ------------------------------------------------------------------------------
+# ENDPOINTS: RECUPERACIÓN SEGURA DE CONTRASEÑA / PIN (ZERO-TRUST PHONE BINDING)
+# ------------------------------------------------------------------------------
+
+@router.post(
+    "/recuperar-password/validar-titular",
+    response_model=RecuperarValidarTitularResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Paso 1 Recuperación: Validar Titularidad",
+    description="Valida la coincidencia del código de socio y CI, y recupera el celular registrado en BD."
+)
+async def recuperar_validar_titular(
+    datos: RecuperarValidarTitularRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> RecuperarValidarTitularResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.validar_titular_recuperacion(
+        cod_socio=datos.cod_socio,
+        ci=datos.ci
+    )
+    return RecuperarValidarTitularResponse(**res)
+
+
+@router.post(
+    "/recuperar-password/solicitar-otp",
+    response_model=RecuperarSolicitarOtpResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Paso 2 Recuperación: Solicitar OTP a número registrado",
+    description="Genera y envía un código OTP de 6 dígitos al celular previamente registrado del socio."
+)
+async def recuperar_solicitar_otp(
+    datos: RecuperarSolicitarOtpRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> RecuperarSolicitarOtpResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.solicitar_otp_recuperacion(
+        session_id=datos.session_id,
+        canal=datos.canal
+    )
+    return RecuperarSolicitarOtpResponse(**res)
+
+
+@router.post(
+    "/recuperar-password/verificar-otp",
+    response_model=RecuperarVerificarOtpResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Paso 3 Recuperación: Verificar OTP de 6 dígitos",
+    description="Valida el código OTP y emite un token de recuperación criptográfico temporal (TTL 10 min)."
+)
+async def recuperar_verificar_otp(
+    datos: RecuperarVerificarOtpRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> RecuperarVerificarOtpResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.verificar_otp_recuperacion(
+        session_id=datos.session_id,
+        codigo=datos.codigo
+    )
+    return RecuperarVerificarOtpResponse(**res)
+
+
+@router.post(
+    "/recuperar-password/cambiar-pin",
+    response_model=RecuperarCambiarPinResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Paso 4 Recuperación: Restablecer PIN y desbloquear cuenta",
+    description="Actualiza el PIN en bcrypt, limpia bloqueos e invalida sesiones anteriores."
+)
+async def recuperar_cambiar_pin(
+    datos: RecuperarCambiarPinRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> RecuperarCambiarPinResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.cambiar_pin_recuperacion(
+        token_recuperacion=datos.token_recuperacion,
+        nuevo_pin=datos.nuevo_pin
+    )
+    cod_socio_val = res.get("cod_socio", 0)
+    try:
+        cod_socio_int = int(str(cod_socio_val).strip())
+    except (ValueError, TypeError):
+        cod_socio_int = 0
+    background_tasks.add_task(
+        despachar_auditoria_reportes,
+        codigo_socio=cod_socio_int,
+        nombres=f"SOCIO {cod_socio_int}",
+        id_tipo=1,
+        tipo_consulta="Recuperación de Contraseña / PIN",
+    )
+    return RecuperarCambiarPinResponse(**res)
+
 

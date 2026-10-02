@@ -184,3 +184,111 @@ class RenovarTokenRequest(BaseModel):
     """
     refresh_token: str = Field(..., description="Token de refresco vigente.")
     device_id: str = Field(..., description="Device ID para verificar que la sesión no fue tomada por otro equipo.")
+
+
+# ------------------------------------------------------------------------------
+# ESQUEMAS PARA RECUPERACIÓN SEGURA DE CONTRASEÑA / PIN (ZERO-TRUST)
+# ------------------------------------------------------------------------------
+
+class RecuperarValidarTitularRequest(BaseModel):
+    """
+    Paso 1 Recuperación: El socio ingresa su Código de Socio y Carnet de Identidad.
+    El backend valida la titularidad y busca en BD el teléfono previamente registrado.
+    """
+    cod_socio: str = Field(..., min_length=3, max_length=20, description="Código de socio oficial.")
+    ci: str = Field(..., min_length=4, max_length=20, description="Carnet de Identidad del titular.")
+
+    @field_validator("cod_socio", "ci")
+    @classmethod
+    def limpiar_espacios(cls, v: str) -> str:
+        return v.strip()
+
+
+class RecuperarValidarTitularResponse(BaseModel):
+    """
+    Respuesta exitosa del Paso 1: Retorna el session_id temporal y el teléfono enmascarado.
+    """
+    session_id: str = Field(..., description="Identificador único de sesión de recuperación.")
+    cod_socio: str = Field(..., description="Código de socio validado.")
+    nombre_titular: str = Field(..., description="Nombre oficial del titular registrado.")
+    telefono_enmascarado: str = Field(..., description="Número celular enmascarado (+591 7*** **384).")
+    mensaje: str = Field(..., description="Instrucción para el siguiente paso.")
+
+
+class RecuperarSolicitarOtpRequest(BaseModel):
+    """
+    Paso 2 Recuperación: El socio solicita el envío del OTP de 6 dígitos a su número registrado.
+    """
+    session_id: str = Field(..., description="Identificador de sesión obtenido en el Paso 1.")
+    canal: Literal["WHATSAPP", "SMS"] = Field(
+        default="WHATSAPP",
+        description="Canal de entrega: 'WHATSAPP' o 'SMS'."
+    )
+
+    @field_validator("canal", mode="before")
+    @classmethod
+    def normalizar_canal(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip().upper()
+        return v
+
+
+class RecuperarSolicitarOtpResponse(BaseModel):
+    """
+    Respuesta exitosa del Paso 2: Confirma el despacho del código de seguridad.
+    """
+    mensaje: str = Field(..., description="Mensaje de confirmación del envío.")
+    canal: str = Field(..., description="Canal utilizado para el envío.")
+    telefono_enmascarado: str = Field(..., description="Celular destino enmascarado.")
+    ttl_segundos: int = Field(default=300, description="Tiempo de validez del código OTP (segundos).")
+    debug_codigo_otp: Optional[str] = Field(
+        default=None,
+        description="Código OTP visible únicamente en entorno de desarrollo/pruebas."
+    )
+
+
+class RecuperarVerificarOtpRequest(BaseModel):
+    """
+    Paso 3 Recuperación: El socio ingresa el código OTP recibido de 6 dígitos.
+    """
+    session_id: str = Field(..., description="Identificador de sesión de recuperación.")
+    codigo: str = Field(..., min_length=6, max_length=6, description="Código de 6 dígitos.")
+
+    @field_validator("codigo")
+    @classmethod
+    def limpiar_codigo(cls, v: str) -> str:
+        return v.strip()
+
+
+class RecuperarVerificarOtpResponse(BaseModel):
+    """
+    Respuesta exitosa del Paso 3: Retorna el token de recuperación criptográfico temporal.
+    """
+    mensaje: str = Field(..., description="Mensaje de éxito.")
+    token_recuperacion: str = Field(..., description="Token temporal para autorizar el cambio de PIN.")
+    cod_socio: str = Field(..., description="Código de socio asociado.")
+
+
+class RecuperarCambiarPinRequest(BaseModel):
+    """
+    Paso 4 Recuperación: El socio define su nuevo PIN personal usando el token_recuperacion.
+    """
+    token_recuperacion: str = Field(..., description="Token de autorización temporal emitido en el Paso 3.")
+    nuevo_pin: str = Field(..., min_length=4, max_length=30, description="Nuevo PIN o contraseña personal.")
+
+    @field_validator("nuevo_pin")
+    @classmethod
+    def validar_pin(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 4:
+            raise ValueError("El nuevo PIN debe contener al menos 4 caracteres.")
+        return v
+
+
+class RecuperarCambiarPinResponse(BaseModel):
+    """
+    Respuesta exitosa del Paso 4: Confirma la actualización y desbloqueo de la cuenta.
+    """
+    mensaje: str = Field(..., description="Mensaje de confirmación.")
+    cod_socio: str = Field(..., description="Código de socio actualizado.")
+

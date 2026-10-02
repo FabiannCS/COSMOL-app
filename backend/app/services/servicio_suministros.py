@@ -156,7 +156,10 @@ class ServicioSuministros:
                     usuario_id = None
 
             if not usuario_id and cod_socio_principal:
-                stmt = select(Suministro).where(Suministro.cod_socio == cod_socio_principal)
+                stmt = select(Suministro).where(
+                    Suministro.cod_socio == cod_socio_principal,
+                    Suministro.rol == "TITULAR"
+                )
                 res = await self.db.execute(stmt)
                 sum_principal = res.scalars().first()
                 if sum_principal:

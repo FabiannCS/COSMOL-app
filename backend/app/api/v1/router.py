@@ -27,6 +27,11 @@ api_router.include_router(
     prefix="/autenticacion",
     tags=["Identidad, Onboarding OTP y Multicuenta"]
 )
+api_router.include_router(
+    autenticacion_router,
+    prefix="/auth",
+    tags=["Identidad, Onboarding OTP y Multicuenta"]
+)
 
 # 3. Módulo de Consulta de Deuda y Dashboard (DEV 2)
 api_router.include_router(
