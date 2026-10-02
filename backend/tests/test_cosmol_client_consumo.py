@@ -65,17 +65,18 @@ async def test_obtener_historial_consumo_filtro_meses():
     """
     Verifica que el parámetro 'meses' limite correctamente el rango cronológico retornado.
     """
-    # Solicitar solo 6 meses
+    consumos_12 = await cosmol_client.obtener_historial_consumo("556", meses=12)
+    assert len(consumos_12) == 12
+
+    # Solicitar solo 6 meses: deben ser exactamente los últimos 6
     consumos_6 = await cosmol_client.obtener_historial_consumo("556", meses=6)
     assert len(consumos_6) == 6
-    # Los meses retornados deben ser los últimos 6 (04/2026 a 09/2026)
-    periodos = [c["periodo"] for c in consumos_6]
-    assert periodos == ["04/2026", "05/2026", "06/2026", "07/2026", "08/2026", "09/2026"]
+    assert [c["periodo"] for c in consumos_6] == [c["periodo"] for c in consumos_12[-6:]]
 
-    # Solicitar 3 meses
+    # Solicitar 3 meses: deben ser exactamente los últimos 3
     consumos_3 = await cosmol_client.obtener_historial_consumo("556", meses=3)
     assert len(consumos_3) == 3
-    assert [c["periodo"] for c in consumos_3] == ["07/2026", "08/2026", "09/2026"]
+    assert [c["periodo"] for c in consumos_3] == [c["periodo"] for c in consumos_12[-3:]]
 
 
 def test_normalizador_consumo_legado_informix():

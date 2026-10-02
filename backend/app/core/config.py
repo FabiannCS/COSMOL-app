@@ -1,5 +1,6 @@
 import os
 from typing import List
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +20,21 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validar_secret_key_segura(cls, v: str, info) -> str:
+        valores = info.data
+        entorno = valores.get("ENVIRONMENT", "development").lower()
+        
+        if entorno == "production":
+            claves_inseguras = ["change_in_production", "secret", "cosmol_secret", "123456", "dev_secret"]
+            if any(insegura in v.lower() for insegura in claves_inseguras) or len(v) < 32:
+                raise ValueError(
+                    "CRÍTICO: En producción, 'SECRET_KEY' debe ser una cadena aleatoria segura "
+                    "de al menos 32 caracteres generada criptográficamente (ej: openssl rand -hex 32)."
+                )
+        return v
 
     # CORS (Orígenes autorizados conformes con estándar W3C para allow_credentials=True)
     BACKEND_CORS_ORIGINS: List[str] = [

@@ -41,13 +41,15 @@ async def lifespan(app: FastAPI):
     await close_redis_pool()
 
 
+es_produccion = settings.ENVIRONMENT.lower() == "production"
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
     description="API REST Backend (BFF) para la plataforma de socios de COSMOL R.L.",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json",
+    docs_url=None if es_produccion else "/docs",
+    redoc_url=None if es_produccion else "/redoc",
+    openapi_url=None if es_produccion else "/openapi.json",
     lifespan=lifespan
 )
 
@@ -74,6 +76,6 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 async def root():
     return {
         "message": "Bienvenido a la API de COSMOL R.L.",
-        "docs": "/docs",
+        "docs": None if es_produccion else "/docs",
         "health": f"{settings.API_V1_STR}/health"
     }

@@ -9,7 +9,7 @@ services:
     container_name: cosmol-backend-api
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
     env_file:
@@ -34,7 +34,7 @@ services:
     container_name: cosmol-db-postgres
     restart: unless-stopped
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5435:5432"
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-cosmol_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cosmol_secret_pass}
@@ -55,8 +55,7 @@ services:
     image: redis:7-alpine
     container_name: cosmol-cache-redis
     restart: unless-stopped
-    ports:
-      - "6379:6379"
+    # Puertos no expuestos al host: la comunicación es 100% interna vía red Docker (cache-redis:6379)
     volumes:
       - redis_data:/data
     healthcheck:
@@ -73,8 +72,8 @@ services:
     container_name: cosmol-storage-minio
     restart: unless-stopped
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cosmol_minio_admin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-cosmol_minio_secret_pass}

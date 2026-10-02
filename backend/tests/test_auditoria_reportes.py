@@ -244,6 +244,7 @@ async def test_tarea_despacho_background_exitosa_y_fallida():
          patch.object(settings, "REPORTES_ENABLED", True), \
          patch.object(settings, "REPORTES_API_URL", "http://reportes.cosmol.local"):
 
+        MockClient.CATALOGO_EVENTOS = {1: "Autenticación / Acceso", 2: "Consulta de Deudas"}
         instance = MockClient.return_value
         instance.enviar_payload_directo = AsyncMock(return_value=False)
 
@@ -251,6 +252,7 @@ async def test_tarea_despacho_background_exitosa_y_fallida():
             codigo_socio=1470,
             nombres="SOCIO CAIDO",
             id_tipo=2,
+            tipo_consulta="Consulta de Deudas",
         )
 
         mock_redis.rpush.assert_called_once()
