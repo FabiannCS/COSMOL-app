@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
+import '../../data/models/pago_model.dart';
 import '../../data/models/resumen_deuda_model.dart';
 import '../providers/deuda_provider.dart';
 import '../providers/pagos_provider.dart';
@@ -55,6 +56,64 @@ class BalanceCardWidget extends ConsumerWidget {
         }
       }
     }
+  }
+
+  Widget _buildCanalLogo(CanalPagoModel canal, bool isStore) {
+    final canalId = canal.id.toLowerCase();
+    final canalNombre = canal.nombre.toLowerCase();
+
+    String? assetPath;
+    if (canalId.contains('multipago') || canalNombre.contains('multipago')) {
+      assetPath = 'assets/images/multipago.png';
+    } else if (canalId.contains('paso') || canalNombre.contains('paso')) {
+      assetPath = 'assets/images/pagoalpaso.png';
+    }
+
+    if (assetPath != null) {
+      return Container(
+        width: 52,
+        height: 52,
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: AppColors.pureWhite,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.borderSubtle),
+          boxShadow: const [
+            BoxShadow(
+              color: AppColors.shadowColor,
+              blurRadius: 4,
+              offset: Offset(0, 1),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.asset(
+            assetPath,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => Icon(
+              isStore ? Icons.storefront_rounded : Icons.qr_code_2_rounded,
+              color: const Color(0xFF0288D1),
+              size: 28,
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      width: 52,
+      height: 52,
+      decoration: BoxDecoration(
+        color: const Color(0xFFE3F2FD),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(
+        isStore ? Icons.storefront_rounded : Icons.qr_code_2_rounded,
+        color: const Color(0xFF0288D1),
+        size: 28,
+      ),
+    );
   }
 
   void _showPaymentModal(BuildContext context, WidgetRef ref) {
@@ -267,21 +326,7 @@ class BalanceCardWidget extends ConsumerWidget {
                             ),
                             child: Row(
                               children: [
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFE3F2FD),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Icon(
-                                    isStore
-                                        ? Icons.storefront_rounded
-                                        : Icons.qr_code_2_rounded,
-                                    color: const Color(0xFF0288D1),
-                                    size: 28,
-                                  ),
-                                ),
+                                _buildCanalLogo(canal, isStore),
                                 const SizedBox(width: 14),
                                 Expanded(
                                   child: Column(
