@@ -29,12 +29,20 @@ Todos los endpoints necesarios bajo el prefijo unificado `/api/v1/autenticacion/
 
 ---
 
-### ✅ Tarea F1: Desvinculación Real de Suministros Secundarios (Multicuenta)
-- **Archivo:** `frontend/lib/features/multicuenta/presentation/providers/multicuenta_provider.dart`
-- **Implementación:**
-  1. `MulticuentaNotifier.desvincularSuministro(codSocio)` ejecuta la llamada HTTP `DELETE /api/v1/autenticacion/suministros/{cod_socio}`.
-  2. Si la API responde con éxito, actualiza la lista in-memory y reasigna el suministro principal si el eliminado era el activo.
-  3. Maneja excepciones tipadas `AppException` con rollback seguro en caso de fallo de red.
+### ✅ Tarea F1: Desvinculación Real de Suministros Secundarios y Protección de Socio Principal
+- **Archivos:**
+  - `frontend/lib/features/multicuenta/presentation/providers/multicuenta_provider.dart`
+  - `frontend/lib/features/multicuenta/presentation/screens/supplies_list_screen.dart`
+  - `backend/app/services/servicio_suministros.py`
+- **Implementación y Reglas de Negocio:**
+  1. **Backend:** Se eliminó la validación prematura del token y ahora se comprueba directamente en base de datos el flag `es_suministro_principal`.
+     - Si el suministro es el **principal registrado con el que se creó la cuenta** (`es_suministro_principal == True`): El backend lo protege y rechaza su eliminación con `CANNOT_UNLINK_PRIMARY`.
+     - Si es un **segundo socio añadido posteriormente** (sea de rol `TITULAR` o `CONSULTA_PAGO` con `es_suministro_principal == False`): El backend permite su desvinculación persistente en PostgreSQL.
+  2. **Frontend:**
+     - El botón **"Desvincular"** se muestra visible para **todos los suministros** de la lista (tanto titulares como de consulta).
+     - Al pulsar "Desvincular" en el socio principal registrado (`item.esSuministroPrincipal == true`), se despliega una pestaña/modal informativo explicando que es el suministro principal de registro y no se puede remover por seguridad.
+     - Al pulsar "Desvincular" en cualquier socio añadido posteriormente, solicita confirmación habitual y ejecuta `DELETE /api/v1/autenticacion/suministros/{cod_socio}`.
+  3. Si el socio desvinculado era el que estaba activo en la sesión, reasigna automáticamente el principal y actualiza `StorageService`.
 
 ---
 

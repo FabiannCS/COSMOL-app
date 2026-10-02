@@ -173,17 +173,11 @@ class ServicioSuministros:
         usuario_id_token: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Desvincula un suministro secundario (rol CONSULTA_PAGO o no principal) de la cuenta del usuario.
-        Rechaza la desvinculación si el suministro es el principal o titular de la cuenta.
+        Desvincula un suministro secundario (sea TITULAR adicional o CONSULTA_PAGO) de la cuenta del usuario.
+        Rechaza la desvinculación únicamente si el suministro es el principal con el que se registró la cuenta.
         """
         cod_socio_a_desvincular = str(cod_socio_a_desvincular).strip()
         cod_socio_principal = str(cod_socio_principal).strip()
-
-        if cod_socio_a_desvincular == cod_socio_principal:
-            raise BadRequestException(
-                message="No es posible desvincular el suministro principal de su cuenta.",
-                error_code="CANNOT_UNLINK_PRIMARY"
-            )
 
         desvinculado_exitoso = False
 
@@ -218,7 +212,7 @@ class ServicioSuministros:
 
                 if suministro.es_suministro_principal:
                     raise BadRequestException(
-                        message="No es posible desvincular el suministro principal de su cuenta.",
+                        message="No es posible desvincular el suministro principal registrado con el que se creó su cuenta.",
                         error_code="CANNOT_UNLINK_PRIMARY"
                     )
 
@@ -228,15 +222,22 @@ class ServicioSuministros:
                 logger.info(f"Suministro '{cod_socio_a_desvincular}' desvinculado exitosamente del usuario {usuario_id} en PostgreSQL.")
 
         # Sincronización en memoria
-        usuario_mem = USUARIOS_REGISTRADOS_DB.get(cod_socio_principal)
-        if usuario_mem:
-            suministros_previos = usuario_mem.get("suministros", [])
-            usuario_mem["suministros"] = [
-                s for s in suministros_previos
-                if s.get("cod_socio") != cod_socio_a_desvincular
-            ]
-            if len(usuario_mem["suministros"]) < len(suministros_previos):
-                desvinculado_exitoso = True
+        for cod_key, usuario_mem in USUARIOS_REGISTRADOS_DB.items():
+            if (usuario_id_token and usuario_mem.get("user_id") == str(usuario_id_token)) or cod_key == cod_socio_principal:
+                suministros_previos = usuario_mem.get("suministros", [])
+                sum_target = next((s for s in suministros_previos if s.get("cod_socio") == cod_socio_a_desvincular), None)
+                if sum_target:
+                    if sum_target.get("es_suministro_principal", False) and not self.db:
+                        raise BadRequestException(
+                            message="No es posible desvincular el suministro principal registrado con el que se creó su cuenta.",
+                            error_code="CANNOT_UNLINK_PRIMARY"
+                        )
+                    usuario_mem["suministros"] = [
+                        s for s in suministros_previos
+                        if s.get("cod_socio") != cod_socio_a_desvincular
+                    ]
+                    desvinculado_exitoso = True
+                    break
 
         if not desvinculado_exitoso and not self.db:
             raise NotFoundException(
