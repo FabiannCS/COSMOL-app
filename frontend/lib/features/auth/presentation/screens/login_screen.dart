@@ -60,7 +60,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _openWhatsAppHelp() async {
     final Uri url = Uri.parse(
-      'https://wa.me/59178500000?text=Hola%20COSMOL%20R.L.%2C%20requiero%20asistencia%20con%20mi%20c%C3%B3digo%20de%20socio%20o%20clave',
+      'https://wa.me/59161555507?text=Hola%20COSMOL%20R.L.%2C%20requiero%20asistencia%20con%20mi%20c%C3%B3digo%20de%20socio%20o%20clave',
     );
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
