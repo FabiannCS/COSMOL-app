@@ -36,13 +36,23 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
         ? 'Gestión $firstYear'
         : 'Gestión $firstYear - $lastYear';
 
-    // Calcular el promedio del conjunto
+    // Calcular el promedio del conjunto filtrado (6 o 12 meses)
     final totalVolumen = chronologicItems.fold<double>(0.0, (sum, f) => sum + f.consumoM3);
     final promedio = chronologicItems.isNotEmpty ? (totalVolumen / chronologicItems.length) : 0.0;
 
     // Calcular el índice correspondiente en la lista cronológica
     final activeChronologicalIndex =
         (chronologicItems.length - 1 - widget.selectedIndex).clamp(0, chronologicItems.length - 1);
+
+    // Identificar meses con incremento mayor al 40% respecto al mes inmediatamente anterior
+    final alertIndices = <int>{};
+    for (int i = 1; i < chronologicItems.length; i++) {
+      final prev = chronologicItems[i - 1].consumoM3;
+      final curr = chronologicItems[i].consumoM3;
+      if (prev > 0 && ((curr - prev) / prev) > 0.40) {
+        alertIndices.add(i);
+      }
+    }
 
     return Container(
       width: double.infinity,
@@ -70,7 +80,7 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Evolución de Consumo (m³)',
+                    'Registro de consumo (m³)',
                     style: GoogleFonts.plusJakartaSans(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -108,7 +118,10 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
           const SizedBox(height: 12),
 
           // Leyenda
-          Row(
+          Wrap(
+            spacing: 14,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               _buildLegendItem(
                 color: AppColors.primaryContainer,
@@ -116,13 +129,20 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
                 label: 'Consumo medido',
                 isPrimary: true,
               ),
-              const SizedBox(width: 16),
               _buildLegendItem(
                 color: Colors.blueGrey,
                 isDashed: true,
                 label: 'Promedio (${promedio.toStringAsFixed(1)} m³)',
                 isPrimary: false,
               ),
+              if (alertIndices.isNotEmpty)
+                _buildLegendItem(
+                  color: const Color(0xFFDC2626),
+                  isDashed: false,
+                  label: 'Alerta fuga (>+40%)',
+                  isPrimary: false,
+                  isAlert: true,
+                ),
             ],
           ),
           const SizedBox(height: 14),
@@ -151,6 +171,7 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
                       items: chronologicItems,
                       selectedIndex: activeChronologicalIndex,
                       promedio: promedio,
+                      alertIndices: alertIndices,
                     ),
                   ),
                 );
@@ -167,25 +188,39 @@ class _ConsumoChartWidgetState extends State<ConsumoChartWidget> {
     required bool isDashed,
     required String label,
     required bool isPrimary,
+    bool isAlert = false,
   }) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Container(
-          width: 16,
-          height: 3,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
+        if (isAlert)
+          Container(
+            width: 8,
+            height: 8,
+            margin: const EdgeInsets.only(right: 5),
+            decoration: const BoxDecoration(
+              color: Color(0xFFDC2626),
+              shape: BoxShape.circle,
+            ),
+          )
+        else
+          Container(
+            width: 16,
+            height: 3,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-        ),
-        const SizedBox(width: 6),
+        if (!isAlert) const SizedBox(width: 6),
         Text(
           label,
           style: GoogleFonts.plusJakartaSans(
             fontSize: 11,
-            fontWeight: isPrimary ? FontWeight.w700 : FontWeight.w500,
-            color: isPrimary ? AppColors.primary : AppColors.onSurfaceVariant,
+            fontWeight: isPrimary || isAlert ? FontWeight.w700 : FontWeight.w500,
+            color: isAlert
+                ? const Color(0xFFDC2626)
+                : (isPrimary ? AppColors.primary : AppColors.onSurfaceVariant),
           ),
         ),
       ],
@@ -197,11 +232,13 @@ class _ConsumoChartPainter extends CustomPainter {
   final List<ConsumoPeriodoModel> items;
   final int selectedIndex;
   final double promedio;
+  final Set<int> alertIndices;
 
   _ConsumoChartPainter({
     required this.items,
     required this.selectedIndex,
     required this.promedio,
+    required this.alertIndices,
   });
 
   @override
@@ -266,7 +303,7 @@ class _ConsumoChartPainter extends CustomPainter {
       );
     }
 
-    // Línea horizontal punteada del Promedio
+    // Línea horizontal punteada del Promedio (sobre el período filtrado)
     if (promedio > 0) {
       final normPromY = (promedio - minY) / (maxY - minY);
       final yPromPos = topMargin + (chartHeight * (1.0 - normPromY.clamp(0.0, 1.0)));
@@ -347,7 +384,7 @@ class _ConsumoChartPainter extends CustomPainter {
       canvas.drawPath(mainPath, mainLinePaint);
     }
 
-    // 3. Dibujar puntos de datos principales y etiquetas de meses
+    // 3. Dibujar puntos de datos principales, alertas de fuga y etiquetas de meses
     final textStyleX = GoogleFonts.plusJakartaSans(
       fontSize: 10,
       color: AppColors.onSurfaceVariant,
@@ -370,43 +407,66 @@ class _ConsumoChartPainter extends CustomPainter {
       final pt = currentPoints[i];
       final item = items[i];
       final isSelected = (i == selectedIndex);
+      final isAlert = alertIndices.contains(i);
 
-      // Halo de selección interactiva
+      // Halo de alerta o de selección interactiva
       if (isSelected) {
         canvas.drawCircle(
           pt,
-          10.0,
-          Paint()..color = AppColors.primary.withValues(alpha: 0.18),
+          11.0,
+          Paint()
+            ..color = isAlert
+                ? const Color(0xFFDC2626).withValues(alpha: 0.25)
+                : AppColors.primary.withValues(alpha: 0.18),
+        );
+      } else if (isAlert) {
+        canvas.drawCircle(
+          pt,
+          8.0,
+          Paint()..color = const Color(0xFFDC2626).withValues(alpha: 0.18),
         );
       }
 
-      // Punto
+      // Punto central
+      final pointColor = isAlert
+          ? (isSelected ? const Color(0xFFDC2626) : const Color(0xFFEF4444))
+          : (isSelected ? AppColors.primary : Colors.white);
+
+      final pointBorderColor = isAlert
+          ? const Color(0xFF991B1B)
+          : (isSelected ? Colors.white : AppColors.primary);
+
       canvas.drawCircle(
         pt,
         isSelected ? 5.5 : 4.0,
-        Paint()..color = isSelected ? AppColors.primary : Colors.white,
+        Paint()..color = pointColor,
       );
       canvas.drawCircle(
         pt,
         isSelected ? 5.5 : 4.0,
         Paint()
-          ..color = isSelected ? Colors.white : AppColors.primary
+          ..color = pointBorderColor
           ..style = PaintingStyle.stroke
-          ..strokeWidth = isSelected ? 2.0 : 2.2,
+          ..strokeWidth = isSelected ? 2.2 : 2.0,
       );
 
-      // Etiqueta de valor sobre el punto (solo si hay suficiente espacio o si está seleccionado)
-      final showLabel = numPoints <= 7 || isSelected || (i % 2 == 0);
+      // Etiqueta de valor sobre el punto (con distintivo de alerta si > 40%)
+      final showLabel = numPoints <= 7 || isSelected || isAlert || (i % 2 == 0);
       if (showLabel) {
         final valText = item.consumoM3 == item.consumoM3.roundToDouble()
             ? item.consumoM3.toInt().toString()
             : item.consumoM3.toStringAsFixed(1);
 
+        final labelText = isAlert ? '⚠️ $valText' : valText;
+
         final valSpan = TextSpan(
-          text: valText,
+          text: labelText,
           style: textStyleValue.copyWith(
-            color: isSelected ? AppColors.primary : const Color(0xFF003E6B),
-            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+            color: isAlert
+                ? const Color(0xFFDC2626)
+                : (isSelected ? AppColors.primary : const Color(0xFF003E6B)),
+            fontWeight: isSelected || isAlert ? FontWeight.w900 : FontWeight.w700,
+            fontSize: isAlert ? 8.5 : 9,
           ),
         );
         final valPainter = TextPainter(
@@ -423,7 +483,9 @@ class _ConsumoChartPainter extends CustomPainter {
       // Etiqueta del Mes en el eje X
       final xSpan = TextSpan(
         text: item.mesNombreCorto,
-        style: isSelected ? textStyleSelectedX : textStyleX,
+        style: isSelected
+            ? textStyleSelectedX
+            : (isAlert ? textStyleX.copyWith(color: const Color(0xFFB91C1C), fontWeight: FontWeight.w700) : textStyleX),
       );
       final xPainter = TextPainter(
         text: xSpan,
@@ -471,6 +533,7 @@ class _ConsumoChartPainter extends CustomPainter {
   bool shouldRepaint(covariant _ConsumoChartPainter oldDelegate) {
     return oldDelegate.items != items ||
         oldDelegate.selectedIndex != selectedIndex ||
-        oldDelegate.promedio != promedio;
+        oldDelegate.promedio != promedio ||
+        oldDelegate.alertIndices != alertIndices;
   }
 }

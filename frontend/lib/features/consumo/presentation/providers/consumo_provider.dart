@@ -87,7 +87,21 @@ class ConsumoState {
   /// Consumo del mes más reciente en m³
   double get consumoActual => mesActual?.consumoM3 ?? 0.0;
 
-  /// Promedio de consumo calculado sobre el período activo (6 o 12 meses)
+  /// Mes inmediatamente anterior al mes más reciente (cronológicamente el previo)
+  ConsumoPeriodoModel? get mesAnteriorAlActual {
+    final list = allFacturasDescendente;
+    return list.length > 1 ? list[1] : null;
+  }
+
+  /// Variación porcentual del mes actual respecto al mes anterior
+  double? get variacionVsMesAnterior {
+    final mesAnt = mesAnteriorAlActual;
+    if (mesActual == null || mesAnt == null || mesAnt.consumoM3 <= 0) return null;
+    final varPct = ((consumoActual - mesAnt.consumoM3) / mesAnt.consumoM3) * 100.0;
+    return double.parse(varPct.toStringAsFixed(1));
+  }
+
+  /// Promedio de consumo calculado sobre el período activo seleccionado (6 o 12 meses)
   double get promedioConsumo {
     final list = filteredFacturas;
     if (list.isEmpty) return historial?.estadisticas.promedioM3 ?? 0.0;
@@ -104,6 +118,31 @@ class ConsumoState {
     if (list.isEmpty) return null;
     final index = selectedIndex.clamp(0, list.length - 1);
     return list[index];
+  }
+
+  /// Obtiene el mes anterior cronológico a una factura específica en el historial completo
+  ConsumoPeriodoModel? getMesAnterior(ConsumoPeriodoModel factura) {
+    final list = allFacturasDescendente;
+    final index = list.indexWhere((f) => f.mes == factura.mes && f.anio == factura.anio);
+    if (index != -1 && index + 1 < list.length) {
+      return list[index + 1];
+    }
+    return null;
+  }
+
+  /// Variación porcentual de una factura específica respecto a su mes anterior
+  double? getVariacionVsMesAnterior(ConsumoPeriodoModel factura) {
+    final mesAnt = getMesAnterior(factura);
+    if (mesAnt == null || mesAnt.consumoM3 <= 0) return null;
+    final varPct = ((factura.consumoM3 - mesAnt.consumoM3) / mesAnt.consumoM3) * 100.0;
+    return double.parse(varPct.toStringAsFixed(1));
+  }
+
+  /// Determina si una factura específica tiene un incremento mayor al 40% respecto a su mes anterior
+  bool tieneAlertaFuga(ConsumoPeriodoModel factura) {
+    final mesAnt = getMesAnterior(factura);
+    if (mesAnt == null || mesAnt.consumoM3 <= 0) return false;
+    return ((factura.consumoM3 - mesAnt.consumoM3) / mesAnt.consumoM3) > 0.40;
   }
 
   /// Registro con menor consumo dentro del período (mayor ahorro)
@@ -123,17 +162,29 @@ class ConsumoState {
     return double.parse((totalTarifa / list.length).toStringAsFixed(2));
   }
 
-  /// Indica si el backend detectó consumo atípico o fuga preventiva
-  bool get consumoAtipico =>
-      historial?.estadisticas.consumoAtipico ??
-      (promedioConsumo > 0 && consumoActual >= (promedioConsumo * 1.30));
+  /// Indica si el mes actual tiene alerta de consumo elevado y posible fuga.
+  /// REGLA ESTRICTA: Se activa ÚNICAMENTE cuando el consumo del mes es mayor al 40% en comparación al mes anterior.
+  bool get consumoAtipico {
+    final mesAnt = mesAnteriorAlActual;
+    if (mesActual == null || mesAnt == null || mesAnt.consumoM3 <= 0) return false;
+    return ((consumoActual - mesAnt.consumoM3) / mesAnt.consumoM3) > 0.40;
+  }
 
-  /// Mensaje oficial preventivo de fuga
-  String? get mensajeAlerta =>
-      historial?.estadisticas.mensajeAlerta ??
-      (consumoAtipico
-          ? 'Detectamos un consumo anormalmente alto en el último periodo. Le sugerimos revisar sus instalaciones internas para descartar posibles fugas de agua.'
-          : null);
+  /// Mensaje preventivo oficial cuando se detecta consumo elevado mayor al 40% vs mes anterior
+  String? get mensajeAlerta {
+    if (!consumoAtipico) return null;
+    final mesAnt = mesAnteriorAlActual;
+    final varPct = variacionVsMesAnterior ?? 0.0;
+    final actualStr = consumoActual == consumoActual.roundToDouble()
+        ? '${consumoActual.toInt()}'
+        : consumoActual.toStringAsFixed(1);
+    final antStr = mesAnt != null
+        ? (mesAnt.consumoM3 == mesAnt.consumoM3.roundToDouble()
+            ? '${mesAnt.consumoM3.toInt()}'
+            : mesAnt.consumoM3.toStringAsFixed(1))
+        : '';
+    return 'Detectamos un consumo de $actualStr m³, un +${varPct.toStringAsFixed(1)}% superior al mes anterior ($antStr m³). Le sugerimos revisar sus instalaciones internas para descartar posibles fugas de agua.';
+  }
 
   /// Tendencia de consumo (SUBIENDO, BAJANDO, ESTABLE)
   String get tendencia => historial?.estadisticas.tendencia ?? 'ESTABLE';
@@ -149,9 +200,9 @@ class ConsumoState {
 final consumoProvider =
     StateNotifierProvider<ConsumoNotifier, ConsumoState>((ref) {
   final repository = ref.watch(consumoRepositoryProvider);
-  final multicuentaState = ref.watch(multicuentaProvider);
-  final activeCodSocio =
-      multicuentaState.activeSuministro?.codSocio.trim() ?? '23807';
+  final activeCodSocio = ref.watch(
+    multicuentaProvider.select((s) => s.activeSuministro?.codSocio.trim() ?? ''),
+  );
 
   return ConsumoNotifier(
     repository: repository,
@@ -175,11 +226,12 @@ class ConsumoNotifier extends StateNotifier<ConsumoState> {
     String? codSocio,
     bool forzarRefresco = false,
   }) async {
-    final targetCodSocio = codSocio ?? state.currentCodSocio ?? '23807';
+    final targetCodSocio = codSocio ?? state.currentCodSocio ?? '';
 
     // Si ya tenemos datos y solo refrescamos, marcamos isRefreshing para no parpadear toda la pantalla
     final esPrimeraCarga = state.historial == null || targetCodSocio != state.currentCodSocio;
 
+    if (!mounted) return;
     state = state.copyWith(
       isLoading: esPrimeraCarga,
       isRefreshing: !esPrimeraCarga,
@@ -194,6 +246,7 @@ class ConsumoNotifier extends StateNotifier<ConsumoState> {
         meses: 12,
       );
 
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         isRefreshing: false,
@@ -202,16 +255,18 @@ class ConsumoNotifier extends StateNotifier<ConsumoState> {
         errorMessage: null,
       );
     } on AppException catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         isRefreshing: false,
         errorMessage: e.message,
       );
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         isRefreshing: false,
-        errorMessage: 'No se pudo cargar el historial de consumo desde COSMOL.',
+        errorMessage: 'No se pudo cargar el historial de consumo.',
       );
     }
   }

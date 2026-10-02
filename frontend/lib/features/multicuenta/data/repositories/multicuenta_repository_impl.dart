@@ -30,4 +30,9 @@ class MulticuentaRepositoryImpl implements MulticuentaRepository {
       alias: alias,
     );
   }
+
+  @override
+  Future<void> desvincularSuministro(String codSocio) {
+    return _remoteDataSource.desvincularSuministro(codSocio);
+  }
 }

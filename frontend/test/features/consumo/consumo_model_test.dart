@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cosmol_app/features/consumo/data/models/consumo_factura_model.dart';
+import 'package:cosmol_app/features/consumo/presentation/providers/consumo_provider.dart';
 
 void main() {
   group('HistorialConsumoModel Tests', () {
@@ -125,6 +126,86 @@ void main() {
       expect(model.nroMedidor, 'MED-***-40');
       expect(model.estadisticas.consumoAtipico, isTrue);
       expect(model.estadisticas.mensajeAlerta, contains('fugas de agua'));
+    });
+
+    test('ConsumoState calcula promedio según período y activa alerta únicamente si > 40% vs mes anterior', () {
+      final periodos = [
+        const ConsumoPeriodoModel(periodo: '08/2026', mes: 8, mesNombre: 'Agosto', anio: 2026, consumoM3: 28.0, montoBs: 100, lecturaAnterior: 100, lecturaActual: 128),
+        const ConsumoPeriodoModel(periodo: '07/2026', mes: 7, mesNombre: 'Julio', anio: 2026, consumoM3: 18.0, montoBs: 70, lecturaAnterior: 82, lecturaActual: 100),
+        const ConsumoPeriodoModel(periodo: '06/2026', mes: 6, mesNombre: 'Junio', anio: 2026, consumoM3: 16.0, montoBs: 60, lecturaAnterior: 66, lecturaActual: 82),
+        const ConsumoPeriodoModel(periodo: '05/2026', mes: 5, mesNombre: 'Mayo', anio: 2026, consumoM3: 14.0, montoBs: 50, lecturaAnterior: 52, lecturaActual: 66),
+        const ConsumoPeriodoModel(periodo: '04/2026', mes: 4, mesNombre: 'Abril', anio: 2026, consumoM3: 15.0, montoBs: 55, lecturaAnterior: 37, lecturaActual: 52),
+        const ConsumoPeriodoModel(periodo: '03/2026', mes: 3, mesNombre: 'Marzo', anio: 2026, consumoM3: 17.0, montoBs: 65, lecturaAnterior: 20, lecturaActual: 37),
+        const ConsumoPeriodoModel(periodo: '02/2026', mes: 2, mesNombre: 'Febrero', anio: 2026, consumoM3: 20.0, montoBs: 75, lecturaAnterior: 0, lecturaActual: 20),
+      ];
+
+      final historial = HistorialConsumoModel(
+        codSocio: '23807',
+        alias: 'Casa',
+        rolAcceso: 'TITULAR',
+        totalPeriodos: periodos.length,
+        periodos: periodos,
+        estadisticas: const EstadisticasConsumoModel(
+          promedioM3: 18.0,
+          consumoMaximoM3: 28.0,
+          mesConsumoMaximo: '08/2026',
+          consumoMinimoM3: 14.0,
+          mesConsumoMinimo: '05/2026',
+          consumoUltimoMesM3: 28.0,
+        ),
+      );
+
+      // 1. Estado en 6 meses
+      final state6 = ConsumoState(
+        historial: historial,
+        periodo: PeriodoConsumo.seisMeses,
+      );
+
+      expect(state6.filteredFacturas.length, 6);
+      // Promedio de los 6 meses más recientes: (28 + 18 + 16 + 14 + 15 + 17) / 6 = 108 / 6 = 18.0
+      expect(state6.promedioConsumo, 18.0);
+      expect(state6.consumoActual, 28.0);
+      expect(state6.mesAnteriorAlActual?.consumoM3, 18.0);
+      // Variación vs mes anterior: (28 - 18) / 18 = +55.6% (> 40%)
+      expect(state6.variacionVsMesAnterior, 55.6);
+      expect(state6.consumoAtipico, isTrue);
+      expect(state6.mensajeAlerta, contains('fugas de agua'));
+
+      // 2. Estado cuando el incremento es <= 40% (ejemplo: 22 m³ vs 18 m³ -> +22.2%)
+      final periodosSinFuga = List<ConsumoPeriodoModel>.from(periodos);
+      periodosSinFuga[0] = const ConsumoPeriodoModel(
+        periodo: '08/2026',
+        mes: 8,
+        mesNombre: 'Agosto',
+        anio: 2026,
+        consumoM3: 22.0,
+        montoBs: 80,
+        lecturaAnterior: 100,
+        lecturaActual: 122,
+      );
+      final historialSinFuga = HistorialConsumoModel(
+        codSocio: '23807',
+        alias: 'Casa',
+        rolAcceso: 'TITULAR',
+        totalPeriodos: periodosSinFuga.length,
+        periodos: periodosSinFuga,
+        estadisticas: const EstadisticasConsumoModel(
+          promedioM3: 17.0,
+          consumoMaximoM3: 22.0,
+          mesConsumoMaximo: '08/2026',
+          consumoMinimoM3: 14.0,
+          mesConsumoMinimo: '05/2026',
+          consumoUltimoMesM3: 22.0,
+        ),
+      );
+      final stateSinFuga = ConsumoState(
+        historial: historialSinFuga,
+        periodo: PeriodoConsumo.seisMeses,
+      );
+      // Variación vs mes anterior: (22 - 18) / 18 = 22.2% (NO supera el 40%)
+      expect(stateSinFuga.variacionVsMesAnterior, 22.2);
+      expect(stateSinFuga.consumoAtipico, isFalse);
+      expect(stateSinFuga.mensajeAlerta, isNull);
     });
   });
 }

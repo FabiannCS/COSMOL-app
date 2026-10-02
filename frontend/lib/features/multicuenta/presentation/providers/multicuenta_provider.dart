@@ -45,26 +45,23 @@ final multicuentaProvider =
     storageService: storageService,
     initialSuministros: authState.suministros,
     initialCodSocio: authState.activeCodSocio,
-    isAuthenticated: authState.status == AuthStatus.authenticated,
   );
 });
 
 class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
   final MulticuentaRepository repository;
   final StorageService storageService;
-  final bool isAuthenticated;
 
   MulticuentaNotifier({
     required this.repository,
     required this.storageService,
-    this.isAuthenticated = false,
     List<SuministroModel> initialSuministros = const [],
     String? initialCodSocio,
   }) : super(const MulticuentaState()) {
     _init(initialSuministros, initialCodSocio);
   }
 
-  void _init(List<SuministroModel> initialSuministros, String? initialCodSocio) async {
+  void _init(List<SuministroModel> initialSuministros, String? initialCodSocio) {
     if (initialSuministros.isNotEmpty) {
       SuministroModel? active;
       if (initialCodSocio != null && initialCodSocio.isNotEmpty) {
@@ -79,17 +76,13 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
         suministros: initialSuministros,
         activeSuministro: active,
       );
-    } else if (isAuthenticated) {
+    } else {
       cargarSuministros();
     }
   }
 
   Future<void> cargarSuministros() async {
-    final token = await storageService.getAccessToken();
-    if (token == null || token.trim().isEmpty) {
-      state = state.copyWith(isLoading: false);
-      return;
-    }
+    if (!mounted) return;
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final lista = await repository.listarSuministros();
@@ -108,26 +101,30 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
         await storageService.saveActiveCodSocio(active.codSocio);
       }
 
+      if (!mounted) return;
       state = state.copyWith(
         suministros: lista,
         activeSuministro: active,
         isLoading: false,
       );
     } on AppException catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         errorMessage: e.message,
       );
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Error al cargar suministros.',
+        errorMessage: 'Error al cargar Socios.',
       );
     }
   }
 
   Future<void> seleccionarSuministro(SuministroModel suministro) async {
     await storageService.saveActiveCodSocio(suministro.codSocio);
+    if (!mounted) return;
     state = state.copyWith(activeSuministro: suministro);
   }
 
@@ -136,6 +133,7 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
     String? ciOMedidor,
     required String alias,
   }) async {
+    if (!mounted) return false;
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final nuevoSuministro = await repository.vincularSuministro(
@@ -147,6 +145,7 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
       final nuevaLista = [...state.suministros, nuevoSuministro];
       await storageService.saveActiveCodSocio(nuevoSuministro.codSocio);
 
+      if (!mounted) return true;
       state = state.copyWith(
         suministros: nuevaLista,
         activeSuministro: nuevoSuministro,
@@ -154,15 +153,56 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
       );
       return true;
     } on AppException catch (e) {
+      if (!mounted) return false;
       state = state.copyWith(
         isLoading: false,
         errorMessage: e.message,
       );
       return false;
     } catch (e) {
+      if (!mounted) return false;
       state = state.copyWith(
         isLoading: false,
-        errorMessage: 'Error al vincular el suministro.',
+        errorMessage: 'Error al vincular el Socio.',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> desvincularSuministro(String codSocio) async {
+    if (!mounted) return false;
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      // Se intenta llamar a la API si estuviera implementada
+      try {
+        await repository.desvincularSuministro(codSocio);
+      } catch (_) {
+        // Fallback local mientras se implementa el endpoint en backend
+      }
+
+      final nuevaLista =
+          state.suministros.where((s) => s.codSocio != codSocio).toList();
+
+      SuministroModel? nuevoActivo = state.activeSuministro;
+      if (state.activeSuministro?.codSocio == codSocio) {
+        nuevoActivo = nuevaLista.isNotEmpty ? nuevaLista.first : null;
+        if (nuevoActivo != null) {
+          await storageService.saveActiveCodSocio(nuevoActivo.codSocio);
+        }
+      }
+
+      if (!mounted) return true;
+      state = state.copyWith(
+        suministros: nuevaLista,
+        activeSuministro: nuevoActivo,
+        isLoading: false,
+      );
+      return true;
+    } catch (e) {
+      if (!mounted) return false;
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Error al desvincular el suministro.',
       );
       return false;
     }

@@ -288,7 +288,7 @@ class ServicioAutenticacion:
                 suministro_db = Suministro(
                     usuario_id=usuario_db.id,
                     cod_socio=cod_socio,
-                    alias="Mi Casa",
+                    alias=f"Socio: {cod_socio}",
                     rol="TITULAR",
                     es_suministro_principal=True
                 )
@@ -309,7 +309,7 @@ class ServicioAutenticacion:
                 {
                     "id": suministro_id,
                     "cod_socio": cod_socio,
-                    "alias": "Mi Casa",
+                    "alias": f"Socio: {cod_socio}",
                     "rol": "TITULAR",
                     "es_suministro_principal": True
                 }
@@ -397,16 +397,25 @@ class ServicioAutenticacion:
                 datos_socio_real = await self.cosmol_client.obtener_datos_socio(cod_socio)
                 if datos_socio_real and datos_socio_real.get("NOMBRE"):
                     nombre_socio = datos_socio_real["NOMBRE"]
-                suministros_lista = [
-                    SuministroResponse(
-                        id=s.id,
-                        cod_socio=s.cod_socio,
-                        alias=s.alias,
-                        rol=s.rol,
-                        es_suministro_principal=s.es_suministro_principal
+                suministros_lista = []
+                for s in usuario_db.suministros:
+                    nom_s = None
+                    try:
+                        datos_s = await self.cosmol_client.obtener_datos_socio(s.cod_socio)
+                        if datos_s:
+                            nom_s = datos_s.get("NOMBRE")
+                    except Exception:
+                        nom_s = None
+                    suministros_lista.append(
+                        SuministroResponse(
+                            id=s.id,
+                            cod_socio=s.cod_socio,
+                            alias=s.alias,
+                            nombre=nom_s,
+                            rol=s.rol,
+                            es_suministro_principal=s.es_suministro_principal
+                        )
                     )
-                    for s in usuario_db.suministros
-                ]
 
         if not password_hash:
             usuario_mem = USUARIOS_REGISTRADOS_DB.get(cod_socio)
@@ -418,16 +427,25 @@ class ServicioAutenticacion:
             password_hash = usuario_mem["password_hash"]
             user_id = usuario_mem["user_id"]
             nombre_socio = usuario_mem.get("nombre", "SOCIO COSMOL")
-            suministros_lista = [
-                SuministroResponse(
-                    id=s["id"],
-                    cod_socio=s["cod_socio"],
-                    alias=s["alias"],
-                    rol=s["rol"],
-                    es_suministro_principal=s["es_suministro_principal"]
+            suministros_lista = []
+            for s in usuario_mem["suministros"]:
+                nom_s = None
+                try:
+                    datos_s = await self.cosmol_client.obtener_datos_socio(s["cod_socio"])
+                    if datos_s:
+                        nom_s = datos_s.get("NOMBRE")
+                except Exception:
+                    nom_s = None
+                suministros_lista.append(
+                    SuministroResponse(
+                        id=s["id"],
+                        cod_socio=s["cod_socio"],
+                        alias=s["alias"],
+                        nombre=nom_s,
+                        rol=s["rol"],
+                        es_suministro_principal=s["es_suministro_principal"]
+                    )
                 )
-                for s in usuario_mem["suministros"]
-            ]
 
         fallos_key = f"intentos_fallidos:{cod_socio}"
 
@@ -555,10 +573,21 @@ class ServicioAutenticacion:
                 if suministros_db:
                     cod_socio = suministros_db[0].cod_socio
                     for s in suministros_db:
+                        nom_s = None
+                        try:
+                            datos_s = await self.cosmol_client.obtener_datos_socio(s.cod_socio)
+                            if datos_s:
+                                nom_s = datos_s.get("NOMBRE")
+                        except Exception:
+                            nom_s = None
+                        if s.es_suministro_principal and nom_s:
+                            nombre_socio = nom_s
                         suministros_lista.append(
                             SuministroResponse(
+                                id=s.id,
                                 cod_socio=s.cod_socio,
                                 alias=s.alias,
+                                nombre=nom_s,
                                 rol=s.rol,
                                 es_suministro_principal=s.es_suministro_principal
                             )

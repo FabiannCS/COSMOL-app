@@ -41,10 +41,23 @@ class MulticuentaRemoteDataSource {
           'cod_socio': codSocio.trim(),
           if (ciOMedidor != null && ciOMedidor.trim().isNotEmpty)
             'ci_o_medidor': ciOMedidor.trim(),
-          'alias': alias.trim().isNotEmpty ? alias.trim() : 'Mi Suministro',
+          'alias': alias.trim().isNotEmpty
+              ? alias.trim()
+              : 'Socio: ${codSocio.trim()}',
         },
       );
       return SuministroModel.fromJson(response.data as Map<String, dynamic>);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  /// Desvincula un suministro previamente asociado
+  Future<void> desvincularSuministro(String codSocio) async {
+    try {
+      await _dio.delete(
+        '/autenticacion/suministros/$codSocio',
+      );
     } on DioException catch (e) {
       throw _handleDioError(e);
     }

@@ -8,4 +8,6 @@ abstract class MulticuentaRepository {
     String? ciOMedidor,
     required String alias,
   });
+
+  Future<void> desvincularSuministro(String codSocio);
 }

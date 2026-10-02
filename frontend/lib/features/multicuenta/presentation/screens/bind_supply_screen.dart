@@ -50,13 +50,14 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
   Future<void> _vincularTitular() async {
     if (!_formKeyTitular.currentState!.validate()) return;
 
+    final codSocio = _codSocioTitularController.text.trim();
     final success =
         await ref.read(multicuentaProvider.notifier).vincularSuministro(
-              codSocio: _codSocioTitularController.text.trim(),
+              codSocio: codSocio,
               ciOMedidor: _ciMedidorController.text.trim(),
               alias: _aliasTitularController.text.trim().isNotEmpty
                   ? _aliasTitularController.text.trim()
-                  : 'Mi Suministro',
+                  : 'Socio: $codSocio',
             );
 
     if (!mounted) return;
@@ -84,13 +85,14 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
   Future<void> _vincularConsulta() async {
     if (!_formKeyConsulta.currentState!.validate()) return;
 
+    final codSocio = _codSocioConsultaController.text.trim();
     final success =
         await ref.read(multicuentaProvider.notifier).vincularSuministro(
-              codSocio: _codSocioConsultaController.text.trim(),
+              codSocio: codSocio,
               ciOMedidor: null, // Sin CI = CONSULTA_PAGO
               alias: _aliasConsultaController.text.trim().isNotEmpty
                   ? _aliasConsultaController.text.trim()
-                  : 'Socio de Consulta',
+                  : 'Socio: $codSocio',
             );
 
     if (!mounted) return;

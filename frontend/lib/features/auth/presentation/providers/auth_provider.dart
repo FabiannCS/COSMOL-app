@@ -182,6 +182,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final cleanPassword = password.trim();
 
     if (cleanCodSocio.isEmpty || cleanPassword.isEmpty) {
+      if (!mounted) return false;
       state = state.copyWith(
         errorMessage: 'Por favor complete todos los campos.',
         isLoading: false,
@@ -189,6 +190,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       return false;
     }
 
+    if (!mounted) return false;
     state = state.copyWith(
       isLoading: true,
       errorMessage: null,
@@ -211,6 +213,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       await storageService.saveActiveCodSocio(cleanCodSocio);
 
+      if (!mounted) return true;
       state = state.copyWith(
         status: AuthStatus.authenticated,
         activeCodSocio: cleanCodSocio,
@@ -220,6 +223,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return true;
     } on AccountLockedException catch (e) {
+      if (!mounted) return false;
       state = state.copyWith(
         status: AuthStatus.locked,
         bloqueadoSegundosRestantes: e.segundosRestantes,
@@ -228,6 +232,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return false;
     } on OnboardingRequiredException catch (e) {
+      if (!mounted) return false;
       state = state.copyWith(
         status: AuthStatus.onboardingRequired,
         errorMessage: e.message,
@@ -235,6 +240,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return false;
     } on AppException catch (e) {
+      if (!mounted) return false;
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
         errorMessage: e.message,
@@ -242,6 +248,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return false;
     } catch (e) {
+      if (!mounted) return false;
       state = state.copyWith(
         status: AuthStatus.unauthenticated,
         errorMessage: 'Error inesperado al iniciar sesión. Intente nuevamente.',
