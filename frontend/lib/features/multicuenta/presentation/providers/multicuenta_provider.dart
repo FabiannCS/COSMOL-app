@@ -45,23 +45,26 @@ final multicuentaProvider =
     storageService: storageService,
     initialSuministros: authState.suministros,
     initialCodSocio: authState.activeCodSocio,
+    isAuthenticated: authState.status == AuthStatus.authenticated,
   );
 });
 
 class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
   final MulticuentaRepository repository;
   final StorageService storageService;
+  final bool isAuthenticated;
 
   MulticuentaNotifier({
     required this.repository,
     required this.storageService,
+    this.isAuthenticated = false,
     List<SuministroModel> initialSuministros = const [],
     String? initialCodSocio,
   }) : super(const MulticuentaState()) {
     _init(initialSuministros, initialCodSocio);
   }
 
-  void _init(List<SuministroModel> initialSuministros, String? initialCodSocio) {
+  void _init(List<SuministroModel> initialSuministros, String? initialCodSocio) async {
     if (initialSuministros.isNotEmpty) {
       SuministroModel? active;
       if (initialCodSocio != null && initialCodSocio.isNotEmpty) {
@@ -76,12 +79,17 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
         suministros: initialSuministros,
         activeSuministro: active,
       );
-    } else {
+    } else if (isAuthenticated) {
       cargarSuministros();
     }
   }
 
   Future<void> cargarSuministros() async {
+    final token = await storageService.getAccessToken();
+    if (token == null || token.trim().isEmpty) {
+      state = state.copyWith(isLoading: false);
+      return;
+    }
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final lista = await repository.listarSuministros();

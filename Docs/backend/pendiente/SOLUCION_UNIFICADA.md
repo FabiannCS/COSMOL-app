@@ -3,184 +3,220 @@
 > **Ecosistema Integrado:** `COSMOL-app` (App de Socios) · `Cosmol-Chatbot` (Proxy Caddy & Bot WhatsApp) · `COSMOL-Reportes` (Dashboard de Auditoría y Operaciones)  
 > **Servidor Central de Despliegue:** Ubuntu Server (`10.129.1.105`)  
 > **Dominio Oficial:** `https://chatbot.cosmol.com.bo`  
-> **Fecha:** Octubre 2026  
-> **Propósito:** Unificar las observaciones operativas de infraestructura de Aireyu con el diagnóstico de seguridad y hardening, estableciendo una hoja de ruta clara y dividida por responsabilidades individuales.
+> **Fecha:** Octubre 2026 (Versión 1.3.0 - Guía Definitiva de Implementación de Seguridad)  
+> **Estado de Producción:** ✅ **Prueba en Producción con ÉXITO:** Autenticación de socios, consulta de deudas, historial y documentos 100% operativos.  
+> **Estrategia sobre Reportes:** ⏸️ **Envío a COSMOL-Reportes DIFERIDO (`REPORTES_ENABLED=false`):** La app opera de forma completamente autónoma para maximizar rendimiento y velocidad (<300ms). Se abordará en una fase posterior.  
+> **Estrategia sobre OTP:** 🧪 **OTP en Modo Prueba (`MOCK_MESSAGING=true`):** Se mantiene el código mock `123456` para pruebas y desarrollo. No se migrará a Meta WABA hasta contar con credenciales definitivas.  
+> **Objetivo de este Documento:** Proporcionar a **Eduardo** la guía exacta de implementación técnica para el **Hardening y Seguridad del Backend (`COSMOL-app`)**.
 
 ---
 
-## 1. División Estricta de Responsabilidades
+## 1. División Estricta de Responsabilidades y Límites de Código
 
-Para evitar solapamientos y preservar la integridad de cada proyecto:
+> [!IMPORTANT]
+> **Principio de Aislamiento Exclusivo de Repositorio:**  
+> **Eduardo trabaja EXCLUSIVAMENTE dentro del repositorio `COSMOL-app`.**  
+> Eduardo **NO debe modificar, configurar ni alterar** ningún archivo de `Cosmol-Chatbot` (Caddyfile, n8n, proxy), de `COSMOL-Reportes` (API PHP, base de datos de reportes) ni del sistema operativo host Ubuntu. Todas las configuraciones perimetrales de Caddy, certificados SSL y ajustes en los otros contenedores del servidor son gestionadas directamente por **Aireyu**.
 
-| Responsable | Repositorios y Alcance de Trabajo | Enfoque Principal |
-|---|---|---|
-| **Eduardo** | **`COSMOL-app`** (Backend FastAPI, `docker-compose.yml` de la App, Frontend Flutter, configuraciones `.env` locales/plantilla). | **Seguridad del BFF, blindaje de contenedores de la app, control de endpoints y variables.** |
-| **Aireyu** | **`Cosmol-Chatbot`** (Proxy Caddy, puertos de pasarela, enrutamiento SSL), **`COSMOL-Reportes`** (API PHP, base de datos de reportes) y **Configuración Host del Servidor Ubuntu (`10.129.1.105`)**. | **Enrutamiento perimetral, infraestructura host, proveedor de tokens Meta/WABA y estabilidad de auditoría.** |
+| Responsable | Repositorio Exclusivo | Alcance de Modificaciones de Código | Lo que NO debe tocar |
+|---|---|---|---|
+| **Eduardo** | **`COSMOL-app`** | • `docker-compose.yml`<br>• `backend/app/main.py`<br>• `backend/app/core/config.py`<br>• `.env.example` | ❌ `Cosmol-Chatbot` (Caddyfile)<br>❌ `COSMOL-Reportes`<br>❌ Servidor Ubuntu / Firewall |
+| **Aireyu** | **`Cosmol-Chatbot`**, **`COSMOL-Reportes`** y Servidor | • Proxy Caddy (puertos 80, 443, 8081)<br>• Certificados SSL y enrutamiento<br>• Host Ubuntu `10.129.1.105` | N/A (Administración perimetral y coordinación) |
 
 ---
 
-## 2. Diagnóstico Raíz: Por qué se Unifican las Soluciones
+## 2. El Dilema de los Puertos y la Realidad del Firewall
 
-El análisis demostró que las observaciones de Aireyu (en [SEGUIMIENTO_CAMBIOS_Y_PENDIENTES_PRODUCCION.md](file:///c:/Users/Lenovo/Desktop/COSMOL-app/Docs/pendiente/SEGUIMIENTO_CAMBIOS_Y_PENDIENTES_PRODUCCION.md)) y el diagnóstico de seguridad abordan **la misma infraestructura desde dos caras de la misma moneda**:
+### 2.1 La Restricción Real
+El ingeniero de redes **NO otorgará permisos de apertura de puertos adicionales en el firewall institucional (FortiGate)**. El sistema debe operar con la infraestructura y reglas existentes.
+
+### 2.2 Por qué NO se Necesitan Puertos Nuevos en el Firewall
+La confusión común consiste en creer que cada contenedor Docker necesita un puerto abierto hacia internet. Esto es falso:
+- El firewall institucional **solo tiene y solo debe tener abiertos los puertos `80` (HTTP) y `443` (HTTPS)**.
+- La aplicación móvil de socios (Flutter) **NUNCA** se conecta directamente a PostgreSQL, a Redis, ni al puerto 8000.
+- La app móvil se comunica exclusivamente vía:
+  $$\text{https://chatbot.cosmol.com.bo/api/v1}$$
+  Esto viaja por el puerto **443 (HTTPS) estándar**, que **ya está 100% habilitado en el firewall**.
 
 ```
-           [ Visiòn de Aireyu: Operatividad ]          [ Visión de Seguridad: Hardening ]
-       "Evitar que los puertos choquen con el host" ◄──► "Cerrar los puertos a internet público"
-                                    │                                  │
-                                    └──────────────┬───────────────────┘
-                                                   ▼
-                                        [ SOLUCIÓN UNIFICADA ]
-                     "Eliminar el mapeo público de puertos en Docker Compose:
-                   resuelve la colisión en el servidor Y blinda la base de datos"
+[ INTERNET / USUARIOS MÓVILES ]
+              │  (Solo pasan puertos 80 y 443 por FortiGate)
+              ▼
+    ╔═══════════════════════════════════════════════╗
+    ║       FIREWALL INSTITUCIONAL (FortiGate)      ║  <-- Cero puertos nuevos requeridos
+    ╚═══════════════════════════════════════════════╝
+              │  (Tráfico seguro HTTPS por puerto 443)
+              ▼
+   ┌─────────────────────────────────────────────────┐
+   │            PROXY INVERSO CENTRAL (Caddy)        │  <-- Escucha en 443 y despacha internamente
+   └───────┬─────────────────┬───────────────────────┘
+           │                 │
+     (handle /api/v1*)       (handle /uploads, n8n)
+           │                 │
+           ▼                 ▼
+   ┌───────────────┐ ┌───────────────┐
+   │ FastAPI (8000)│ │  n8n (5678)   │
+   └───────┬───────┘ └───────────────┘
+           │ (Red interna Docker privada / 127.0.0.1)
+     ┌─────┴────────┐
+     ▼              ▼
+┌──────────┐  ┌──────────┐
+│ PostgreSQL│  │  Redis   │
+│  (5432)  │  │  (6379)  │
+└──────────┘  └──────────┘
 ```
 
-### Cuadro de Equivalencia de Incidencias
+---
 
-| # | Observación de Aireyu (Operativa) | Diagnóstico de Seguridad (Riesgo) | Solución Unificada Definitiva | Responsable |
+## 3. Matriz de Convivencia de Puertos en el Servidor (Cero Colisiones)
+
+Para evitar que los servicios choquen entre sí en el host Ubuntu (`10.129.1.105`):
+
+| Proyecto | Contenedor | Puerto Interno | Mapeo en el Host | Justificación Técnica |
 |---|---|---|---|---|
-| **1** | **Colisión de puerto 5432** en host si existe otro PostgreSQL. | **Exposición crítica de DB y Redis** a internet (`0.0.0.0:5432` y `6379`). | **Eliminar mapeo de puertos públicos** de Postgres y Redis en Docker Compose. La app se comunica por red interna Docker (`cosmol-net`). | **Eduardo** |
-| **2** | **Puerto 8083 huérfano** en Caddy pero no expuesto en Compose de Chatbot. | Superficie de ataque innecesaria; apertura de puertos no estándar. | **Eliminar bloque 8083 de Caddyfile** y consolidar todo en el puerto estándar `443` HTTPS. | **Aireyu** |
-| **3** | **Timeouts de auditoría (3s)** y saturación en Redis por ruta duplicada y puerto 8082. | Denegación de servicio interna y acumulación descontrolada de memoria. | Configurar `REPORTES_API_URL=http://172.17.0.1:8082/api` en el servidor y purgar la cola en Redis. | **Aireyu** |
-| **4** | *(No contemplado en bitácora de Aireyu)* | **Swagger UI y OpenAPI expuestos** públicamente en `/docs` en producción. | Condicionar `/docs` y `/openapi.json` para que se desactiven en producción. | **Eduardo** |
-| **5** | **Falta de OTP WhatsApp real** (`MOCK_MESSAGING=true` en `.env`). | Bypass de autenticación (cualquiera entra con código mock `123456`). | Migrar a credenciales Meta WABA oficiales y pasar a `MOCK_MESSAGING=false`. | **Aireyu** (Tokens) / **Eduardo** (Código) |
-| **6** | *(No contemplado en bitácora de Aireyu)* | **Secretos por defecto** en `config.py` (`SECRET_KEY`, pass de DB). | Generar claves aleatorias seguras de 256 bits y actualizar en servidor. | **Eduardo** (Validación) / **Aireyu** (Servidor) |
+| **Cosmol-Chatbot** | `cosmol_caddy` | 80, 443, 8081 | `80:80`, `443:443`, `8081:8081` | Único punto de entrada perimetral con SSL. |
+| **Cosmol-Chatbot** | `cosmol_postgres` | 5432 | `127.0.0.1:5433:5432` | BD del Chatbot. Escucha en puerto **5433** solo local. |
+| **COSMOL-Reportes**| `cosmol_reportes_app` | 80 | `8082:80` | Backend PHP de Reportes. Escucha en puerto **8082**. |
+| **COSMOL-Reportes**| `cosmol_reportes_db` | 5432 | `5434:5432` | BD de Reportes. Escucha en puerto **5434**. |
+| **COSMOL-app** | `cosmol-backend-api` | 8000 | `127.0.0.1:8000:8000` | FastAPI. Solo Caddy puede alcanzarlo localmente. |
+| **COSMOL-app** | `cosmol-db-postgres` | 5432 | `127.0.0.1:5435:5432` | BD App Socios. Escucha en puerto **5435** solo local. |
+| **COSMOL-app** | `cosmol-cache-redis` | 6379 | **SIN MAPEO** | Solo accesible por FastAPI dentro de la red Docker. |
+| **COSMOL-app** | `cosmol-storage-minio`| 9000, 9001 | `127.0.0.1:9000`, `9001` | Almacenamiento S3. Solo local para administración. |
+
+> [!IMPORTANT]
+> **Armonía perfecta de bases de datos PostgreSQL:**
+> - Chatbot: puerto **`5433`**
+> - Reportes: puerto **`5434`**
+> - App de Socios: puerto **`5435`**
+> Ninguna usa `0.0.0.0:5432`. Cero colisiones con el sistema operativo host.
+>
+> *Nota para Eduardo:* Esta matriz es informativa para entender la convivencia en el host Ubuntu. **Tú únicamente debes modificar tu propio archivo [`docker-compose.yml`](../../../docker-compose.yml) de `COSMOL-app`.** Los demás servicios ya se encuentran administrados por Aireyu.
 
 ---
 
-## 3. Plan de Trabajo Detallado por Responsable
+## 4. Guía de Implementación para Eduardo (Backend `COSMOL-app`)
+
+Eduardo ejecutará las siguientes tareas de seguridad **exclusivamente dentro de los archivos del repositorio `COSMOL-app`** (sin tocar ningún archivo de Chatbot, Reportes ni el host).
 
 ---
 
-### 👨‍💻 PARTE 1: Tareas de Eduardo (`COSMOL-app`)
+### Tarea E1: Blindaje de Puertos en `docker-compose.yml`
 
-Eduardo trabaja exclusivamente dentro del repositorio **`COSMOL-app`**.
+* **Archivo a modificar:** [`docker-compose.yml`](../../../docker-compose.yml)
+* **Objetivo:** Eliminar la exposición pública de bases de datos y servicios auxiliares hacia `0.0.0.0`, vinculándolos exclusivamente a `127.0.0.1` (loopback) o eliminando el mapeo donde no sea necesario.
 
-#### Tarea E1: Blindaje de Puertos en `docker-compose.yml`
-* **Archivo:** [`COSMOL-app/docker-compose.yml`](file:///c:/Users/Lenovo/Desktop/COSMOL-app/docker-compose.yml)
-* **Problema:** Los servicios `db-postgres` (línea 37) y `cache-redis` (línea 59) exponen `"5432:5432"` y `"6379:6379"` en `0.0.0.0`. Asimismo, `backend-api` expone `"8000:8000"`.
-* **Solución Técnica:**
-  1. En `db-postgres`: Quitar `ports: - "5432:5432"` o reemplazar por `127.0.0.1:5435:5432` (solo accesible por loopback local para mantenimiento SSH/DBeaver).
-  2. En `cache-redis`: Quitar `ports: - "6379:6379"`. FastAPI se comunica por `cache-redis:6379` a nivel de red interna Docker.
-  3. En `storage-minio`: Vincular a loopback `127.0.0.1:9000:9000` y `127.0.0.1:9001:9001` si no se accede directamente desde internet.
-  4. En `backend-api`: Cambiar `"8000:8000"` por `"127.0.0.1:8000:8000"` para que nadie pueda saltarse el proxy Caddy accediendo directo a la IP en el puerto 8000.
-* **Resultado:** Cero colisiones con el sistema operativo host y cero exposición de bases de datos hacia el exterior.
+#### Especificación de Cambios:
 
-#### Tarea E2: Ocultar Swagger UI y OpenAPI en Producción
-* **Archivos:** [`backend/app/main.py`](file:///c:/Users/Lenovo/Desktop/COSMOL-app/backend/app/main.py#L44-L52) y [`backend/app/core/config.py`](file:///c:/Users/Lenovo/Desktop/COSMOL-app/backend/app/core/config.py#L14-L16)
-* **Problema:** `docs_url="/docs"`, `redoc_url="/redoc"` y `openapi_url="/openapi.json"` están activados incondicionalmente, dejando al descubierto todos los endpoints en `https://chatbot.cosmol.com.bo/docs`.
-* **Solución Técnica:**
-  * En `config.py`, agregar la propiedad o flag `ENABLE_SWAGGER: bool = False` cuando `ENVIRONMENT == "production"`.
-  * En `main.py`, inicializar FastAPI evaluando el entorno:
-    ```python
-    app = FastAPI(
-        title=settings.PROJECT_NAME,
-        version=settings.VERSION,
-        description="API REST Backend (BFF) para la plataforma de socios de COSMOL R.L.",
-        docs_url="/docs" if settings.ENVIRONMENT != "production" else None,
-        redoc_url="/redoc" if settings.ENVIRONMENT != "production" else None,
-        openapi_url="/openapi.json" if settings.ENVIRONMENT != "production" else None,
-        lifespan=lifespan
-    )
-    ```
+1. **`db-postgres`:**
+   Cambiar `ports: - "5432:5432"` por:
+   ```yaml
+   ports:
+     - "127.0.0.1:5435:5432"
+   ```
+   *Razón:* Permite que un administrador se conecte vía SSH/DBeaver al puerto 5435, sin exponerlo a la red y sin colisionar con el puerto 5432.
 
-#### Tarea E3: Endurecimiento de Validación de Secretos
-* **Archivo:** [`backend/app/core/config.py`](file:///c:/Users/Lenovo/Desktop/COSMOL-app/backend/app/core/config.py#L18)
-* **Problema:** Si el archivo `.env` en producción no define `SECRET_KEY`, la aplicación usa la clave insegura por defecto sin avisar.
-* **Solución Técnica:**
-  * Agregar un validador en Pydantic (`@field_validator("SECRET_KEY")`) para que, si `ENVIRONMENT == "production"` y la clave contiene `"change_in_production"`, el backend lance un error impidiendo arrancar con credenciales inseguras.
+2. **`cache-redis`:**
+   Eliminar completamente la directiva `ports`:
+   ```yaml
+   # ELIMINAR O COMENTAR:
+   # ports:
+   #   - "6379:6379"
+   ```
+   *Razón:* FastAPI se comunica directamente con Redis mediante el nombre interno del contenedor (`cache-redis:6379`). Nadie fuera de Docker necesita acceder a Redis.
 
-#### Tarea E4: Soporte y Verificación de Mensajería WhatsApp OTP
-* **Archivos:** [`backend/app/services/messaging_service.py`](file:///c:/Users/Lenovo/Desktop/COSMOL-app/backend/app/services/messaging_service.py) y `.env.example`
-* **Acción:** Asegurar que cuando Aireyu entregue las credenciales de WhatsApp Cloud API (`WHATSAPP_PHONE_NUMBER_ID` y `WHATSAPP_ACCESS_TOKEN`), el servicio cambie limpiamente de modo Mock a modo Real sin modificaciones de código adicionales.
+3. **`backend-api`:**
+   Vincular el puerto 8000 a la interfaz local:
+   ```yaml
+   ports:
+     - "127.0.0.1:8000:8000"
+   ```
+   *Razón:* Caddy se comunica con FastAPI localmente. Nadie en la red local o externa podrá saltarse el proxy ni el certificado SSL consultando `http://IP:8000`.
+
+4. **`storage-minio`:**
+   Vincular MinIO a la interfaz local:
+   ```yaml
+   ports:
+     - "127.0.0.1:9000:9000"
+     - "127.0.0.1:9001:9001"
+   ```
 
 ---
 
-### 🛠️ PARTE 2: Tareas de Aireyu (`Cosmol-Chatbot`, `COSMOL-Reportes` y Servidor)
+### Tarea E2: Ocultar Swagger UI y OpenAPI en Producción
 
-Aireyu trabaja exclusivamente en los repositorios de **Chatbot**, **Reportes** y la administración del servidor Ubuntu.
+* **Archivos a modificar:** [`backend/app/main.py`](../../../../backend/app/main.py) y [`backend/app/core/config.py`](../../../../backend/app/core/config.py)
+* **Objetivo:** En entornos de producción (`ENVIRONMENT == "production"`), las rutas `/docs`, `/redoc` y `/openapi.json` deben devolver 404 para no exponer contratos ni firmas de la API.
 
-#### Tarea A1: Depuración del Puerto 8083 en Proxy Caddy
-* **Repositorio:** `Cosmol-Chatbot`
-* **Archivos:** `Cosmol-Chatbot/Caddyfile` y `Cosmol-Chatbot/docker-compose.yml`
-* **Problema:** En `Caddyfile` existe un bloque para el puerto 8083 (`:8083`), pero Caddy no tiene expuesto ese puerto en su `docker-compose.yml`. Además, la app ya consume limpiamente por el puerto 443 estándar (`https://chatbot.cosmol.com.bo/api/v1`).
-* **Solución Técnica:**
-  * Retirar el bloque de respaldo `:8083` en `Caddyfile`.
-  * Mantener el enrutamiento limpio y unificado en el puerto `443` estándar con TLS.
-  * Reiniciar Caddy: `docker compose restart caddy`.
+#### Código en `backend/app/main.py`:
 
-#### Tarea A2: Conectividad Interna de Auditoría y Purga de Cola en Servidor
-* **Repositorio / Servidor:** `10.129.1.105` (Ubuntu Server) / `COSMOL-Reportes`
-* **Problema:** `REPORTES_API_URL` en el servidor intentaba acceder por el dominio público en el puerto 8082, generando timeout de 3 segundos y saturando Redis con 60 eventos encolados.
-* **Solución Técnica (Comandos directos en servidor):**
-  1. En el archivo `.env` de producción de `COSMOL-app`, fijar la URL interna correcta:
-     ```env
-     REPORTES_API_URL=http://172.17.0.1:8082/api
-     ```
-  2. Purgar la cola de eventos atascados con timeout en Redis:
-     ```bash
-     docker exec -it cosmol-cache-redis redis-cli del auditoria:cola_pendientes
-     ```
-  3. Reiniciar el contenedor del backend para refrescar variables y conexiones:
-     ```bash
-     docker compose restart backend-api
-     ```
-  4. Verificar en los logs que no haya errores de timeout:
-     ```bash
-     docker logs -f --tail 50 cosmol-backend-api
-     ```
+```python
+from app.core.config import settings
 
-#### Tarea A3: Provisión de Credenciales Meta Cloud API (WhatsApp WABA)
-* **Origen:** Cuenta de Meta Business Suite / Configuración oficial de `Cosmol-Chatbot`.
-* **Acción:**
-  * Extraer el `WHATSAPP_PHONE_NUMBER_ID` y generar un token permanente (`WHATSAPP_ACCESS_TOKEN`) desde la aplicación oficial de Meta Cloud API de COSMOL.
-  * Proporcionar las credenciales para inyectarlas en el `.env` del servidor.
-  * Verificar en Meta Business Suite que la plantilla `codigo_autenticacion_cosmol` se encuentre en estado **APPROVED**.
+# En la instanciación de FastAPI, condicionar la documentación:
+es_produccion = settings.ENVIRONMENT.lower() == "production"
 
-#### Tarea A4: Monitoreo en Panel de COSMOL-Reportes
-* **Repositorio:** `COSMOL-Reportes`
-* **Acción:** Comprobar en la vista `/reportes/app-socios` que las consultas y accesos generados desde la aplicación móvil de socios se registren con timestamp, socio y tipo de acción, y que el botón *"Exportar CSV"* descargue los registros sin error.
-
----
-
-## 4. Cronograma de Ejecución y Dependencias
-
-```mermaid
-graph TD
-    subgraph Fase 1: Infraestructura y Puertos [Fase 1: Inmediata]
-        E1[Eduardo: Cerrar puertos en docker-compose.yml]
-        A1[Aireyu: Limpiar puerto 8083 en Caddyfile]
-    end
-
-    subgraph Fase 2: Estabilización Operativa [Fase 2: Servidor Ubuntu]
-        A2[Aireyu: Corregir URL Reportes y purgar Redis]
-        E2[Eduardo: Apagar /docs en producción en FastAPI]
-        E3[Eduardo: Validación estricta de SECRET_KEY]
-    end
-
-    subgraph Fase 3: Puesta en Producción [Fase 3: Salida Oficial]
-        A3[Aireyu: Extraer credenciales Meta WABA]
-        E4[Eduardo / Aireyu: Activar MOCK_MESSAGING=false]
-        A4[Aireyu: Validar Dashboard de Reportes]
-    end
-
-    E1 --> A2
-    A1 --> A2
-    A2 --> E2
-    E2 --> E3
-    E3 --> A3
-    A3 --> E4
-    E4 --> A4
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    description="API REST Backend (BFF) para la plataforma de socios de COSMOL R.L.",
+    docs_url=None if es_produccion else "/docs",
+    redoc_url=None if es_produccion else "/redoc",
+    openapi_url=None if es_produccion else "/openapi.json",
+    lifespan=lifespan
+)
 ```
 
 ---
 
-## 5. Checklist de Verificación y Aceptación Final
+### Tarea E3: Validación Estricta de `SECRET_KEY` en Producción
 
-Al finalizar las tareas, se deben cumplir los siguientes criterios técnicos:
+* **Archivo a modificar:** [`backend/app/core/config.py`](../../../../backend/app/core/config.py)
+* **Objetivo:** Evitar que el backend inicie en producción si no se ha configurado una clave criptográfica segura en `.env`.
 
-- [ ] **Puertos Seguros:** Un escaneo de puertos sobre la IP del servidor no muestra expuestos los puertos `5432`, `6379`, `9000` ni `8000`.
-- [ ] **Sin Colisiones:** `docker compose up -d` en `COSMOL-app` arranca sin advertencias de `port already in use`.
-- [ ] **Navegación Móvil Rápida:** La app en Android/Web responde en menos de 300 ms sin retardos por timeout de auditoría.
-- [ ] **Auditoría Fluida:** Redis mantiene la clave `auditoria:cola_pendientes` vacía o en 0 elementos tras una consulta normal.
-- [ ] **API Documentación Protegida:** Intentar acceder a `https://chatbot.cosmol.com.bo/docs` devuelve HTTP 404 en producción.
-- [ ] **OTP por WhatsApp Real:** Al registrarse un socio nuevo, el código de 6 dígitos llega al número celular registrado vía la API oficial de WhatsApp.
+#### Código en `backend/app/core/config.py`:
+
+```python
+from pydantic import field_validator
+
+class Settings(BaseSettings):
+    # ... campos existentes ...
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validar_secret_key_segura(cls, v: str, info) -> str:
+        # Si el entorno es producción, rechazar claves por defecto o cortas
+        valores = info.data
+        entorno = valores.get("ENVIRONMENT", "development").lower()
+        
+        if entorno == "production":
+            claves_inseguras = ["change_in_production", "secret", "cosmol_secret", "123456"]
+            if any(insegura in v.lower() for insegura in claves_inseguras) or len(v) < 32:
+                raise ValueError(
+                    "CRÍTICO: En producción, 'SECRET_KEY' debe ser una cadena aleatoria segura "
+                    "de al menos 32 caracteres generada criptográficamente (ej: openssl rand -hex 32)."
+                )
+        return v
+```
+
+---
+
+## 5. Decisiones Operativas Formales
+
+1. **COSMOL-Reportes Diferido:**
+   - La variable `REPORTES_ENABLED` en `.env` debe permanecer en `false`.
+   - El worker de fondo en [`backend/app/tasks/auditoria_reportes.py`](../../../../backend/app/tasks/auditoria_reportes.py) no despachará peticiones que puedan generar timeouts.
+   - La app responde en <100ms de forma autónoma.
+2. **OTP Mock Mantenido:**
+   - La variable `MOCK_MESSAGING` en `.env` debe permanecer en `true`.
+   - El código para verificar teléfonos en pruebas seguirá siendo `123456`.
+   - La integración con Meta WABA se ejecutará cuando se entreguen tokens definitivos aprobados.
+
+---
+
+## 6. Checklist de Aceptación para Eduardo
+
+- [ ] **Puertos Blindados:** `docker-compose.yml` tiene `db-postgres` en `127.0.0.1:5435:5432`, `cache-redis` sin puerto expuesto, y `backend-api` en `127.0.0.1:8000:8000`.
+- [ ] **Sin Colisiones en Host:** Al ejecutar `docker compose up -d`, ningún puerto colisiona con Chatbot (`5433`) ni Reportes (`5434` / `8082`).
+- [ ] **Swagger Oculto:** Al consultar `https://chatbot.cosmol.com.bo/docs` en producción, devuelve `404 Not Found`. En desarrollo sigue disponible.
+- [ ] **Secretos Validados:** Si se prueba levantar en producción con una clave débil, la aplicación se detiene con error explicativo de validación.
+- [ ] **Pruebas de Regresión:** La app Flutter sigue funcionando al 100% (login de socio `11543`, visualización de facturas, cierre de sesión y reingreso).
