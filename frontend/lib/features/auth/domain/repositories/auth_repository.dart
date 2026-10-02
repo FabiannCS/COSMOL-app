@@ -1,4 +1,5 @@
 import '../../data/models/login_response_model.dart';
+import '../../data/models/migrar_telefono_models.dart';
 import '../../data/models/otp_models.dart';
 import '../../data/models/recuperar_password_models.dart';
 import '../../data/models/register_credentials_model.dart';
@@ -50,5 +51,13 @@ abstract class AuthRepository {
   Future<CambiarPinRecuperacionResponseModel> cambiarPinRecuperacion({
     required String tokenRecuperacion,
     required String nuevoPin,
+  });
+
+  Future<MigrarTelefonoIniciarResponseModel> iniciarMigracionTelefono({
+    required MigrarTelefonoIniciarRequestModel request,
+  });
+
+  Future<MigrarTelefonoConfirmarResponseModel> confirmarMigracionTelefono({
+    required MigrarTelefonoConfirmarRequestModel request,
   });
 }

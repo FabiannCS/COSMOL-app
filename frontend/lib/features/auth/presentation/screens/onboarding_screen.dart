@@ -52,8 +52,131 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
 
     if (mounted && success) {
-      context.push('/onboarding/step2');
+      final state = ref.read(onboardingProvider);
+      if (state.cuentaExistente) {
+        _mostrarModalCuentaExistente(context, state);
+      } else {
+        context.push('/onboarding/step2');
+      }
     }
+  }
+
+  void _mostrarModalCuentaExistente(BuildContext context, OnboardingState state) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 48,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.phonelink_lock,
+                  color: AppColors.primary,
+                  size: 40,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Cuenta Ya Registrada',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.h2.copyWith(
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'El socio ${state.nombreTitular ?? "COSMOL"} (Cód: ${state.codSocio}) ya tiene una cuenta activa vinculada al número celular:\n\n${state.telefonoEnmascaradoExistente ?? "registrado"}',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.body1.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+            CosmolButton(
+              text: 'Iniciar Sesión',
+              icon: Icons.login,
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.go('/login');
+              },
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.push(
+                  '/migrar-celular',
+                  extra: {
+                    'cod_socio': state.codSocio,
+                    'ci': state.ci,
+                    'nombre_titular': state.nombreTitular,
+                  },
+                );
+              },
+              icon: const Icon(Icons.phonelink_setup, color: AppColors.primary),
+              label: const Text(
+                '¿Cambiaste de número? Migrar Celular',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(color: AppColors.primary),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.push('/recuperar-password');
+              },
+              icon: const Icon(Icons.lock_reset, size: 20, color: AppColors.textSecondary),
+              label: Text(
+                '¿Olvidaste tu contraseña? Recuperar PIN',
+                style: AppTextStyles.body2.copyWith(
+                  color: AppColors.textSecondary,
+                  decoration: TextDecoration.underline,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override

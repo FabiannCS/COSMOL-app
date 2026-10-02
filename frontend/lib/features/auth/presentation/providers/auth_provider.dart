@@ -303,4 +303,26 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void setOnboardingRequired() {
     state = state.copyWith(status: AuthStatus.onboardingRequired);
   }
+
+  Future<void> setAuthenticatedSession({
+    required String accessToken,
+    required String refreshToken,
+    required String codSocio,
+    List<SuministroModel> suministros = const [],
+  }) async {
+    await storageService.saveTokens(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+    );
+    await storageService.saveActiveCodSocio(codSocio);
+
+    if (!mounted) return;
+    state = state.copyWith(
+      status: AuthStatus.authenticated,
+      activeCodSocio: codSocio,
+      suministros: suministros,
+      isLoading: false,
+      errorMessage: null,
+    );
+  }
 }

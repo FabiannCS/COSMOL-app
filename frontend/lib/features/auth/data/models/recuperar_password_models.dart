@@ -1,5 +1,5 @@
-/// Modelos de datos para el flujo de Recuperación de Contraseña / PIN (COSMOL R.L.).
-/// Alineado con los contratos REST en Docs/backend/guias/PLAN_RECUPERACION_PASSWORD_BACKEND.md
+// Modelos de datos para el flujo de Recuperación de Contraseña / PIN (COSMOL R.L.).
+// Alineado con los contratos REST en Docs/backend/guias/PLAN_RECUPERACION_PASSWORD_BACKEND.md
 
 class ValidarTitularResponseModel {
   final String sessionId;

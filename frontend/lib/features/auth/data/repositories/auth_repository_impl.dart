@@ -1,11 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../data/models/login_response_model.dart';
+import '../../data/models/migrar_telefono_models.dart';
+import '../../data/models/otp_models.dart';
 import '../../data/models/recuperar_password_models.dart';
+import '../../data/models/register_credentials_model.dart';
+import '../../data/models/verify_socio_response_model.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../datasources/auth_remote_datasource.dart';
-import '../models/login_response_model.dart';
-import '../models/otp_models.dart';
-import '../models/register_credentials_model.dart';
-import '../models/verify_socio_response_model.dart';
 
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final remoteDataSource = ref.watch(authRemoteDataSourceProvider);
@@ -110,5 +111,19 @@ class AuthRepositoryImpl implements AuthRepository {
       tokenRecuperacion: tokenRecuperacion,
       nuevoPin: nuevoPin,
     );
+  }
+
+  @override
+  Future<MigrarTelefonoIniciarResponseModel> iniciarMigracionTelefono({
+    required MigrarTelefonoIniciarRequestModel request,
+  }) {
+    return _remoteDataSource.iniciarMigracionTelefono(request: request);
+  }
+
+  @override
+  Future<MigrarTelefonoConfirmarResponseModel> confirmarMigracionTelefono({
+    required MigrarTelefonoConfirmarRequestModel request,
+  }) {
+    return _remoteDataSource.confirmarMigracionTelefono(request: request);
   }
 }

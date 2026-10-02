@@ -13,6 +13,8 @@ class OnboardingState {
   final String ci;
   final String? nombreTitular;
   final bool socioVerificado;
+  final bool cuentaExistente;
+  final String? telefonoEnmascaradoExistente;
 
   // Paso 2: Teléfono & OTP Dual (6 dígitos)
   final String telefono;
@@ -41,6 +43,8 @@ class OnboardingState {
     this.ci = '',
     this.nombreTitular,
     this.socioVerificado = false,
+    this.cuentaExistente = false,
+    this.telefonoEnmascaradoExistente,
     this.telefono = '',
     this.canal = 'WhatsApp',
     this.otpSent = false,
@@ -64,6 +68,8 @@ class OnboardingState {
     String? ci,
     String? nombreTitular,
     bool? socioVerificado,
+    bool? cuentaExistente,
+    String? telefonoEnmascaradoExistente,
     String? telefono,
     String? canal,
     bool? otpSent,
@@ -86,6 +92,9 @@ class OnboardingState {
       ci: ci ?? this.ci,
       nombreTitular: nombreTitular ?? this.nombreTitular,
       socioVerificado: socioVerificado ?? this.socioVerificado,
+      cuentaExistente: cuentaExistente ?? this.cuentaExistente,
+      telefonoEnmascaradoExistente:
+          telefonoEnmascaradoExistente ?? this.telefonoEnmascaradoExistente,
       telefono: telefono ?? this.telefono,
       canal: canal ?? this.canal,
       otpSent: otpSent ?? this.otpSent,
@@ -192,7 +201,9 @@ class OnboardingNotifier extends StateNotifier<OnboardingState> {
         nombreTitular: response.nombreTitular.isNotEmpty
             ? response.nombreTitular
             : 'Socio COSMOL',
-        currentStep: 2,
+        cuentaExistente: response.cuentaExistente,
+        telefonoEnmascaradoExistente: response.telefonoEnmascarado,
+        currentStep: response.cuentaExistente ? 1 : 2,
         successMessage: response.mensaje,
       );
       return true;

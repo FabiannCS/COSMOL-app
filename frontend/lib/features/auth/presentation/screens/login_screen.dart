@@ -254,6 +254,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               context.push('/onboarding');
                             },
                           ),
+                          const SizedBox(height: 12),
+                          Center(
+                            child: TextButton.icon(
+                              onPressed: _openWhatsAppHelp,
+                              icon: const Icon(Icons.support_agent, size: 18, color: AppColors.textSecondary),
+                              label: Text(
+                                '¿Necesitas ayuda? Contactar Soporte',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.textSecondary,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),

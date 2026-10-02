@@ -8,6 +8,7 @@ import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/screens/onboarding_step2_screen.dart';
 import '../../features/auth/presentation/screens/recuperar_password_screen.dart';
+import '../../features/auth/presentation/screens/migrar_celular_screen.dart';
 import '../../features/home/presentation/screens/dashboard_screen.dart';
 import '../../features/multicuenta/presentation/screens/supplies_list_screen.dart';
 import '../../features/multicuenta/presentation/screens/bind_supply_screen.dart';
@@ -26,13 +27,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isOnboarding = state.matchedLocation.startsWith('/onboarding');
       final isRecuperarPassword =
           state.matchedLocation.startsWith('/recuperar-password');
+      final isMigrarCelular =
+          state.matchedLocation.startsWith('/migrar-celular');
 
       if (status == AuthStatus.initial) {
         return isSplash ? null : '/splash';
       }
 
       if (status == AuthStatus.unauthenticated || status == AuthStatus.locked) {
-        return isLoggingIn || isOnboarding || isRecuperarPassword ? null : '/login';
+        return isLoggingIn || isOnboarding || isRecuperarPassword || isMigrarCelular ? null : '/login';
       }
 
       if (status == AuthStatus.onboardingRequired) {
@@ -40,7 +43,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (status == AuthStatus.authenticated) {
-        if (isSplash || isLoggingIn || isOnboarding || isRecuperarPassword) {
+        if (isSplash || isLoggingIn || isOnboarding || isRecuperarPassword || isMigrarCelular) {
           return '/dashboard';
         }
       }
@@ -62,6 +65,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/recuperar-password',
         name: 'recuperar-password',
         builder: (context, state) => const RecuperarPasswordScreen(),
+      ),
+      GoRoute(
+        path: '/migrar-celular',
+        name: 'migrar-celular',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>?;
+          return MigrarCelularScreen(
+            initialCodSocio: extra?['cod_socio'] as String?,
+            initialCi: extra?['ci'] as String?,
+            nombreTitular: extra?['nombre_titular'] as String?,
+          );
+        },
       ),
       GoRoute(
         path: '/onboarding',
