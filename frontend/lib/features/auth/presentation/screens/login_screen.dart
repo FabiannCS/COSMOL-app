@@ -285,9 +285,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Column(
       children: [
         Container(
-          width: 84,
-          height: 84,
-          padding: const EdgeInsets.all(12),
+          width: 88,
+          height: 88,
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: AppColors.pureWhite,
             borderRadius: BorderRadius.circular(16),
@@ -299,13 +299,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ],
           ),
-          child: Image.asset(
-            'assets/images/logo_cosmol.jpeg',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Icon(
-              Icons.water_drop_rounded,
-              color: AppColors.primary,
-              size: 52,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset(
+              'assets/images/LogoCosmolCuadrado.png',
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.water_drop_rounded,
+                color: AppColors.primary,
+                size: 52,
+              ),
             ),
           ),
         ),

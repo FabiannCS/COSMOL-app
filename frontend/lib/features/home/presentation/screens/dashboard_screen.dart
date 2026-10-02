@@ -31,37 +31,30 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final titularBackend = deudaState.resumenDeuda?.suministro?.nombreTitular;
 
     return Scaffold(
-      appBar: _currentIndex == 0
-          ? CosmolAppBar(
-              title: 'COSMOL R.L.',
-              subtitle: _getSocioNombre(activeSuministro,
-                  titularBackend: titularBackend),
-              actions: [
-                IconButton(
-                  icon: const Icon(Icons.notifications_outlined,
-                      color: AppColors.onSurfaceVariant),
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('No tienes notificaciones pendientes.'),
-                      ),
-                    );
-                  },
-                ),
-              ],
+      appBar: CosmolAppBar(
+        title: 'COSMOL R.L.',
+        subtitle: _getSocioNombre(activeSuministro,
+            titularBackend: titularBackend),
+        actions: [
+          if (_currentIndex == 3)
+            IconButton(
+              icon: const Icon(Icons.add_rounded, color: AppColors.primary),
+              onPressed: () => context.push('/suministros/vincular'),
             )
-          : CosmolAppBar(
-              title: 'COSMOL R.L.',
-              subtitle: _getAppBarTitle(_currentIndex),
-              actions: [
-                if (_currentIndex == 3)
-                  IconButton(
-                    icon: const Icon(Icons.add_rounded,
-                        color: AppColors.primary),
-                    onPressed: () => context.push('/suministros/vincular'),
+          else
+            IconButton(
+              icon: const Icon(Icons.notifications_outlined,
+                  color: AppColors.onSurfaceVariant),
+              onPressed: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('No tienes notificaciones pendientes.'),
                   ),
-              ],
+                );
+              },
             ),
+        ],
+      ),
       body: SafeArea(
         child: IndexedStack(
           index: _currentIndex,
@@ -162,20 +155,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     );
   }
 
-  String _getAppBarTitle(int index) {
-    switch (index) {
-      case 1:
-        return 'Historial de Consumo';
-      case 2:
-        return 'Facturas y Avisos';
-      case 3:
-        return 'Mis Suministros';
-      case 4:
-        return 'Perfil del Socio';
-      default:
-        return 'COSMOL R.L.';
-    }
-  }
 
   String _getSocioNombre(dynamic activeSuministro, {String? titularBackend}) {
     if (titularBackend != null && titularBackend.trim().isNotEmpty) {

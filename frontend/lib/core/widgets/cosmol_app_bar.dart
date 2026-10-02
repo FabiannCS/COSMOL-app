@@ -81,10 +81,10 @@ class CosmolAppBar extends StatelessWidget implements PreferredSizeWidget {
               width: 38,
               height: 38,
               padding: const EdgeInsets.all(4),
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 color: AppColors.pureWhite,
-                shape: BoxShape.circle,
-                boxShadow: [
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: const [
                   BoxShadow(
                     color: AppColors.shadowColor,
                     blurRadius: 4,
@@ -94,7 +94,7 @@ class CosmolAppBar extends StatelessWidget implements PreferredSizeWidget {
               ),
               clipBehavior: Clip.antiAlias,
               child: Image.asset(
-                'assets/images/logo_cosmol.jpeg',
+                'assets/images/LogoCosmolCuadrado.png',
                 fit: BoxFit.contain,
                 errorBuilder: (context, error, stackTrace) => const Icon(
                   Icons.water_drop_rounded,
