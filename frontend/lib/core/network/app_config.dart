@@ -13,7 +13,7 @@ class AppConfig {
 
   static const String _envPort = String.fromEnvironment(
     'APP_EXTERNAL_PORT',
-    defaultValue: '8083',
+    defaultValue: '443',
   );
 
   /// URL remota del backend institucional desplegado en el servidor.
