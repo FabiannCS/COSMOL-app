@@ -75,32 +75,13 @@ class _ConsumoScreenState extends ConsumerState<ConsumoScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      const SizedBox(width: 10),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            activeSuministro?.alias.isNotEmpty == true
-                                ? activeSuministro!.alias
-                                : 'Socio $activeCodSocio',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.onSurface,
-                            ),
-                          ),
-                          Text(
-                            'Código: $activeCodSocio',
-                            style: GoogleFonts.plusJakartaSans(
-                              fontSize: 11,
-                              color: AppColors.onSurfaceVariant,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                  Text(
+                    'Código de socio: $activeCodSocio',
+                    style: GoogleFonts.plusJakartaSans(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.onSurface,
+                    ),
                   ),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -111,13 +92,11 @@ class _ConsumoScreenState extends ConsumerState<ConsumoScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Text(
-                      consumoState.isTitular ? 'Titular' : 'Inquilino',
+                      consumoState.isTitular ? 'TITULAR' : 'CONSULTA',
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 10.5,
                         fontWeight: FontWeight.w700,
-                        color: consumoState.isTitular
-                            ? AppColors.primary
-                            : AppColors.onSurfaceVariant,
+                        color: AppColors.primary
                       ),
                     ),
                   ),

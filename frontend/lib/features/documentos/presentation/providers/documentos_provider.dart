@@ -97,9 +97,9 @@ class DocumentosState {
 final documentosProvider =
     StateNotifierProvider<DocumentosNotifier, DocumentosState>((ref) {
   final repository = ref.watch(documentosRepositoryProvider);
-  final multicuentaState = ref.watch(multicuentaProvider);
-  final activeCodSocio =
-      multicuentaState.activeSuministro?.codSocio.trim();
+  final activeCodSocio = ref.watch(
+    multicuentaProvider.select((s) => s.activeSuministro?.codSocio.trim()),
+  );
 
   return DocumentosNotifier(
     repository: repository,
@@ -144,6 +144,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
       return;
     }
 
+    if (!mounted) return;
     state = state.copyWith(
       isLoading: true,
       currentCodSocio: cleanCodSocio,
@@ -162,6 +163,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
         newTabIndex = 1;
       }
 
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         documentosResponse: response,
@@ -170,11 +172,13 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
         clearError: true,
       );
     } on AppException catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         errorMessage: e.message,
       );
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         errorMessage: 'Error inesperado al cargar documentos: ${e.toString()}',
@@ -190,6 +194,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
   /// Descarga el archivo PDF y lo guarda en el directorio local del dispositivo.
   /// Retorna la ruta completa al archivo guardado o null si ocurre un error.
   Future<String?> guardarDocumentoLocal(DocumentoModel doc) async {
+    if (!mounted) return null;
     state = state.copyWith(
       isDownloading: true,
       downloadingDocId: doc.id,
@@ -217,6 +222,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
 
       await file.writeAsBytes(bytes, flush: true);
 
+      if (!mounted) return filePath;
       state = state.copyWith(
         isDownloading: false,
         clearDownloading: true,
@@ -224,6 +230,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
 
       return filePath;
     } on AppException catch (e) {
+      if (!mounted) return null;
       state = state.copyWith(
         isDownloading: false,
         clearDownloading: true,
@@ -231,6 +238,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
       );
       return null;
     } catch (e) {
+      if (!mounted) return null;
       state = state.copyWith(
         isDownloading: false,
         clearDownloading: true,
@@ -247,6 +255,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
 
   /// Descarga temporalmente el documento y dispara el diálogo nativo de compartir (WhatsApp, email, etc.)
   Future<bool> compartirDocumento(DocumentoModel doc) async {
+    if (!mounted) return false;
     state = state.copyWith(
       isDownloading: true,
       downloadingDocId: doc.id,
@@ -260,6 +269,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
       final file = File(filePath);
       await file.writeAsBytes(bytes, flush: true);
 
+      if (!mounted) return false;
       state = state.copyWith(
         isDownloading: false,
         clearDownloading: true,
@@ -273,6 +283,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
 
       return result.status == ShareResultStatus.success;
     } on AppException catch (e) {
+      if (!mounted) return false;
       state = state.copyWith(
         isDownloading: false,
         clearDownloading: true,
@@ -280,6 +291,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
       );
       return false;
     } catch (e) {
+      if (!mounted) return false;
       state = state.copyWith(
         isDownloading: false,
         clearDownloading: true,

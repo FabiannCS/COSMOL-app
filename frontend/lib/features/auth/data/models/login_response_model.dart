@@ -3,6 +3,7 @@ class SuministroModel {
   final String id;
   final String codSocio;
   final String alias;
+  final String? nombre;
   final String rol;
   final bool esSuministroPrincipal;
 
@@ -10,6 +11,7 @@ class SuministroModel {
     required this.id,
     required this.codSocio,
     required this.alias,
+    this.nombre,
     required this.rol,
     required this.esSuministroPrincipal,
   });
@@ -19,6 +21,7 @@ class SuministroModel {
       id: json['id']?.toString() ?? '',
       codSocio: json['cod_socio']?.toString() ?? '',
       alias: json['alias']?.toString() ?? '',
+      nombre: json['nombre']?.toString() ?? json['nombre_titular']?.toString(),
       rol: json['rol']?.toString() ?? 'TITULAR',
       esSuministroPrincipal: json['es_suministro_principal'] as bool? ?? false,
     );
@@ -29,6 +32,7 @@ class SuministroModel {
       'id': id,
       'cod_socio': codSocio,
       'alias': alias,
+      if (nombre != null) 'nombre': nombre,
       'rol': rol,
       'es_suministro_principal': esSuministroPrincipal,
     };

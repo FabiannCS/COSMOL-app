@@ -109,17 +109,24 @@ class ServicioConsumo:
                 ((ultimo_m3 - promedio_m3) / promedio_m3) * 100.0, 1
             )
 
-        # Criterio oficial COSMOL: salto de >= 30% respecto al promedio
+        # Criterio oficial: salto de > 40% respecto al mes inmediatamente anterior
         # Exige al menos 2 periodos históricos registrados para validar anomalía
         consumo_atipico = False
         mensaje_alerta = None
-        if cantidad >= 2 and promedio_m3 > 0 and ultimo_m3 >= round(1.30 * promedio_m3, 2):
-            consumo_atipico = True
-            mensaje_alerta = (
-                f"Detectamos un consumo de {ultimo_m3} m³, un {porcentaje_variacion:+0.1f}% superior "
-                f"a su promedio habitual ({promedio_m3} m³). Le sugerimos revisar sus instalaciones "
-                "internas para descartar fugas de agua no visibles."
-            )
+        porcentaje_variacion_mes_anterior = None
+        if cantidad >= 2:
+            penultimo = periodos[-2]
+            if penultimo.consumo_m3 > 0:
+                porcentaje_variacion_mes_anterior = round(
+                    ((ultimo_m3 - penultimo.consumo_m3) / penultimo.consumo_m3) * 100.0, 1
+                )
+                if porcentaje_variacion_mes_anterior > 40.0:
+                    consumo_atipico = True
+                    mensaje_alerta = (
+                        f"Detectamos un consumo de {ultimo_m3} m³, un {porcentaje_variacion_mes_anterior:+0.1f}% superior "
+                        f"al mes anterior ({penultimo.consumo_m3} m³). Le sugerimos revisar sus instalaciones "
+                        "internas para descartar posibles fugas de agua."
+                    )
 
         # Tendencia respecto al mes inmediatamente anterior
         tendencia = "ESTABLE"
@@ -139,7 +146,7 @@ class ServicioConsumo:
             mes_consumo_minimo=p_min.periodo,
             consumo_ultimo_mes_m3=ultimo_m3,
             consumo_atipico=consumo_atipico,
-            porcentaje_variacion_ultimo_mes=porcentaje_variacion,
+            porcentaje_variacion_ultimo_mes=porcentaje_variacion_mes_anterior if porcentaje_variacion_mes_anterior is not None else porcentaje_variacion,
             mensaje_alerta=mensaje_alerta,
             tendencia=tendencia,
         )

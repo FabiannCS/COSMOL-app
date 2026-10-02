@@ -5,13 +5,27 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   AppConfig._();
 
-  /// URL remota del backend institucional desplegado en el servidor
-  static const String remoteBaseUrl = 'https://chatbot.cosmol.com.bo:8083/api/v1';
+  // Variables de entorno inyectadas desde el archivo .env (vía --dart-define-from-file=../.env o --dart-define)
+  static const String _envDomain = String.fromEnvironment(
+    'APP_DOMAIN',
+    defaultValue: 'chatbot.cosmol.com.bo',
+  );
+
+  static const String _envPort = String.fromEnvironment(
+    'APP_EXTERNAL_PORT',
+    defaultValue: '8083',
+  );
+
+  /// URL remota del backend institucional desplegado en el servidor.
+  /// Prioriza API_BASE_URL definido en el archivo .env, o se compone dinámicamente con APP_DOMAIN y APP_EXTERNAL_PORT.
+  static const String remoteBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'https://$_envDomain:$_envPort/api/v1',
+  );
 
   /// Detecta la URL base según la plataforma o entorno de ejecución
   static String get baseUrl {
-    // 1. Si se define explícitamente en tiempo de compilación o ejecución:
-    // flutter run --dart-define=API_BASE_URL=https://chatbot.cosmol.com.bo:8083/api/v1
+    // 1. Si se define explícitamente en tiempo de compilación o ejecución (ej: desde .env):
     const String customBaseUrl = String.fromEnvironment('API_BASE_URL');
     if (customBaseUrl.isNotEmpty) {
       return customBaseUrl;

@@ -5,6 +5,54 @@ import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
 import '../providers/multicuenta_provider.dart';
 
+String _enmascararNombre(String nombreCompleto) {
+  final limpio = nombreCompleto.trim();
+  if (limpio.isEmpty) return '';
+
+  final palabras = limpio.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  if (palabras.isEmpty) return '';
+
+  return palabras.map((p) {
+    if (p.length <= 1) return p;
+    return '${p[0]}******';
+  }).join(' ');
+}
+
+String _formatAlias(String alias, String codSocio, {String? nombre, bool isTitular = true}) {
+  // En modo TITULAR: mostrar el nombre completo si existe
+  if (isTitular) {
+    if (nombre != null && nombre.trim().isNotEmpty) {
+      return nombre.trim();
+    }
+  } else {
+    // En modo CONSULTA: mostrar la inicial y asteriscos (ej. J****** P******)
+    if (nombre != null && nombre.trim().isNotEmpty) {
+      return _enmascararNombre(nombre);
+    }
+  }
+
+  final cleanAlias = alias.trim();
+  final aliasLower = cleanAlias.toLowerCase();
+
+  if (cleanAlias.isEmpty ||
+      cleanAlias == 'Mi Casa' ||
+      cleanAlias == 'Mi casa' ||
+      cleanAlias == 'Mi Suministro' ||
+      cleanAlias == 'Casa Principal' ||
+      cleanAlias == 'Socio de Titular' ||
+      cleanAlias == 'Socio de Titularidad' ||
+      cleanAlias == 'Suministro Consulta' ||
+      cleanAlias == 'Socio de Consulta' ||
+      cleanAlias == 'Socio de Consulta y Pago' ||
+      cleanAlias == 'Cuenta de Consulta' ||
+      aliasLower.contains('suministro consulta') ||
+      aliasLower.contains('socio de consulta')) {
+    return 'Socio: $codSocio';
+  }
+
+  return cleanAlias;
+}
+
 class SuministroSelectorDropdown extends ConsumerWidget {
   const SuministroSelectorDropdown({super.key});
 
@@ -76,7 +124,8 @@ class SuministroSelectorDropdown extends ConsumerWidget {
                 Row(
                   children: [
                     Text(
-                      active.alias.isNotEmpty ? active.alias : 'Socio',
+                      _formatAlias(active.alias, active.codSocio,
+                          nombre: active.nombre, isTitular: isTitular),
                       style: AppTextStyles.subtitle2.copyWith(
                         fontWeight: FontWeight.bold,
                         color: AppColors.textPrimary,
@@ -108,20 +157,13 @@ class SuministroSelectorDropdown extends ConsumerWidget {
 
   Widget _buildRolBadge(String rol) {
     final isTitular = rol.toUpperCase() == 'TITULAR';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
+    return Text(
+      isTitular ? 'TITULAR' : 'CONSULTA',
+      style: TextStyle(
         color: isTitular ? AppColors.primary : AppColors.warningOrange,
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(
-        isTitular ? 'TITULAR' : 'CONSULTA',
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 0.4,
-        ),
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 0.4,
       ),
     );
   }
@@ -169,7 +211,7 @@ class _SuministrosBottomSheet extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Tus Socios Vinculados',
+                'Socios Vinculados',
                 style: AppTextStyles.h3,
               ),
               IconButton(
@@ -242,30 +284,21 @@ class _SuministrosBottomSheet extends ConsumerWidget {
                                 Row(
                                   children: [
                                     Text(
-                                      item.alias.isNotEmpty
-                                          ? item.alias
-                                          : 'Socio ${item.codSocio}',
+                                      _formatAlias(item.alias, item.codSocio,
+                                          nombre: item.nombre, isTitular: isTitular),
                                       style: AppTextStyles.subtitle1.copyWith(
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 6, vertical: 2),
-                                      decoration: BoxDecoration(
+                                    Text(
+                                      isTitular ? 'TITULAR' : 'CONSULTA',
+                                      style: TextStyle(
                                         color: isTitular
                                             ? AppColors.primary
                                             : AppColors.warningOrange,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        isTitular ? 'TITULAR' : 'CONSULTA',
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
                                       ),
                                     ),
                                   ],

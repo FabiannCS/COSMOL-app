@@ -131,17 +131,20 @@ class ServicioSuministros:
                 )
             usuario["suministros"].append(nuevo_suministro_dict)
 
+        nombre_socio = datos_socio.get("NOMBRE") if datos_socio else None
+
         return SuministroResponse(
             id=suministro_id,
             cod_socio=cod_socio,
             alias=datos.alias,
+            nombre=nombre_socio,
             rol=rol,
             es_suministro_principal=False
         )
 
     async def listar_suministros(self, cod_socio_principal: str) -> List[SuministroResponse]:
         """
-        Retorna todos los contratos vinculados al socio actual.
+        Retorna todos los contratos vinculados al socio actual con su nombre oficial.
         """
         if self.db:
             stmt = select(Suministro).where(Suministro.cod_socio == cod_socio_principal)
@@ -171,28 +174,48 @@ class ServicioSuministros:
                 res_all = await self.db.execute(stmt_all)
                 suministros_db = res_all.scalars().all()
                 if suministros_db:
-                    return [
-                        SuministroResponse(
-                            id=s.id,
-                            cod_socio=s.cod_socio,
-                            alias=s.alias,
-                            rol=s.rol,
-                            es_suministro_principal=s.es_suministro_principal
+                    resultado = []
+                    for s in suministros_db:
+                        nom = None
+                        try:
+                            datos_s = await self.cosmol_client.obtener_datos_socio(s.cod_socio)
+                            if datos_s:
+                                nom = datos_s.get("NOMBRE")
+                        except Exception:
+                            nom = None
+                        resultado.append(
+                            SuministroResponse(
+                                id=s.id,
+                                cod_socio=s.cod_socio,
+                                alias=s.alias,
+                                nombre=nom,
+                                rol=s.rol,
+                                es_suministro_principal=s.es_suministro_principal
+                            )
                         )
-                        for s in suministros_db
-                    ]
+                    return resultado
 
         usuario = USUARIOS_REGISTRADOS_DB.get(cod_socio_principal)
         if not usuario:
             return []
 
-        return [
-            SuministroResponse(
-                id=s["id"],
-                cod_socio=s["cod_socio"],
-                alias=s["alias"],
-                rol=s["rol"],
-                es_suministro_principal=s["es_suministro_principal"]
+        resultado_mem = []
+        for s in usuario.get("suministros", []):
+            nom = None
+            try:
+                datos_s = await self.cosmol_client.obtener_datos_socio(s["cod_socio"])
+                if datos_s:
+                    nom = datos_s.get("NOMBRE")
+            except Exception:
+                nom = None
+            resultado_mem.append(
+                SuministroResponse(
+                    id=s["id"],
+                    cod_socio=s["cod_socio"],
+                    alias=s["alias"],
+                    nombre=nom,
+                    rol=s["rol"],
+                    es_suministro_principal=s["es_suministro_principal"]
+                )
             )
-            for s in usuario.get("suministros", [])
-        ]
+        return resultado_mem

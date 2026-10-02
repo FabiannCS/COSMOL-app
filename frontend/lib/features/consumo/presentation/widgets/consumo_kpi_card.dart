@@ -20,7 +20,8 @@ class ConsumoKpiCard extends StatelessWidget {
     final isBajo = state.isBajoPromedio;
     final mesesCount = state.periodo == PeriodoConsumo.seisMeses ? '6' : '12';
     final tendencia = state.tendencia;
-    final esAtipico = state.consumoAtipico;
+    final esAtipico = state.consumoAtipico; // ÚNICAMENTE mayor al 40% vs mes anterior
+    final variacionVsAnterior = state.variacionVsMesAnterior;
 
     return Container(
       width: double.infinity,
@@ -48,10 +49,10 @@ class ConsumoKpiCard extends StatelessWidget {
               Expanded(
                 child: Row(
                   children: [
-                    const Icon(
-                      Icons.water_drop_rounded,
-                      size: 16,
-                      color: Color(0xFFC5E7FF),
+                    Icon(
+                      esAtipico ? Icons.warning_amber_rounded : Icons.water_drop_rounded,
+                      size: 17,
+                      color: esAtipico ? const Color(0xFFFDE047) : const Color(0xFFC5E7FF),
                     ),
                     const SizedBox(width: 6),
                     Flexible(
@@ -60,7 +61,7 @@ class ConsumoKpiCard extends StatelessWidget {
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: const Color(0xFFD1E4FF),
+                          color: esAtipico ? const Color(0xFFFEE2E2) : const Color(0xFFD1E4FF),
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -122,7 +123,7 @@ class ConsumoKpiCard extends StatelessWidget {
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
-                        color: const Color(0xFFC5E7FF),
+                        color: esAtipico ? const Color(0xFFFECACA) : const Color(0xFFC5E7FF),
                       ),
                     ),
                   ],
@@ -135,12 +136,65 @@ class ConsumoKpiCard extends StatelessWidget {
                   style: GoogleFonts.plusJakartaSans(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: const Color(0xFFD1E4FF),
+                    color: esAtipico ? const Color(0xFFFEE2E2) : const Color(0xFFD1E4FF),
                   ),
                 ),
               ],
             ],
           ),
+
+          // Banner Destacado de Alerta de Fuga (Se muestra ÚNICAMENTE si incremento > 40% vs mes anterior)
+          if (esAtipico) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: const Color(0xFFFCA5A5).withValues(alpha: 0.6),
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline_rounded,
+                    color: Color(0xFFFDE047),
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          variacionVsAnterior != null
+                              ? 'Consumo elevado (+${variacionVsAnterior.toStringAsFixed(1)}% vs mes anterior)'
+                              : 'Consumo elevado (> +40% vs mes anterior)',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        Text(
+                          'Alerta de posible fuga interna en sus instalaciones.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w500,
+                            color: const Color(0xFFFEE2E2),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
           const SizedBox(height: 14),
 
           // Divisor sutil
@@ -150,7 +204,7 @@ class ConsumoKpiCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
-          // Fila de Promedio y Estado Comparativo (Responsive & Overflow-Safe)
+          // Fila de Promedio y Estado Comparativo (Calculado sobre 6 o 12 meses según filtro)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.center,
@@ -163,7 +217,7 @@ class ConsumoKpiCard extends StatelessWidget {
                     text: TextSpan(
                       style: GoogleFonts.plusJakartaSans(
                         fontSize: 12,
-                        color: const Color(0xFFD1E4FF),
+                        color: esAtipico ? const Color(0xFFFEE2E2) : const Color(0xFFD1E4FF),
                       ),
                       children: [
                         TextSpan(text: 'Promedio $mesesCount meses: '),
@@ -192,7 +246,7 @@ class ConsumoKpiCard extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: isBajo
                             ? const Color(0xFF16A34A).withValues(alpha: 0.3)
-                            : const Color(0xFFDC2626).withValues(alpha: 0.3),
+                            : const Color(0xFFDC2626).withValues(alpha: 0.35),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Row(
@@ -215,7 +269,26 @@ class ConsumoKpiCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (tendencia != 'ESTABLE') ...[
+                    if (variacionVsAnterior != null) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          variacionVsAnterior >= 0
+                              ? '↑ +${variacionVsAnterior.toStringAsFixed(0)}%'
+                              : '↓ ${variacionVsAnterior.toStringAsFixed(0)}%',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    ] else if (tendencia != 'ESTABLE') ...[
                       const SizedBox(width: 6),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),

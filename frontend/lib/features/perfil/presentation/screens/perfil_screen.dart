@@ -88,7 +88,7 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Código de Socio: ${widget.activeSuministro?.codSocio ?? 'N/A'}',
+                  'Código de Socio: ${widget.activeSuministro?.codSocio ?? ''}',
                   style: AppTextStyles.body2.copyWith(color: Colors.white70),
                 ),
               ],

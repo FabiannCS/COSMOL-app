@@ -14,19 +14,19 @@ async def seed():
             {
                 "cod_socio": "540",
                 "telefono": "+59171029384",
-                "alias": "Mi Casa",
-                "secundario": {"cod_socio": "556", "alias": "Alquiler Bolívar", "rol": "CONSULTA_PAGO"}
+                "alias": "Socio: 540",
+                "secundario": {"cod_socio": "556", "alias": "Socio: 556", "rol": "CONSULTA_PAGO"}
             },
             {
                 "cod_socio": "104523",
                 "telefono": "+59172019283",
-                "alias": "Mi Suministro",
+                "alias": "Socio: 104523",
                 "secundario": None
             },
             {
                 "cod_socio": "556",
                 "telefono": "+59173091827",
-                "alias": "Casa Principal",
+                "alias": "Socio: 556",
                 "secundario": None
             },
         ]

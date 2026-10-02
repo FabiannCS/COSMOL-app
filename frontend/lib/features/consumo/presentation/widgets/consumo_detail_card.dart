@@ -25,6 +25,8 @@ class ConsumoDetailCard extends StatelessWidget {
     final esElMesDeMayorAhorro = mayorAhorro != null &&
         mayorAhorro.mes == selectedFactura.mes &&
         mayorAhorro.anio == selectedFactura.anio;
+    final tieneAlertaFuga = state.tieneAlertaFuga(selectedFactura);
+    final variacionVsAnterior = state.getVariacionVsMesAnterior(selectedFactura);
 
     return Container(
       width: double.infinity,
@@ -205,7 +207,58 @@ class ConsumoDetailCard extends StatelessWidget {
             const SizedBox(height: 10),
           ],
 
-          // 4. Tarjeta Explicativa de Comparación con el Promedio
+          // 4. Banner Preventivo si el mes seleccionado supera el 40% vs mes anterior
+          if (tieneAlertaFuga) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFFCA5A5)),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.warning_amber_rounded,
+                    color: Color(0xFFDC2626),
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          variacionVsAnterior != null
+                              ? 'Alerta: Consumo Elevado (+${variacionVsAnterior.toStringAsFixed(1)}% vs mes anterior)'
+                              : 'Alerta: Consumo Elevado (> +40% vs mes anterior)',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            color: const Color(0xFF991B1B),
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Este mes registró un incremento superior al 40% respecto al mes anterior. Le sugerimos revisar sus instalaciones para descartar posibles fugas de agua.',
+                          style: GoogleFonts.plusJakartaSans(
+                            fontSize: 11,
+                            color: const Color(0xFFB91C1C),
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+
+          // 5. Tarjeta Explicativa de Comparación con el Promedio
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),

@@ -47,6 +47,7 @@ class SuministroResponse(BaseModel):
     id: UUID = Field(..., description="Identificador único del registro de suministro.")
     cod_socio: str = Field(..., description="Código de socio o contrato.")
     alias: str = Field(..., description="Alias personalizado configurado por el usuario.")
+    nombre: Optional[str] = Field(default=None, description="Nombre oficial del socio registrado en COSMOL.")
     rol: str = Field(..., description="Nivel de acceso: 'TITULAR' o 'CONSULTA_PAGO'.")
     es_suministro_principal: bool = Field(
         default=False,

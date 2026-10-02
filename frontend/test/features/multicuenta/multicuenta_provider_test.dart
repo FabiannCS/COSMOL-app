@@ -31,6 +31,11 @@ class MockMulticuentaRepository implements MulticuentaRepository {
       esSuministroPrincipal: false,
     );
   }
+
+  @override
+  Future<void> desvincularSuministro(String codSocio) async {
+    mockSuministros.removeWhere((s) => s.codSocio == codSocio);
+  }
 }
 
 class FakeStorageService implements StorageService {
@@ -144,6 +149,33 @@ void main() {
 
       expect(notifier.state.activeSuministro?.codSocio, '104524');
       expect(mockStorage.activeCodSocio, '104524');
+    });
+
+    test('Desvincular suministro secundario actualiza la lista y reasigna el activo', () async {
+      final nuevoSuministro = const SuministroModel(
+        id: 'mock-id-2',
+        codSocio: '104524',
+        alias: 'Depto Alquiler',
+        rol: 'CONSULTA_PAGO',
+        esSuministroPrincipal: false,
+      );
+
+      final notifier = MulticuentaNotifier(
+        repository: mockRepo,
+        storageService: mockStorage,
+        initialSuministros: [suministroInitial, nuevoSuministro],
+        initialCodSocio: '104524',
+      );
+
+      expect(notifier.state.activeSuministro?.codSocio, '104524');
+
+      final result = await notifier.desvincularSuministro('104524');
+
+      expect(result, true);
+      expect(notifier.state.suministros.length, 1);
+      expect(notifier.state.suministros.first.codSocio, '104523');
+      expect(notifier.state.activeSuministro?.codSocio, '104523');
+      expect(mockStorage.activeCodSocio, '104523');
     });
   });
 }

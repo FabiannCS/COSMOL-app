@@ -45,8 +45,9 @@ class DeudaState {
 
 final deudaProvider = StateNotifierProvider<DeudaNotifier, DeudaState>((ref) {
   final repository = ref.watch(deudaRepositoryProvider);
-  final multicuentaState = ref.watch(multicuentaProvider);
-  final activeCodSocio = multicuentaState.activeSuministro?.codSocio;
+  final activeCodSocio = ref.watch(
+    multicuentaProvider.select((s) => s.activeSuministro?.codSocio),
+  );
 
   final notifier = DeudaNotifier(repository);
 
@@ -75,6 +76,7 @@ class DeudaNotifier extends StateNotifier<DeudaState> {
       return;
     }
 
+    if (!mounted) return;
     state = state.copyWith(
       isLoading: true,
       errorMessage: null,
@@ -87,6 +89,7 @@ class DeudaNotifier extends StateNotifier<DeudaState> {
         forzarRefresco: forzarRefresco,
       );
 
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         resumenDeuda: resumen,
@@ -94,11 +97,13 @@ class DeudaNotifier extends StateNotifier<DeudaState> {
         currentCodSocio: cleanCod,
       );
     } on AppException catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         errorMessage: e.message,
       );
     } catch (e) {
+      if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         errorMessage:
