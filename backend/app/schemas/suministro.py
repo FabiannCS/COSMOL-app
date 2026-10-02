@@ -53,3 +53,12 @@ class SuministroResponse(BaseModel):
         default=False,
         description="Indica si es el suministro predeterminado al abrir la aplicación."
     )
+
+
+class DesvincularSuministroResponse(BaseModel):
+    """
+    Respuesta tras desvincular un suministro secundario de la cuenta del usuario.
+    """
+    mensaje: str = Field(..., description="Mensaje de confirmación de la operación.")
+    cod_socio: str = Field(..., description="Código de socio desvinculado exitosamente.")
+

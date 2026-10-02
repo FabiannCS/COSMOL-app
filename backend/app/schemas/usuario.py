@@ -184,3 +184,164 @@ class RenovarTokenRequest(BaseModel):
     """
     refresh_token: str = Field(..., description="Token de refresco vigente.")
     device_id: str = Field(..., description="Device ID para verificar que la sesión no fue tomada por otro equipo.")
+
+
+class PrimerAccesoResponse(BaseModel):
+    """
+    Respuesta enriquecida del Paso 1 de Onboarding.
+    Informa si el socio ya tiene cuenta previa para activar el diálogo de migración/login.
+    """
+    cod_socio: str = Field(..., description="Código de socio verificado.")
+    nombre_titular: str = Field(..., description="Nombre oficial del titular registrado en COSMOL.")
+    cuenta_existente: bool = Field(default=False, description="True si ya existe una cuenta TITULAR activa.")
+    telefono_enmascarado: Optional[str] = Field(default=None, description="Teléfono celular enmascarado si la cuenta ya existe.")
+    es_recuperacion: bool = Field(default=False, description="Indica si debe derivar a recuperación/migración.")
+    mensaje: str = Field(..., description="Mensaje contextual para el usuario.")
+
+
+# ------------------------------------------------------------------------------
+# MIGRACIÓN SEGURA DE TELÉFONO (CAMBIO DE CHIP / CELULAR NUEVO)
+# ------------------------------------------------------------------------------
+
+class MigrarTelefonoIniciarRequest(BaseModel):
+    """
+    Solicitud para iniciar el traspaso de la cuenta titular a un nuevo número de celular.
+    Exige la validación estricta del PIN actual para prevenir robo de cuentas con facturas físicas.
+    """
+    cod_socio: str = Field(..., min_length=3, max_length=20, description="Código de socio titular.")
+    ci: str = Field(..., min_length=4, max_length=20, description="Cédula de Identidad del titular.")
+    pin_actual: str = Field(..., min_length=4, max_length=30, description="PIN o clave secreta actual de la cuenta.")
+    nuevo_telefono: str = Field(..., min_length=8, max_length=20, description="Nuevo número celular a vincular.")
+    canal: Literal["WHATSAPP", "SMS"] = Field(default="WHATSAPP", description="Canal para recibir el OTP.")
+
+    @field_validator("cod_socio", "ci")
+    @classmethod
+    def limpiar_espacios(cls, v: str) -> str:
+        return v.strip()
+
+    @field_validator("canal", mode="before")
+    @classmethod
+    def normalizar_canal(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip().upper()
+        return v
+
+    @field_validator("nuevo_telefono")
+    @classmethod
+    def normalizar_nuevo_telefono(cls, v: str) -> str:
+        v = v.strip().replace(" ", "").replace("-", "")
+        if len(v) == 8 and v.isdigit():
+            return f"+591{v}"
+        if not re.match(r"^\+?[0-9]{8,15}$", v):
+            raise ValueError("El formato del nuevo número telefónico no es válido.")
+        return v if v.startswith("+") else f"+{v}"
+
+
+class MigrarTelefonoIniciarResponse(BaseModel):
+    session_id: str = Field(..., description="ID de sesión temporal de migración (TTL 5 min).")
+    mensaje: str = Field(..., description="Mensaje descriptivo.")
+    ttl_segundos: int = Field(default=300, description="Tiempo de expiración del OTP.")
+    debug_codigo_otp: Optional[str] = Field(default=None, description="Código OTP en desarrollo.")
+
+
+class MigrarTelefonoConfirmarRequest(BaseModel):
+    session_id: str = Field(..., description="ID de sesión obtenido al iniciar la migración.")
+    codigo_otp: str = Field(..., min_length=6, max_length=6, description="Código de 6 dígitos recibido en el nuevo celular.")
+
+    @field_validator("codigo_otp")
+    @classmethod
+    def validar_codigo(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isdigit() or len(v) != 6:
+            raise ValueError("El código OTP debe ser numérico de 6 dígitos.")
+        return v
+
+
+class MigrarTelefonoConfirmarResponse(BaseModel):
+    mensaje: str = Field(..., description="Confirmación de actualización.")
+    access_token: str = Field(..., description="Nuevo JWT de acceso.")
+    refresh_token: str = Field(..., description="Nuevo JWT de renovación.")
+    token_type: str = Field(default="bearer")
+    cod_socio: str = Field(...)
+    nombre: str = Field(...)
+    suministros: List[SuministroResponse] = Field(default_factory=list)
+
+
+# ------------------------------------------------------------------------------
+# RECUPERACIÓN SEGURA DE CONTRASEÑA / PIN (ZERO-TRUST)
+# ------------------------------------------------------------------------------
+
+class RecuperarValidarTitularRequest(BaseModel):
+    cod_socio: str = Field(..., min_length=3, max_length=20, description="Código de socio.")
+    ci: str = Field(..., min_length=4, max_length=20, description="Carnet de Identidad del titular.")
+
+    @field_validator("cod_socio", "ci")
+    @classmethod
+    def limpiar_espacios(cls, v: str) -> str:
+        return v.strip()
+
+
+class RecuperarValidarTitularResponse(BaseModel):
+    session_id: str = Field(..., description="Identificador de sesión de recuperación.")
+    cod_socio: str = Field(..., description="Código de socio.")
+    nombre_titular: str = Field(..., description="Nombre del titular.")
+    telefono_enmascarado: str = Field(..., description="Número celular enmascarado registrado en BD.")
+    mensaje: str = Field(...)
+
+
+class RecuperarSolicitarOtpRequest(BaseModel):
+    session_id: str = Field(..., description="ID de sesión obtenido en validar titular.")
+    canal: Literal["WHATSAPP", "SMS"] = Field(default="WHATSAPP")
+
+    @field_validator("canal", mode="before")
+    @classmethod
+    def normalizar_canal(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip().upper()
+        return v
+
+
+class RecuperarSolicitarOtpResponse(BaseModel):
+    mensaje: str
+    canal: str
+    telefono_enmascarado: str
+    ttl_segundos: int = 300
+    debug_codigo_otp: Optional[str] = None
+
+
+class RecuperarVerificarOtpRequest(BaseModel):
+    session_id: str = Field(..., description="ID de sesión de recuperación.")
+    codigo: str = Field(..., min_length=6, max_length=6, description="Código de 6 dígitos.")
+
+    @field_validator("codigo")
+    @classmethod
+    def validar_codigo(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isdigit() or len(v) != 6:
+            raise ValueError("El código debe contener exactamente 6 dígitos.")
+        return v
+
+
+class RecuperarVerificarOtpResponse(BaseModel):
+    mensaje: str
+    token_recuperacion: str = Field(..., description="Token criptográfico para cambiar el PIN.")
+    cod_socio: str
+
+
+class RecuperarCambiarPinRequest(BaseModel):
+    token_recuperacion: str = Field(..., description="Token criptográfico emitido tras verificar OTP.")
+    nuevo_pin: str = Field(..., min_length=4, max_length=30, description="Nuevo PIN personal.")
+
+    @field_validator("nuevo_pin")
+    @classmethod
+    def validar_pin(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 4:
+            raise ValueError("El PIN debe contener al menos 4 caracteres.")
+        return v
+
+
+class RecuperarCambiarPinResponse(BaseModel):
+    mensaje: str
+    cod_socio: str
+

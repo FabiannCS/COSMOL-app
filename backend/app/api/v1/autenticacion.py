@@ -7,10 +7,27 @@ from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_redis, get_token_payload
-from app.schemas.suministro import SuministroResponse, VincularSuministroRequest
+from app.schemas.suministro import (
+    DesvincularSuministroResponse,
+    SuministroResponse,
+    VincularSuministroRequest,
+)
 from app.schemas.usuario import (
     CrearPinPasswordRequest,
     LoginRequest,
+    MigrarTelefonoConfirmarRequest,
+    MigrarTelefonoConfirmarResponse,
+    MigrarTelefonoIniciarRequest,
+    MigrarTelefonoIniciarResponse,
+    PrimerAccesoResponse,
+    RecuperarCambiarPinRequest,
+    RecuperarCambiarPinResponse,
+    RecuperarSolicitarOtpRequest,
+    RecuperarSolicitarOtpResponse,
+    RecuperarValidarTitularRequest,
+    RecuperarValidarTitularResponse,
+    RecuperarVerificarOtpRequest,
+    RecuperarVerificarOtpResponse,
     RenovarTokenRequest,
     SolicitarOtpRequest,
     TokenResponse,
@@ -26,20 +43,29 @@ router = APIRouter()
 
 @router.post(
     "/verificar-socio",
+    response_model=PrimerAccesoResponse,
     status_code=status.HTTP_200_OK,
     summary="Paso 1 Onboarding: Verificar código de socio y CI",
-    description="Valida la coincidencia del código de socio y carnet contra el sistema comercial legado de COSMOL."
+    description="Valida la coincidencia del código de socio y carnet contra el sistema comercial legado de COSMOL e informa si ya existe cuenta previa."
+)
+@router.post(
+    "/verificar-primer-acceso",
+    response_model=PrimerAccesoResponse,
+    status_code=status.HTTP_200_OK,
+    include_in_schema=False
 )
 async def verificar_socio(
     datos: VerificarSocioRequest,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
-) -> Dict[str, Any]:
+) -> PrimerAccesoResponse:
     servicio = ServicioAutenticacion(redis, db=db)
-    return await servicio.verificar_primer_acceso(
+    res = await servicio.verificar_primer_acceso(
         cod_socio=datos.cod_socio,
         ci=datos.ci
     )
+    return PrimerAccesoResponse(**res)
+
 
 
 @router.post(
@@ -226,4 +252,160 @@ async def listar_suministros(
         cod_socio_principal=cod_socio_principal,
         usuario_id_token=usuario_id
     )
+
+
+@router.delete(
+    "/suministros/{cod_socio}",
+    response_model=DesvincularSuministroResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Multicuenta: Desvincular suministro secundario",
+    description="Desvincula un suministro en modo consulta o inquilino. Prohibido para el titular principal."
+)
+async def desvincular_suministro(
+    cod_socio: str,
+    token_payload: Dict[str, Any] = Depends(get_token_payload),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> DesvincularSuministroResponse:
+    cod_socio_principal = str(token_payload.get("cod_socio", ""))
+    usuario_id = str(token_payload.get("sub", ""))
+    servicio = ServicioSuministros(redis, db=db)
+    res = await servicio.desvincular_suministro(
+        cod_socio_principal=cod_socio_principal,
+        cod_socio_a_desvincular=cod_socio,
+        usuario_id_token=usuario_id
+    )
+    return DesvincularSuministroResponse(**res)
+
+
+# ==============================================================================
+# MIGRACIÓN SEGURA DE TELÉFONO (CAMBIO DE CHIP / CELULAR NUEVO)
+# ==============================================================================
+
+@router.post(
+    "/migrar-telefono/iniciar",
+    response_model=MigrarTelefonoIniciarResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Migración: Iniciar cambio de número celular con validación de PIN titular",
+    description="Valida las credenciales y el PIN actual del titular antes de enviar el OTP de verificación al nuevo celular."
+)
+async def migrar_telefono_iniciar(
+    datos: MigrarTelefonoIniciarRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> MigrarTelefonoIniciarResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.iniciar_migracion_telefono(
+        cod_socio=datos.cod_socio,
+        ci=datos.ci,
+        pin_actual=datos.pin_actual,
+        nuevo_telefono=datos.nuevo_telefono,
+        canal=datos.canal
+    )
+    return MigrarTelefonoIniciarResponse(**res)
+
+
+@router.post(
+    "/migrar-telefono/confirmar",
+    response_model=MigrarTelefonoConfirmarResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Migración: Confirmar OTP del nuevo número y finalizar traspaso",
+    description="Valida el código de seguridad recibido en el nuevo teléfono, actualiza la BD y emite nuevos tokens JWT."
+)
+async def migrar_telefono_confirmar(
+    datos: MigrarTelefonoConfirmarRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> MigrarTelefonoConfirmarResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.confirmar_migracion_telefono(
+        session_id=datos.session_id,
+        codigo_otp=datos.codigo_otp
+    )
+    return MigrarTelefonoConfirmarResponse(**res)
+
+
+# ==============================================================================
+# RECUPERACIÓN SEGURA DE CONTRASEÑA / PIN (ZERO-TRUST)
+# ==============================================================================
+
+@router.post(
+    "/recuperar-password/validar-titular",
+    response_model=RecuperarValidarTitularResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Recuperar PIN Paso 1: Validar titular y obtener celular enmascarado",
+    description="Comprueba titularidad en COSMOL y retorna el número celular registrado en BD para recepción de OTP."
+)
+async def recuperar_validar_titular(
+    datos: RecuperarValidarTitularRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> RecuperarValidarTitularResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.validar_titular_recuperacion(
+        cod_socio=datos.cod_socio,
+        ci=datos.ci
+    )
+    return RecuperarValidarTitularResponse(**res)
+
+
+@router.post(
+    "/recuperar-password/solicitar-otp",
+    response_model=RecuperarSolicitarOtpResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Recuperar PIN Paso 2: Despachar código OTP al número registrado",
+    description="Genera y envía un código de 6 dígitos con vigencia de 5 minutos al teléfono asociado a la cuenta."
+)
+async def recuperar_solicitar_otp(
+    datos: RecuperarSolicitarOtpRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> RecuperarSolicitarOtpResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.solicitar_otp_recuperacion(
+        session_id=datos.session_id,
+        canal=datos.canal
+    )
+    return RecuperarSolicitarOtpResponse(**res)
+
+
+@router.post(
+    "/recuperar-password/verificar-otp",
+    response_model=RecuperarVerificarOtpResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Recuperar PIN Paso 3: Validar OTP y emitir token de recuperación",
+    description="Valida el código de 6 dígitos y emite un token temporal de un solo uso para autorizar el cambio de PIN."
+)
+async def recuperar_verificar_otp(
+    datos: RecuperarVerificarOtpRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> RecuperarVerificarOtpResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.verificar_otp_recuperacion(
+        session_id=datos.session_id,
+        codigo=datos.codigo
+    )
+    return RecuperarVerificarOtpResponse(**res)
+
+
+@router.post(
+    "/recuperar-password/cambiar-pin",
+    response_model=RecuperarCambiarPinResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Recuperar PIN Paso 4: Establecer nuevo PIN y desbloquear cuenta",
+    description="Actualiza el hash bcrypt del PIN en base de datos, revoca sesiones previas y resetea contadores de bloqueo."
+)
+async def recuperar_cambiar_pin(
+    datos: RecuperarCambiarPinRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> RecuperarCambiarPinResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.cambiar_pin_recuperacion(
+        token_recuperacion=datos.token_recuperacion,
+        nuevo_pin=datos.nuevo_pin
+    )
+    return RecuperarCambiarPinResponse(**res)
+
 

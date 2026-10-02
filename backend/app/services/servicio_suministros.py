@@ -2,9 +2,10 @@
 Servicio de lógica de negocio para gestión Multicuenta de Suministros (COSMOL R.L.).
 Permite que un único socio administre múltiples contratos (casa, alquiler, negocio).
 """
+import asyncio
 import logging
 import uuid
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import redis.asyncio as aioredis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class ServicioSuministros:
     """
-    Controlador para vinculación y consulta de suministros multicuenta.
+    Controlador para vinculación, desvinculación y consulta de suministros multicuenta.
     Integrado con PostgreSQL (AsyncSession) y modelos ORM.
     """
 
@@ -35,6 +36,32 @@ class ServicioSuministros:
         self.redis = redis_client
         self.db = db
         self.cosmol_client = cliente_cosmol or cosmol_client
+
+    async def _obtener_nombre_socio(self, cod_socio: str) -> Optional[str]:
+        """
+        Recupera el nombre oficial del socio con soporte de caché en Redis (TTL 24 horas).
+        Evita saturar el backend comercial y reduce la latencia a <1ms tras la primera consulta.
+        """
+        cache_key = f"socio:nombre:{cod_socio}"
+        try:
+            nombre_cache = await self.redis.get(cache_key)
+            if nombre_cache:
+                return nombre_cache.decode("utf-8") if isinstance(nombre_cache, bytes) else str(nombre_cache)
+        except Exception:
+            pass
+
+        try:
+            datos = await self.cosmol_client.obtener_datos_socio(cod_socio)
+            if datos and datos.get("NOMBRE"):
+                nom = str(datos["NOMBRE"]).strip()
+                try:
+                    await self.redis.set(cache_key, nom, ex=86400)
+                except Exception:
+                    pass
+                return nom
+        except Exception:
+            pass
+        return None
 
     async def vincular_suministro(
         self,
@@ -139,6 +166,89 @@ class ServicioSuministros:
             es_suministro_principal=False
         )
 
+    async def desvincular_suministro(
+        self,
+        cod_socio_principal: str,
+        cod_socio_a_desvincular: str,
+        usuario_id_token: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Desvincula un suministro secundario (rol CONSULTA_PAGO o no principal) de la cuenta del usuario.
+        Rechaza la desvinculación si el suministro es el principal o titular de la cuenta.
+        """
+        cod_socio_a_desvincular = str(cod_socio_a_desvincular).strip()
+        cod_socio_principal = str(cod_socio_principal).strip()
+
+        if cod_socio_a_desvincular == cod_socio_principal:
+            raise BadRequestException(
+                message="No es posible desvincular el suministro principal de su cuenta.",
+                error_code="CANNOT_UNLINK_PRIMARY"
+            )
+
+        desvinculado_exitoso = False
+
+        if self.db:
+            usuario_id = None
+            if usuario_id_token:
+                try:
+                    usuario_id = uuid.UUID(str(usuario_id_token))
+                except Exception:
+                    usuario_id = None
+
+            if not usuario_id and cod_socio_principal:
+                stmt_user = select(Suministro).where(Suministro.cod_socio == cod_socio_principal)
+                res_user = await self.db.execute(stmt_user)
+                sum_p = res_user.scalars().first()
+                if sum_p:
+                    usuario_id = sum_p.usuario_id
+
+            if usuario_id:
+                stmt = select(Suministro).where(
+                    Suministro.usuario_id == usuario_id,
+                    Suministro.cod_socio == cod_socio_a_desvincular
+                )
+                res = await self.db.execute(stmt)
+                suministro = res.scalars().first()
+
+                if not suministro:
+                    raise NotFoundException(
+                        message=f"El suministro '{cod_socio_a_desvincular}' no está vinculado a su cuenta.",
+                        error_code="SUMINISTRO_NOT_LINKED"
+                    )
+
+                if suministro.es_suministro_principal:
+                    raise BadRequestException(
+                        message="No es posible desvincular el suministro principal de su cuenta.",
+                        error_code="CANNOT_UNLINK_PRIMARY"
+                    )
+
+                await self.db.delete(suministro)
+                await self.db.commit()
+                desvinculado_exitoso = True
+                logger.info(f"Suministro '{cod_socio_a_desvincular}' desvinculado exitosamente del usuario {usuario_id} en PostgreSQL.")
+
+        # Sincronización en memoria
+        usuario_mem = USUARIOS_REGISTRADOS_DB.get(cod_socio_principal)
+        if usuario_mem:
+            suministros_previos = usuario_mem.get("suministros", [])
+            usuario_mem["suministros"] = [
+                s for s in suministros_previos
+                if s.get("cod_socio") != cod_socio_a_desvincular
+            ]
+            if len(usuario_mem["suministros"]) < len(suministros_previos):
+                desvinculado_exitoso = True
+
+        if not desvinculado_exitoso and not self.db:
+            raise NotFoundException(
+                message=f"El suministro '{cod_socio_a_desvincular}' no está vinculado a su cuenta.",
+                error_code="SUMINISTRO_NOT_LINKED"
+            )
+
+        return {
+            "mensaje": "Suministro desvinculado exitosamente.",
+            "cod_socio": cod_socio_a_desvincular
+        }
+
     async def listar_suministros(
         self,
         cod_socio_principal: str,
@@ -146,6 +256,7 @@ class ServicioSuministros:
     ) -> List[SuministroResponse]:
         """
         Retorna todos los contratos vinculados al socio actual con su nombre oficial.
+        Optimizado con asyncio.gather concurrente y caché en Redis.
         """
         if self.db:
             usuario_id = None
@@ -171,48 +282,42 @@ class ServicioSuministros:
                 res_all = await self.db.execute(stmt_all)
                 suministros_db = res_all.scalars().all()
                 if suministros_db:
-                    resultado = []
-                    for s in suministros_db:
-                        nom = None
-                        try:
-                            datos_s = await self.cosmol_client.obtener_datos_socio(s.cod_socio)
-                            if datos_s:
-                                nom = datos_s.get("NOMBRE")
-                        except Exception:
-                            nom = None
-                        resultado.append(
-                            SuministroResponse(
-                                id=s.id,
-                                cod_socio=s.cod_socio,
-                                alias=s.alias,
-                                nombre=nom,
-                                rol=s.rol,
-                                es_suministro_principal=s.es_suministro_principal
-                            )
+                    # Consulta concurrente de nombres oficiales con asyncio.gather
+                    nombres = await asyncio.gather(
+                        *[self._obtener_nombre_socio(s.cod_socio) for s in suministros_db],
+                        return_exceptions=True
+                    )
+                    return [
+                        SuministroResponse(
+                            id=s.id,
+                            cod_socio=s.cod_socio,
+                            alias=s.alias,
+                            nombre=nom if isinstance(nom, str) else None,
+                            rol=s.rol,
+                            es_suministro_principal=s.es_suministro_principal
                         )
-                    return resultado
+                        for s, nom in zip(suministros_db, nombres)
+                    ]
 
         usuario = USUARIOS_REGISTRADOS_DB.get(cod_socio_principal)
         if not usuario:
             return []
 
-        resultado_mem = []
-        for s in usuario.get("suministros", []):
-            nom = None
-            try:
-                datos_s = await self.cosmol_client.obtener_datos_socio(s["cod_socio"])
-                if datos_s:
-                    nom = datos_s.get("NOMBRE")
-            except Exception:
-                nom = None
-            resultado_mem.append(
-                SuministroResponse(
-                    id=s["id"],
-                    cod_socio=s["cod_socio"],
-                    alias=s["alias"],
-                    nombre=nom,
-                    rol=s["rol"],
-                    es_suministro_principal=s["es_suministro_principal"]
-                )
+        suministros_mem = usuario.get("suministros", [])
+        nombres_mem = await asyncio.gather(
+            *[self._obtener_nombre_socio(s["cod_socio"]) for s in suministros_mem],
+            return_exceptions=True
+        )
+
+        return [
+            SuministroResponse(
+                id=s["id"],
+                cod_socio=s["cod_socio"],
+                alias=s["alias"],
+                nombre=nom if isinstance(nom, str) else None,
+                rol=s["rol"],
+                es_suministro_principal=s["es_suministro_principal"]
             )
-        return resultado_mem
+            for s, nom in zip(suministros_mem, nombres_mem)
+        ]
+
