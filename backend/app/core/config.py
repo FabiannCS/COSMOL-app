@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """
     # Entorno y Depuración
     PROJECT_NAME: str = "COSMOL R.L. - Backend API"
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.0.2"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
