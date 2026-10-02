@@ -7,6 +7,7 @@ import '../../features/auth/presentation/screens/splash_screen.dart';
 import '../../features/auth/presentation/screens/login_screen.dart';
 import '../../features/auth/presentation/screens/onboarding_screen.dart';
 import '../../features/auth/presentation/screens/onboarding_step2_screen.dart';
+import '../../features/auth/presentation/screens/recuperar_password_screen.dart';
 import '../../features/home/presentation/screens/dashboard_screen.dart';
 import '../../features/multicuenta/presentation/screens/supplies_list_screen.dart';
 import '../../features/multicuenta/presentation/screens/bind_supply_screen.dart';
@@ -23,13 +24,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isSplash = state.matchedLocation == '/splash';
       final isLoggingIn = state.matchedLocation == '/login';
       final isOnboarding = state.matchedLocation.startsWith('/onboarding');
+      final isRecuperarPassword =
+          state.matchedLocation.startsWith('/recuperar-password');
 
       if (status == AuthStatus.initial) {
         return isSplash ? null : '/splash';
       }
 
       if (status == AuthStatus.unauthenticated || status == AuthStatus.locked) {
-        return isLoggingIn || isOnboarding ? null : '/login';
+        return isLoggingIn || isOnboarding || isRecuperarPassword ? null : '/login';
       }
 
       if (status == AuthStatus.onboardingRequired) {
@@ -37,7 +40,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (status == AuthStatus.authenticated) {
-        if (isSplash || isLoggingIn || isOnboarding) {
+        if (isSplash || isLoggingIn || isOnboarding || isRecuperarPassword) {
           return '/dashboard';
         }
       }
@@ -54,6 +57,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/login',
         name: 'login',
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: '/recuperar-password',
+        name: 'recuperar-password',
+        builder: (context, state) => const RecuperarPasswordScreen(),
       ),
       GoRoute(
         path: '/onboarding',

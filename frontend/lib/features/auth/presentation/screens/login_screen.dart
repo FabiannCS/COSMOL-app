@@ -77,7 +77,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           context,
           segundosRestantes: next.bloqueadoSegundosRestantes,
           onUnlockViaOtp: () {
-            context.push('/onboarding');
+            context.push('/recuperar-password');
           },
         );
       } else if (next.status == AuthStatus.onboardingRequired) {
@@ -212,7 +212,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           // Help Link (¿Olvidaste tu contraseña?)
                           Center(
                             child: InkWell(
-                              onTap: _openWhatsAppHelp,
+                              onTap: () {
+                                context.push('/recuperar-password');
+                              },
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(

@@ -1,7 +1,8 @@
-import '../../data/models/verify_socio_response_model.dart';
-import '../../data/models/otp_models.dart';
-import '../../data/models/register_credentials_model.dart';
 import '../../data/models/login_response_model.dart';
+import '../../data/models/otp_models.dart';
+import '../../data/models/recuperar_password_models.dart';
+import '../../data/models/register_credentials_model.dart';
+import '../../data/models/verify_socio_response_model.dart';
 
 abstract class AuthRepository {
   Future<VerifySocioResponseModel> verificarSocio({
@@ -29,5 +30,25 @@ abstract class AuthRepository {
     required String password,
     required String deviceId,
     String modeloDispositivo = 'Mobile Device',
+  });
+
+  Future<ValidarTitularResponseModel> validarTitularRecuperacion({
+    required String codSocio,
+    required String ci,
+  });
+
+  Future<SolicitarOtpRecuperacionResponseModel> solicitarOtpRecuperacion({
+    required String sessionId,
+    String canal = 'WHATSAPP',
+  });
+
+  Future<VerificarOtpRecuperacionResponseModel> verificarOtpRecuperacion({
+    required String sessionId,
+    required String codigo,
+  });
+
+  Future<CambiarPinRecuperacionResponseModel> cambiarPinRecuperacion({
+    required String tokenRecuperacion,
+    required String nuevoPin,
   });
 }

@@ -6,6 +6,7 @@ import 'package:cosmol_app/core/services/device_service.dart';
 import 'package:cosmol_app/core/services/storage_service.dart';
 import 'package:cosmol_app/features/auth/data/models/login_response_model.dart';
 import 'package:cosmol_app/features/auth/data/models/otp_models.dart';
+import 'package:cosmol_app/features/auth/data/models/recuperar_password_models.dart';
 import 'package:cosmol_app/features/auth/data/models/register_credentials_model.dart';
 import 'package:cosmol_app/features/auth/data/models/verify_socio_response_model.dart';
 import 'package:cosmol_app/features/auth/domain/repositories/auth_repository.dart';
@@ -132,6 +133,26 @@ class FakeAuthRepository implements AuthRepository {
 
   @override
   Future<RegisterCredentialsResponseModel> establecerPin({required RegisterCredentialsRequestModel request}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ValidarTitularResponseModel> validarTitularRecuperacion({required String codSocio, required String ci}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SolicitarOtpRecuperacionResponseModel> solicitarOtpRecuperacion({required String sessionId, String canal = 'WHATSAPP'}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<VerificarOtpRecuperacionResponseModel> verificarOtpRecuperacion({required String sessionId, required String codigo}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<CambiarPinRecuperacionResponseModel> cambiarPinRecuperacion({required String tokenRecuperacion, required String nuevoPin}) async {
     throw UnimplementedError();
   }
 }
