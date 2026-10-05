@@ -14,15 +14,31 @@ class SplashScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
+              width: 108,
+              height: 108,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
                 color: AppColors.pureWhite,
-                shape: BoxShape.circle,
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    blurRadius: 18,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
-              child: const Icon(
-                Icons.water_drop_rounded,
-                color: AppColors.primaryBlue,
-                size: 64,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Image.asset(
+                  'assets/images/LogoCosmolCuadrado.png',
+                  fit: BoxFit.contain,
+                  errorBuilder: (context, error, stackTrace) => const Icon(
+                    Icons.water_drop_rounded,
+                    color: AppColors.primaryBlue,
+                    size: 56,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 24),

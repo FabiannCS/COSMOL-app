@@ -60,7 +60,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _openWhatsAppHelp() async {
     final Uri url = Uri.parse(
-      'https://wa.me/59178500000?text=Hola%20COSMOL%20R.L.%2C%20requiero%20asistencia%20con%20mi%20c%C3%B3digo%20de%20socio%20o%20clave',
+      'https://wa.me/59161555507?text=Hola%20COSMOL%20R.L.%2C%20requiero%20asistencia%20con%20mi%20c%C3%B3digo%20de%20socio%20o%20clave',
     );
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
@@ -77,7 +77,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           context,
           segundosRestantes: next.bloqueadoSegundosRestantes,
           onUnlockViaOtp: () {
-            context.push('/onboarding');
+            context.push('/recuperar-password');
           },
         );
       } else if (next.status == AuthStatus.onboardingRequired) {
@@ -212,7 +212,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           // Help Link (¿Olvidaste tu contraseña?)
                           Center(
                             child: InkWell(
-                              onTap: _openWhatsAppHelp,
+                              onTap: () {
+                                context.push('/recuperar-password');
+                              },
                               borderRadius: BorderRadius.circular(8),
                               child: Padding(
                                 padding: const EdgeInsets.symmetric(
@@ -252,6 +254,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               context.push('/onboarding');
                             },
                           ),
+                          const SizedBox(height: 12),
+                          Center(
+                            child: TextButton.icon(
+                              onPressed: _openWhatsAppHelp,
+                              icon: const Icon(Icons.support_agent, size: 18, color: AppColors.textSecondary),
+                              label: Text(
+                                '¿Necesitas ayuda? Contactar Soporte',
+                                style: AppTextStyles.caption.copyWith(
+                                  color: AppColors.textSecondary,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -269,9 +285,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Column(
       children: [
         Container(
-          width: 84,
-          height: 84,
-          padding: const EdgeInsets.all(12),
+          width: 88,
+          height: 88,
+          padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
             color: AppColors.pureWhite,
             borderRadius: BorderRadius.circular(16),
@@ -283,13 +299,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
               ),
             ],
           ),
-          child: Image.asset(
-            'assets/images/logo_cosmol.jpeg',
-            fit: BoxFit.contain,
-            errorBuilder: (context, error, stackTrace) => const Icon(
-              Icons.water_drop_rounded,
-              color: AppColors.primary,
-              size: 52,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Image.asset(
+              'assets/images/LogoCosmolCuadrado.png',
+              fit: BoxFit.contain,
+              errorBuilder: (context, error, stackTrace) => const Icon(
+                Icons.water_drop_rounded,
+                color: AppColors.primary,
+                size: 52,
+              ),
             ),
           ),
         ),

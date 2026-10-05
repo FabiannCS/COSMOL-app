@@ -91,7 +91,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void _initInterceptorCallbacks() {
     authInterceptor.onAccountLocked = handleAccountLocked;
     authInterceptor.onSessionRevoked = handleSessionRevoked;
-    authInterceptor.onUnauthenticated = logout;
+    authInterceptor.onUnauthenticated = () {
+      if (state.status == AuthStatus.authenticated) {
+        logout();
+      }
+    };
   }
 
   bool _isTokenExpired(String token) {
@@ -116,6 +120,9 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> checkAuthStatus() async {
+    // Si ya estamos autenticados (ej. login recién completado), no interferir con la sesión
+    if (state.status == AuthStatus.authenticated) return;
+
     final token = await storageService.getAccessToken();
     final refreshToken = await storageService.getRefreshToken();
     final codSocio = await storageService.getActiveCodSocio();
@@ -295,5 +302,27 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void setOnboardingRequired() {
     state = state.copyWith(status: AuthStatus.onboardingRequired);
+  }
+
+  Future<void> setAuthenticatedSession({
+    required String accessToken,
+    required String refreshToken,
+    required String codSocio,
+    List<SuministroModel> suministros = const [],
+  }) async {
+    await storageService.saveTokens(
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+    );
+    await storageService.saveActiveCodSocio(codSocio);
+
+    if (!mounted) return;
+    state = state.copyWith(
+      status: AuthStatus.authenticated,
+      activeCodSocio: codSocio,
+      suministros: suministros,
+      isLoading: false,
+      errorMessage: null,
+    );
   }
 }

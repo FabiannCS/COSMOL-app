@@ -19,6 +19,59 @@ class SuppliesListScreen extends ConsumerWidget {
     this.onSuministroSeleccionado,
   });
 
+  void _mostrarAvisoNoDesvincularPrincipal(
+    BuildContext context,
+    SuministroModel item,
+  ) {
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AppColors.cardSurface,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.shield_outlined,
+                color: AppColors.primary,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(
+              child: Text(
+                'Socio Principal',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'El socio "${item.alias.isNotEmpty ? item.alias : item.codSocio}" (Cód: ${item.codSocio}) es el suministro principal registrado con el que creaste tu cuenta en COSMOL R.L.\n\nPor seguridad del sistema, no es posible desvincular el suministro principal registrado.',
+          style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
+        ),
+        actions: [
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Entendido'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _confirmarDesvinculacion(
     BuildContext context,
     WidgetRef ref,
@@ -122,61 +175,52 @@ class SuppliesListScreen extends ConsumerWidget {
     }).join(' ');
   }
 
+  bool _hasCustomAlias(String alias, String codSocio) {
+    final clean = alias.trim();
+    if (clean.isEmpty) return false;
+    final cleanLower = clean.toLowerCase();
+
+    if (clean == 'Socio: $codSocio' ||
+        clean == 'Socio $codSocio' ||
+        clean == 'Suministro $codSocio' ||
+        clean == 'Suministro: $codSocio' ||
+        clean == 'Mi Casa' ||
+        clean == 'Mi casa' ||
+        clean == 'Mi Suministro' ||
+        clean == 'Casa Principal' ||
+        clean == 'Socio de Titular' ||
+        clean == 'Socio de Titularidad' ||
+        clean == 'Suministro Consulta' ||
+        clean == 'Socio de Consulta' ||
+        clean == 'Socio de Consulta y Pago' ||
+        clean == 'Cuenta de Consulta' ||
+        cleanLower.startsWith('suministro consulta') ||
+        cleanLower.startsWith('socio de consulta') ||
+        cleanLower.startsWith('socio: ') ||
+        cleanLower.startsWith('suministro: ')) {
+      return false;
+    }
+    return true;
+  }
+
   String _getAliasDisplay(SuministroModel item) {
     final isTitular = item.rol.toUpperCase() == 'TITULAR';
 
     // Para modo consulta (CONSULTA_PAGO / Inquilino):
-    // Mostrar la inicial de cada palabra y lo demás con ****** para evitar redundancia y proteger datos
+    // Mostrar la inicial de cada palabra y asteriscos para proteger datos
     if (!isTitular) {
       if (item.nombre != null && item.nombre!.trim().isNotEmpty) {
         return _enmascararNombre(item.nombre!);
       }
-
-      final alias = item.alias.trim();
-      final aliasLower = alias.toLowerCase();
-
-      if (alias.isEmpty ||
-          alias == 'Mi Casa' ||
-          alias == 'Mi casa' ||
-          alias == 'Mi Suministro' ||
-          alias == 'Casa Principal' ||
-          alias == 'Socio de Titular' ||
-          alias == 'Socio de Titularidad' ||
-          alias == 'Suministro Consulta' ||
-          alias == 'Socio de Consulta' ||
-          alias == 'Socio de Consulta y Pago' ||
-          alias == 'Cuenta de Consulta' ||
-          aliasLower.contains('suministro consulta') ||
-          aliasLower.contains('socio de consulta')) {
-        return 'Socio: ${item.codSocio}';
-      }
-      return alias;
+      return 'Socio: ${item.codSocio}';
     }
 
-    // Para modo TITULAR sí se puede mostrar el nombre completo o el alias
+    // Para modo TITULAR: mostrar el nombre completo del titular
     if (item.nombre != null && item.nombre!.trim().isNotEmpty) {
       return item.nombre!.trim();
     }
 
-    final alias = item.alias.trim();
-
-    if (alias.isEmpty ||
-        alias == 'Mi Casa' ||
-        alias == 'Mi casa' ||
-        alias == 'Mi Suministro' ||
-        alias == 'Casa Principal' ||
-        alias == 'Socio de Titular' ||
-        alias == 'Socio de Titularidad' ||
-        alias == 'Suministro Consulta' ||
-        alias == 'Socio de Consulta' ||
-        alias == 'Socio de Consulta y Pago' ||
-        alias == 'Cuenta de Consulta' ||
-        alias.toLowerCase().contains('suministro consulta') ||
-        alias.toLowerCase().contains('socio de consulta')) {
-      return 'Socio: ${item.codSocio}';
-    }
-
-    return alias;
+    return 'Socio: ${item.codSocio}';
   }
 
   @override
@@ -284,7 +328,34 @@ class SuppliesListScreen extends ConsumerWidget {
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          if (_hasCustomAlias(item.alias, item.codSocio)) ...[
+                            const SizedBox(height: 4),
+                            Text.rich(
+                              TextSpan(
+                                style: AppTextStyles.body2.copyWith(
+                                  color: AppColors.primary,
+                                ),
+                                children: [
+                                  const TextSpan(
+                                    text: 'Alias: ',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: item.alias.trim(),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                          const SizedBox(height: 6),
                           Row(
                             children: [
                               Text(
@@ -326,30 +397,36 @@ class SuppliesListScreen extends ConsumerWidget {
                                   },
                                   child: const Text('Activar'),
                                 ),
-                              if (!isTitular)
-                                TextButton.icon(
-                                  onPressed: () => _confirmarDesvinculacion(
-                                      context, ref, item),
-                                  icon: const Icon(
-                                    Icons.link_off_rounded,
-                                    size: 16,
+                              TextButton.icon(
+                                onPressed: () {
+                                  if (item.esSuministroPrincipal) {
+                                    _mostrarAvisoNoDesvincularPrincipal(
+                                        context, item);
+                                  } else {
+                                    _confirmarDesvinculacion(
+                                        context, ref, item);
+                                  }
+                                },
+                                icon: const Icon(
+                                  Icons.link_off_rounded,
+                                  size: 16,
+                                  color: AppColors.errorRed,
+                                ),
+                                label: const Text(
+                                  'Desvincular',
+                                  style: TextStyle(
                                     color: AppColors.errorRed,
-                                  ),
-                                  label: const Text(
-                                    'Desvincular',
-                                    style: TextStyle(
-                                      color: AppColors.errorRed,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: AppColors.errorRed,
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 8, vertical: 4),
-                                    visualDensity: VisualDensity.compact,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
                                   ),
                                 ),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: AppColors.errorRed,
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8, vertical: 4),
+                                  visualDensity: VisualDensity.compact,
+                                ),
+                              ),
                             ],
                           ),
                         ],

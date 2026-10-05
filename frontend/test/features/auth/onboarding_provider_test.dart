@@ -2,6 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:cosmol_app/core/errors/app_exception.dart';
 import 'package:cosmol_app/features/auth/data/models/login_response_model.dart';
 import 'package:cosmol_app/features/auth/data/models/otp_models.dart';
+import 'package:cosmol_app/features/auth/data/models/recuperar_password_models.dart';
+import 'package:cosmol_app/features/auth/data/models/migrar_telefono_models.dart';
 import 'package:cosmol_app/features/auth/data/models/register_credentials_model.dart';
 import 'package:cosmol_app/features/auth/data/models/verify_socio_response_model.dart';
 import 'package:cosmol_app/features/auth/domain/repositories/auth_repository.dart';
@@ -81,6 +83,36 @@ class FakeOnboardingAuthRepository implements AuthRepository {
     required String deviceId,
     String modeloDispositivo = 'Mobile Device',
   }) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<ValidarTitularResponseModel> validarTitularRecuperacion({required String codSocio, required String ci}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SolicitarOtpRecuperacionResponseModel> solicitarOtpRecuperacion({required String sessionId, String canal = 'WHATSAPP'}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<VerificarOtpRecuperacionResponseModel> verificarOtpRecuperacion({required String sessionId, required String codigo}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<CambiarPinRecuperacionResponseModel> cambiarPinRecuperacion({required String tokenRecuperacion, required String nuevoPin}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MigrarTelefonoIniciarResponseModel> iniciarMigracionTelefono({required MigrarTelefonoIniciarRequestModel request}) async {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<MigrarTelefonoConfirmarResponseModel> confirmarMigracionTelefono({required MigrarTelefonoConfirmarRequestModel request}) async {
     throw UnimplementedError();
   }
 }

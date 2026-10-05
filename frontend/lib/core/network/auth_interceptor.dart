@@ -84,7 +84,8 @@ class AuthInterceptor extends Interceptor {
 
       // 3. Manejo de 401 Unauthorized -> Renovación de Token Silenciosa y Encolada
       final isRefreshEndpoint = err.requestOptions.path.contains('/autenticacion/renovar-token');
-      if (response.statusCode == 401 && !isRefreshEndpoint) {
+      final hadToken = err.requestOptions.headers.containsKey('Authorization');
+      if (response.statusCode == 401 && !isRefreshEndpoint && hadToken) {
         // Si ya hay un refresco en curso por otra petición concurrente, esperar su resultado
         if (_refreshCompleter != null) {
           try {

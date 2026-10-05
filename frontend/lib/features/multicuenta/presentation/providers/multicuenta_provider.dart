@@ -83,6 +83,14 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
 
   Future<void> cargarSuministros() async {
     if (!mounted) return;
+
+    // GUARDA ANTI-401: No disparar petición si el usuario aún no tiene sesión activa
+    final token = await storageService.getAccessToken();
+    if (token == null || token.trim().isEmpty) {
+      state = state.copyWith(isLoading: false);
+      return;
+    }
+
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
       final lista = await repository.listarSuministros();
@@ -173,12 +181,7 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
     if (!mounted) return false;
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      // Se intenta llamar a la API si estuviera implementada
-      try {
-        await repository.desvincularSuministro(codSocio);
-      } catch (_) {
-        // Fallback local mientras se implementa el endpoint en backend
-      }
+      await repository.desvincularSuministro(codSocio);
 
       final nuevaLista =
           state.suministros.where((s) => s.codSocio != codSocio).toList();
@@ -198,6 +201,13 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
         isLoading: false,
       );
       return true;
+    } on AppException catch (e) {
+      if (!mounted) return false;
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: e.message,
+      );
+      return false;
     } catch (e) {
       if (!mounted) return false;
       state = state.copyWith(

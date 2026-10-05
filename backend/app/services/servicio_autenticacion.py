@@ -1,6 +1,7 @@
 """
 Servicio de lógica de negocio para identidad, onboarding y autenticación de socios COSMOL R.L.
 """
+import asyncio
 import json
 import logging
 import secrets
@@ -50,6 +51,20 @@ def normalizar_telefono(t: str) -> str:
     return f"+{clean}" if clean else ""
 
 
+def enmascarar_telefono(t: Optional[str]) -> str:
+    """Enmascara el número celular para visualización segura (ej. +591 7*** **384)."""
+    if not t:
+        return ""
+    clean = str(t).strip().replace(" ", "").replace("-", "")
+    if len(clean) >= 11 and clean.startswith("+591"):
+        digitos = clean[4:]
+        if len(digitos) == 8:
+            return f"+591 {digitos[0]}*** **{digitos[-3:]}"
+    if len(clean) >= 8:
+        return f"{clean[:3]}***{clean[-3:]}"
+    return clean
+
+
 class ServicioAutenticacion:
     """
     Controlador de negocio para el flujo completo de autenticación y seguridad.
@@ -66,6 +81,32 @@ class ServicioAutenticacion:
         self.db = db
         self.cosmol_client = client_legado or cosmol_client
 
+    async def _obtener_nombre_socio(self, cod_socio: str) -> Optional[str]:
+        """
+        Recupera el nombre oficial del socio con soporte de caché en Redis (TTL 24 horas).
+        Evita saturar el backend comercial y reduce la latencia a <1ms tras la primera consulta.
+        """
+        cache_key = f"socio:nombre:{cod_socio}"
+        try:
+            nombre_cache = await self.redis.get(cache_key)
+            if nombre_cache:
+                return nombre_cache.decode("utf-8") if isinstance(nombre_cache, bytes) else str(nombre_cache)
+        except Exception:
+            pass
+
+        try:
+            datos = await self.cosmol_client.obtener_datos_socio(cod_socio)
+            if datos and datos.get("NOMBRE"):
+                nom = str(datos["NOMBRE"]).strip()
+                try:
+                    await self.redis.set(cache_key, nom, ex=86400)
+                except Exception:
+                    pass
+                return nom
+        except Exception:
+            pass
+        return None
+
     # --------------------------------------------------------------------------
     # PASO 1: VERIFICACIÓN INICIAL EN SISTEMA OFICIAL DE COSMOL
     # --------------------------------------------------------------------------
@@ -73,24 +114,33 @@ class ServicioAutenticacion:
         """
         Valida que el socio exista en el sistema comercial oficial de COSMOL
         mediante su Código de Socio y Carnet de Identidad (NROCIONIT).
-        Si el socio ya cuenta con PIN registrado, esta acción habilita la
-        recuperación/desbloqueo de su cuenta mediante OTP.
+        Si el socio ya cuenta con cuenta TITULAR registrada, devuelve cuenta_existente=True
+        junto con el teléfono celular enmascarado para habilitar el diálogo de migración o login.
         """
         cod_socio = cod_socio.strip()
         ci = ci.strip()
 
-        # 1. Comprobar si es un primer ingreso o una recuperación/desbloqueo de PIN
-        es_recuperacion = False
+        # 1. Comprobar si ya existe cuenta TITULAR registrada en el sistema
+        cuenta_existente = False
+        telefono_titular = None
+
         if self.db:
-            stmt = select(Suministro).where(
-                Suministro.cod_socio == cod_socio,
-                Suministro.rol == "TITULAR"
+            stmt = (
+                select(Suministro)
+                .where(Suministro.cod_socio == cod_socio, Suministro.rol == "TITULAR")
             )
             res = await self.db.execute(stmt)
-            if res.scalars().first():
-                es_recuperacion = True
+            sum_titular = res.scalars().first()
+            if sum_titular:
+                cuenta_existente = True
+                stmt_u = select(Usuario).where(Usuario.id == sum_titular.usuario_id)
+                res_u = await self.db.execute(stmt_u)
+                u = res_u.scalars().first()
+                if u:
+                    telefono_titular = u.telefono
         elif cod_socio in USUARIOS_REGISTRADOS_DB:
-            es_recuperacion = True
+            cuenta_existente = True
+            telefono_titular = USUARIOS_REGISTRADOS_DB[cod_socio].get("telefono")
 
         # 2. Validar contra el sistema comercial oficial de COSMOL (vía POST /socios/validar)
         datos_socio = await self.cosmol_client.validar_credenciales_socio(cod_socio, ci)
@@ -102,19 +152,31 @@ class ServicioAutenticacion:
             )
 
         nombre_oficial = str(datos_socio.get("NOMBRE") or datos_socio.get("nombre") or "Socio COSMOL").strip()
+        tel_enmascarado = enmascarar_telefono(telefono_titular) if telefono_titular else None
 
-        logger.info(f"Socio verificado exitosamente en COSMOL: {cod_socio} ({nombre_oficial}) [es_recuperacion={es_recuperacion}]")
-        mensaje = (
-            "Socio verificado correctamente. Proceda a confirmar su celular para restablecer su PIN y desbloquear su cuenta."
-            if es_recuperacion else
-            "Socio verificado correctamente. Proceda a asociar su teléfono celular."
+        logger.info(
+            f"Socio verificado exitosamente en COSMOL: {cod_socio} ({nombre_oficial}) "
+            f"[cuenta_existente={cuenta_existente}, telefono={tel_enmascarado}]"
         )
+
+        if cuenta_existente:
+            mensaje = (
+                f"Socio verificado. Su cuenta ya se encuentra registrada y vinculada al número {tel_enmascarado}."
+                if tel_enmascarado else
+                "Socio verificado. Su cuenta ya se encuentra registrada previamente."
+            )
+        else:
+            mensaje = "Socio verificado correctamente. Proceda a asociar su teléfono celular."
+
         return {
             "cod_socio": cod_socio,
             "nombre_titular": nombre_oficial,
-            "es_recuperacion": es_recuperacion,
+            "cuenta_existente": cuenta_existente,
+            "telefono_enmascarado": tel_enmascarado,
+            "es_recuperacion": cuenta_existente,
             "mensaje": mensaje
         }
+
 
     # --------------------------------------------------------------------------
     # PASO 2: DESPACHO DE CÓDIGO OTP (WHATSAPP / SMS)
@@ -371,24 +433,22 @@ class ServicioAutenticacion:
         suministros_lista: List[SuministroResponse] = []
 
         if self.db:
-            # Autenticar estrictamente con el suministro TITULAR oficial
+            # Exigir que el login diario sea con el código de socio que posee rol TITULAR
             stmt_sum = (
                 select(Suministro)
-                .where(
-                    Suministro.cod_socio == cod_socio,
-                    Suministro.rol == "TITULAR"
-                )
+                .where(Suministro.cod_socio == cod_socio, Suministro.rol == "TITULAR")
+                .order_by(Suministro.es_suministro_principal.desc(), Suministro.created_at.asc())
             )
             res_sum = await self.db.execute(stmt_sum)
             suministro_db = res_sum.scalars().first()
 
             if not suministro_db:
-                # Verificar si el código solo está vinculado como consulta/inquilino
+                # Comprobar si el código existe únicamente en modo CONSULTA_PAGO
                 stmt_inq = select(Suministro).where(Suministro.cod_socio == cod_socio)
                 res_inq = await self.db.execute(stmt_inq)
                 if res_inq.scalars().first():
                     raise UnauthorizedException(
-                        message="El código provisto corresponde a un suministro secundario o de inquilino. Inicie sesión con su código de socio titular.",
+                        message="Este código de socio está vinculado en modo consulta. Debe iniciar sesión con el código de socio titular de su cuenta.",
                         error_code="LOGIN_TITULAR_REQUIRED"
                     )
 
@@ -410,28 +470,26 @@ class ServicioAutenticacion:
                 password_hash = usuario_db.password_hash
                 user_id = str(usuario_db.id)
                 nombre_socio = "Socio COSMOL"
-                datos_socio_real = await self.cosmol_client.obtener_datos_socio(cod_socio)
-                if datos_socio_real and datos_socio_real.get("NOMBRE"):
-                    nombre_socio = datos_socio_real["NOMBRE"]
-                suministros_lista = []
-                for s in usuario_db.suministros:
-                    nom_s = None
-                    try:
-                        datos_s = await self.cosmol_client.obtener_datos_socio(s.cod_socio)
-                        if datos_s:
-                            nom_s = datos_s.get("NOMBRE")
-                    except Exception:
-                        nom_s = None
-                    suministros_lista.append(
-                        SuministroResponse(
-                            id=s.id,
-                            cod_socio=s.cod_socio,
-                            alias=s.alias,
-                            nombre=nom_s,
-                            rol=s.rol,
-                            es_suministro_principal=s.es_suministro_principal
-                        )
+                nom_real = await self._obtener_nombre_socio(cod_socio)
+                if nom_real:
+                    nombre_socio = nom_real
+
+                # Consulta concurrente de todos los nombres oficiales mediante asyncio.gather
+                nombres = await asyncio.gather(
+                    *[self._obtener_nombre_socio(s.cod_socio) for s in usuario_db.suministros],
+                    return_exceptions=True
+                )
+                suministros_lista = [
+                    SuministroResponse(
+                        id=s.id,
+                        cod_socio=s.cod_socio,
+                        alias=s.alias,
+                        nombre=nom if isinstance(nom, str) else None,
+                        rol=s.rol,
+                        es_suministro_principal=s.es_suministro_principal
                     )
+                    for s, nom in zip(usuario_db.suministros, nombres)
+                ]
 
         if not password_hash:
             usuario_mem = USUARIOS_REGISTRADOS_DB.get(cod_socio)
@@ -443,25 +501,23 @@ class ServicioAutenticacion:
             password_hash = usuario_mem["password_hash"]
             user_id = usuario_mem["user_id"]
             nombre_socio = usuario_mem.get("nombre", "SOCIO COSMOL")
-            suministros_lista = []
-            for s in usuario_mem["suministros"]:
-                nom_s = None
-                try:
-                    datos_s = await self.cosmol_client.obtener_datos_socio(s["cod_socio"])
-                    if datos_s:
-                        nom_s = datos_s.get("NOMBRE")
-                except Exception:
-                    nom_s = None
-                suministros_lista.append(
-                    SuministroResponse(
-                        id=s["id"],
-                        cod_socio=s["cod_socio"],
-                        alias=s["alias"],
-                        nombre=nom_s,
-                        rol=s["rol"],
-                        es_suministro_principal=s["es_suministro_principal"]
-                    )
+            
+            suministros_mem = usuario_mem.get("suministros", [])
+            nombres_mem = await asyncio.gather(
+                *[self._obtener_nombre_socio(s["cod_socio"]) for s in suministros_mem],
+                return_exceptions=True
+            )
+            suministros_lista = [
+                SuministroResponse(
+                    id=s["id"],
+                    cod_socio=s["cod_socio"],
+                    alias=s["alias"],
+                    nombre=nom if isinstance(nom, str) else None,
+                    rol=s["rol"],
+                    es_suministro_principal=s["es_suministro_principal"]
                 )
+                for s, nom in zip(suministros_mem, nombres_mem)
+            ]
 
         fallos_key = f"intentos_fallidos:{cod_socio}"
 
@@ -642,268 +698,387 @@ class ServicioAutenticacion:
         return {"mensaje": "Sesión cerrada exitosamente en el servidor.", "status": "ok"}
 
     # --------------------------------------------------------------------------
-    # FLUJO SEGURO DE RECUPERACIÓN DE CONTRASEÑA / PIN (ZERO-TRUST PHONE BINDING)
+    # MIGRACIÓN SEGURA DE NÚMERO CELULAR (CAMBIO DE CHIP / TELÉFONO NUEVO)
     # --------------------------------------------------------------------------
-    async def validar_titular_recuperacion(self, cod_socio: str, ci: str) -> Dict[str, Any]:
+    async def iniciar_migracion_telefono(
+        self,
+        cod_socio: str,
+        ci: str,
+        pin_actual: str,
+        nuevo_telefono: str,
+        canal: str = "WHATSAPP"
+    ) -> Dict[str, Any]:
         """
-        Paso 1: Valida titularidad contra Informix y recupera el teléfono
-        previamente registrado del socio en la base de datos (PostgreSQL).
-        El usuario NUNCA ingresa el celular en el formulario (Anti-Hijacking).
+        Inicia la migración de la cuenta titular a un nuevo número de celular.
+        Exige la validación estricta del PIN actual para evitar secuestro de cuentas con facturas ajenas.
         """
-        cod_socio = str(cod_socio).strip()
-        ci = str(ci).strip()
+        cod_socio = cod_socio.strip()
+        ci = ci.strip()
+        nuevo_telefono = normalizar_telefono(nuevo_telefono)
 
-        # 1. Validar contra el sistema comercial oficial de COSMOL
+        # 1. Validar contra el sistema comercial oficial
         datos_socio = await self.cosmol_client.validar_credenciales_socio(cod_socio, ci)
         if not datos_socio:
-            logger.warning(f"[RECUPERACION] Credenciales inválidas para socio '{cod_socio}' con CI provista")
             raise UnauthorizedException(
                 message="El código de socio o carnet de identidad no coinciden con los registros oficiales de COSMOL.",
                 error_code="SOCIO_NOT_FOUND"
             )
 
-        nombre_oficial = str(datos_socio.get("NOMBRE") or datos_socio.get("nombre") or "Socio COSMOL").strip()
-
-        # 2. Buscar usuario TITULAR registrado en PostgreSQL o memoria
-        usuario_db = None
-        telefono = None
-        user_id_str = None
+        # 2. Localizar usuario titular en BD o memoria
+        password_hash = None
+        user_id = None
 
         if self.db:
             stmt = (
-                select(Usuario)
-                .join(Suministro, Suministro.usuario_id == Usuario.id)
-                .where(
-                    Suministro.cod_socio == cod_socio,
-                    Suministro.rol == "TITULAR"
-                )
+                select(Suministro)
+                .where(Suministro.cod_socio == cod_socio, Suministro.rol == "TITULAR")
             )
+            res = await self.db.execute(stmt)
+            sum_titular = res.scalars().first()
+            if not sum_titular:
+                raise NotFoundException(
+                    message=f"No se encontró una cuenta titular activa para el socio '{cod_socio}'.",
+                    error_code="ACCOUNT_NOT_FOUND"
+                )
+            stmt_u = select(Usuario).where(Usuario.id == sum_titular.usuario_id)
+            res_u = await self.db.execute(stmt_u)
+            usuario_db = res_u.scalars().first()
+            if not usuario_db or not usuario_db.esta_activo:
+                raise UnauthorizedException(
+                    message="La cuenta de socio se encuentra inactiva o deshabilitada.",
+                    error_code="ACCOUNT_DISABLED"
+                )
+            password_hash = usuario_db.password_hash
+            user_id = str(usuario_db.id)
+        elif cod_socio in USUARIOS_REGISTRADOS_DB:
+            usuario_mem = USUARIOS_REGISTRADOS_DB[cod_socio]
+            password_hash = usuario_mem.get("password_hash")
+            user_id = usuario_mem.get("user_id")
+
+        if not password_hash:
+            raise NotFoundException(
+                message="El socio no cuenta con una contraseña registrada. Realice el primer acceso.",
+                error_code="ACCOUNT_NOT_FOUND"
+            )
+
+        # 3. Validar PIN actual
+        if not verify_password(pin_actual, password_hash):
+            raise UnauthorizedException(
+                message="El PIN actual ingresado es incorrecto. Verifique sus credenciales.",
+                error_code="INVALID_PIN"
+            )
+
+        # 4. Rate limit en el nuevo teléfono
+        rate_key = f"rate_otp:{nuevo_telefono}"
+        solicitudes = await self.redis.incr(rate_key)
+        if solicitudes == 1:
+            await self.redis.expire(rate_key, 3600)
+        elif solicitudes > 3:
+            ttl_rate = await self.redis.ttl(rate_key)
+            raise ForbiddenException(
+                message=f"Ha superado el límite de 3 solicitudes de OTP por hora. Intente en {max(1, ttl_rate // 60)} min.",
+                error_code="OTP_RATE_LIMIT_EXCEEDED"
+            )
+
+        # 5. Generar OTP y sesión de migración (TTL 5 min)
+        session_id = f"mig_{uuid.uuid4()}"
+        codigo_otp = f"{secrets.randbelow(900000) + 100000}"
+
+        datos_migracion = {
+            "user_id": user_id,
+            "cod_socio": cod_socio,
+            "nuevo_telefono": nuevo_telefono,
+            "codigo_otp": codigo_otp,
+        }
+        await self.redis.set(f"migracion_sesion:{session_id}", json.dumps(datos_migracion), ex=300)
+
+        # 6. Despachar OTP al NUEVO número celular
+        canal_upper = canal.upper()
+        if canal_upper == "WHATSAPP":
+            await whatsapp_client.enviar_otp(nuevo_telefono, codigo_otp)
+        elif canal_upper == "SMS":
+            await sms_client.enviar_sms_otp(nuevo_telefono, codigo_otp)
+
+        logger.info(f"[MIGRACIÓN TELÉFONO INICIADA] Socio: {cod_socio} | Nuevo Tel: {nuevo_telefono} | OTP: {codigo_otp}")
+
+        return {
+            "session_id": session_id,
+            "mensaje": f"Código de seguridad enviado al nuevo número celular vía {canal_upper}.",
+            "ttl_segundos": 300,
+            "debug_codigo_otp": codigo_otp if settings.ENVIRONMENT == "development" else None
+        }
+
+    async def confirmar_migracion_telefono(
+        self,
+        session_id: str,
+        codigo_otp: str
+    ) -> Dict[str, Any]:
+        """
+        Confirma la migración validando el OTP del nuevo celular.
+        Actualiza el teléfono en PostgreSQL, revoca sesiones previas y emite nuevos JWTs.
+        """
+        mig_key = f"migracion_sesion:{session_id}"
+        datos_raw = await self.redis.get(mig_key)
+        if not datos_raw:
+            raise BadRequestException(
+                message="La sesión de migración ha expirado o no existe. Inicie el proceso nuevamente.",
+                error_code="MIGRATION_SESSION_EXPIRED"
+            )
+
+        datos = json.loads(datos_raw if isinstance(datos_raw, str) else datos_raw.decode("utf-8"))
+        codigo_esperado = datos["codigo_otp"]
+        user_id_str = datos["user_id"]
+        nuevo_telefono = datos["nuevo_telefono"]
+        cod_socio = datos["cod_socio"]
+
+        if codigo_otp.strip() != codigo_esperado:
+            raise BadRequestException(
+                message="El código de seguridad ingresado es incorrecto.",
+                error_code="OTP_INVALID"
+            )
+
+        # Destruir sesión de migración usada
+        await self.redis.delete(mig_key)
+
+        nombre_titular = "Socio COSMOL"
+        suministros_lista: List[SuministroResponse] = []
+
+        if self.db:
+            u_id = uuid.UUID(user_id_str)
+            stmt = select(Usuario).options(selectinload(Usuario.suministros)).where(Usuario.id == u_id)
             res = await self.db.execute(stmt)
             usuario_db = res.scalars().first()
             if usuario_db:
-                telefono = usuario_db.telefono
-                user_id_str = str(usuario_db.id)
-                if not usuario_db.esta_activo:
-                    raise UnauthorizedException(
-                        message="La cuenta de socio se encuentra inactiva o dada de baja.",
-                        error_code="ACCOUNT_DISABLED"
-                    )
+                usuario_db.telefono = nuevo_telefono
+                await self.db.commit()
+                await self.db.refresh(usuario_db)
 
-        if not usuario_db and cod_socio in USUARIOS_REGISTRADOS_DB:
-            mem = USUARIOS_REGISTRADOS_DB[cod_socio]
-            telefono = mem.get("telefono")
-            user_id_str = str(mem.get("user_id", uuid.uuid4()))
+                # Revocar sesiones previas en otros dispositivos
+                await self.redis.delete(f"sesion_activa:{u_id}")
+
+                nom_real = await self._obtener_nombre_socio(cod_socio)
+                if nom_real:
+                    nombre_titular = nom_real
+
+                nombres = await asyncio.gather(
+                    *[self._obtener_nombre_socio(s.cod_socio) for s in usuario_db.suministros],
+                    return_exceptions=True
+                )
+                suministros_lista = [
+                    SuministroResponse(
+                        id=s.id,
+                        cod_socio=s.cod_socio,
+                        alias=s.alias,
+                        nombre=nom if isinstance(nom, str) else None,
+                        rol=s.rol,
+                        es_suministro_principal=s.es_suministro_principal
+                    )
+                    for s, nom in zip(usuario_db.suministros, nombres)
+                ]
+
+        if cod_socio in USUARIOS_REGISTRADOS_DB:
+            USUARIOS_REGISTRADOS_DB[cod_socio]["telefono"] = nuevo_telefono
+
+        # Emitir tokens JWT
+        access_token = create_access_token({"sub": user_id_str, "cod_socio": cod_socio})
+        refresh_token = create_refresh_token({"sub": user_id_str, "cod_socio": cod_socio})
+
+        logger.info(f"[MIGRACIÓN TELÉFONO EXITOSA] Socio {cod_socio} migrado a {nuevo_telefono}.")
+
+        return {
+            "mensaje": "Número de teléfono actualizado exitosamente. Bienvenido a COSMOL.",
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_type": "bearer",
+            "cod_socio": cod_socio,
+            "nombre": nombre_titular,
+            "suministros": suministros_lista
+        }
+
+    # --------------------------------------------------------------------------
+    # RECUPERACIÓN SEGURA DE CONTRASEÑA / PIN (ZERO-TRUST PHONE BINDING)
+    # --------------------------------------------------------------------------
+    async def validar_titular_recuperacion(self, cod_socio: str, ci: str) -> Dict[str, Any]:
+        """
+        Paso 1 Recuperación: Valida titularidad y devuelve el teléfono enmascarado registrado en BD.
+        """
+        cod_socio = cod_socio.strip()
+        ci = ci.strip()
+
+        # Validar credenciales con sistema comercial oficial
+        datos_socio = await self.cosmol_client.validar_credenciales_socio(cod_socio, ci)
+        if not datos_socio:
+            raise UnauthorizedException(
+                message="El código de socio o carnet de identidad no coinciden.",
+                error_code="SOCIO_NOT_FOUND"
+            )
+
+        telefono = None
+        user_id = None
+
+        if self.db:
+            stmt = select(Suministro).where(Suministro.cod_socio == cod_socio, Suministro.rol == "TITULAR")
+            res = await self.db.execute(stmt)
+            sum_titular = res.scalars().first()
+            if not sum_titular:
+                raise NotFoundException(
+                    message="Este socio no tiene una cuenta registrada en la aplicación.",
+                    error_code="ACCOUNT_NOT_REGISTERED"
+                )
+            stmt_u = select(Usuario).where(Usuario.id == sum_titular.usuario_id)
+            res_u = await self.db.execute(stmt_u)
+            u = res_u.scalars().first()
+            if not u or not u.esta_activo:
+                raise UnauthorizedException(
+                    message="La cuenta del socio se encuentra inactiva o deshabilitada.",
+                    error_code="ACCOUNT_DISABLED"
+                )
+            telefono = u.telefono
+            user_id = str(u.id)
+        elif cod_socio in USUARIOS_REGISTRADOS_DB:
+            usuario_mem = USUARIOS_REGISTRADOS_DB[cod_socio]
+            telefono = usuario_mem.get("telefono")
+            user_id = usuario_mem.get("user_id")
 
         if not telefono:
-            logger.warning(f"[RECUPERACION] Socio '{cod_socio}' validado en Informix pero sin cuenta registrada en app")
             raise NotFoundException(
-                message="Este socio no posee una cuenta registrada en la aplicación. Debe completar su registro inicial (Onboarding).",
+                message="No se encontró un número telefónico registrado para esta cuenta.",
                 error_code="ACCOUNT_NOT_REGISTERED"
             )
 
-        # 3. Enmascarar celular para respuesta (+591 7*** **384)
-        tel_len = len(telefono)
-        if tel_len >= 8:
-            tel_enmascarado = f"{telefono[:4]} {'*' * (tel_len - 8)} {telefono[-3:]}"
-        else:
-            tel_enmascarado = telefono
-
-        # 4. Crear sesión temporal de recuperación en Redis (TTL: 5 min / 300 s)
+        nombre_oficial = str(datos_socio.get("NOMBRE") or "Socio COSMOL").strip()
         session_id = f"rec_{uuid.uuid4()}"
-        sesion_data = {
-            "user_id": user_id_str,
-            "telefono": telefono,
+        datos_sesion = {
+            "user_id": user_id,
             "cod_socio": cod_socio,
-            "nombre_titular": nombre_oficial
+            "telefono": telefono,
         }
-        await self.redis.set(f"recuperacion_sesion:{session_id}", json.dumps(sesion_data), ex=300)
+        await self.redis.set(f"recuperacion_sesion:{session_id}", json.dumps(datos_sesion), ex=300)
 
-        logger.info(f"[RECUPERACION] Sesión iniciada: {session_id} para socio {cod_socio} ({tel_enmascarado})")
         return {
             "session_id": session_id,
             "cod_socio": cod_socio,
             "nombre_titular": nombre_oficial,
-            "telefono_enmascarado": tel_enmascarado,
+            "telefono_enmascarado": enmascarar_telefono(telefono),
             "mensaje": "Titular validado correctamente. Seleccione el canal para recibir su código de seguridad."
         }
 
     async def solicitar_otp_recuperacion(self, session_id: str, canal: str = "WHATSAPP") -> Dict[str, Any]:
         """
-        Paso 2: Genera un OTP de 6 dígitos y lo despacha estrictamente al celular
-        registrado del socio (obtenido de la sesión de Redis).
+        Paso 2 Recuperación: Envía el OTP al celular previamente registrado en PostgreSQL.
         """
-        session_id = str(session_id).strip()
-        canal_upper = str(canal or "WHATSAPP").strip().upper()
-
-        sesion_raw = await self.redis.get(f"recuperacion_sesion:{session_id}")
-        if not sesion_raw:
+        raw = await self.redis.get(f"recuperacion_sesion:{session_id}")
+        if not raw:
             raise BadRequestException(
-                message="La sesión de recuperación ha expirado o es inválida. Debe reiniciar el proceso.",
+                message="La sesión de recuperación ha expirado. Reinicie el proceso.",
                 error_code="RECOVERY_SESSION_EXPIRED"
             )
+        datos = json.loads(raw if isinstance(raw, str) else raw.decode("utf-8"))
+        telefono = datos["telefono"]
 
-        sesion = json.loads(sesion_raw)
-        telefono = sesion["telefono"]
-        cod_socio = sesion["cod_socio"]
-
-        # Control de tasa (Rate Limiting): Máximo 3 solicitudes por hora por número
+        # Rate limit por teléfono
         rate_key = f"rate_otp_recuperacion:{telefono}"
         solicitudes = await self.redis.incr(rate_key)
         if solicitudes == 1:
             await self.redis.expire(rate_key, 3600)
-        if solicitudes > settings.OTP_MAX_REQUESTS_PER_HOUR:
-            ttl_rate = await self.redis.ttl(rate_key)
-            minutos = max(1, ttl_rate // 60)
-            logger.warning(f"[RECUPERACION] Rate limit superado para teléfono: {telefono}")
+        elif solicitudes > 3:
             raise ForbiddenException(
-                message=f"Ha superado el límite de {settings.OTP_MAX_REQUESTS_PER_HOUR} solicitudes de código por hora. Intente en {minutos} minutos.",
+                message="Ha superado el límite de 3 solicitudes de OTP por hora.",
                 error_code="OTP_RATE_LIMIT_EXCEEDED"
             )
 
-        # Generar código criptográfico de 6 dígitos
-        codigo_otp = "".join([str(secrets.randbelow(10)) for _ in range(6)])
-
-        # Guardar OTP con TTL de 300 segundos (5 minutos)
+        codigo_otp = f"{secrets.randbelow(900000) + 100000}"
         await self.redis.set(f"otp_recuperacion:{session_id}", codigo_otp, ex=300)
-        await self.redis.delete(f"otp_recuperacion_fallos:{session_id}")
 
-        # Enmascarar celular
-        tel_len = len(telefono)
-        tel_enmascarado = f"{telefono[:4]} {'*' * (tel_len - 8)} {telefono[-3:]}" if tel_len >= 8 else telefono
-
-        # Despachar por canal
+        canal_upper = canal.upper()
         if canal_upper == "WHATSAPP":
             await whatsapp_client.enviar_otp(telefono, codigo_otp)
         elif canal_upper == "SMS":
             await sms_client.enviar_sms_otp(telefono, codigo_otp)
 
-        logger.info(f"[RECUPERACION] OTP despachado para socio {cod_socio} por {canal_upper}")
         return {
             "mensaje": f"Código de seguridad enviado exitosamente vía {canal_upper}.",
             "canal": canal_upper,
-            "telefono_enmascarado": tel_enmascarado,
+            "telefono_enmascarado": enmascarar_telefono(telefono),
             "ttl_segundos": 300,
             "debug_codigo_otp": codigo_otp if settings.ENVIRONMENT == "development" else None
         }
 
     async def verificar_otp_recuperacion(self, session_id: str, codigo: str) -> Dict[str, Any]:
         """
-        Paso 3: Valida el código de 6 dígitos ingresado.
-        Si es correcto, consume el OTP y emite un token de recuperación temporal de 10 min.
+        Paso 3 Recuperación: Valida el OTP y emite un token de recuperación temporal de 10 min.
         """
-        session_id = str(session_id).strip()
-        codigo = str(codigo).strip()
-
-        sesion_raw = await self.redis.get(f"recuperacion_sesion:{session_id}")
-        if not sesion_raw:
+        raw = await self.redis.get(f"recuperacion_sesion:{session_id}")
+        if not raw:
             raise BadRequestException(
-                message="La sesión de recuperación ha expirado o es inválida.",
+                message="La sesión de recuperación ha expirado.",
                 error_code="RECOVERY_SESSION_EXPIRED"
             )
-
-        sesion = json.loads(sesion_raw)
-        cod_socio = sesion["cod_socio"]
+        datos = json.loads(raw if isinstance(raw, str) else raw.decode("utf-8"))
 
         otp_guardado = await self.redis.get(f"otp_recuperacion:{session_id}")
         if not otp_guardado:
             raise BadRequestException(
-                message="El código de seguridad ha expirado o no fue solicitado.",
+                message="El código OTP ha expirado o no fue solicitado.",
                 error_code="OTP_EXPIRED"
             )
 
-        if codigo != otp_guardado:
-            fallos_key = f"otp_recuperacion_fallos:{session_id}"
-            fallos = await self.redis.incr(fallos_key)
-            if fallos >= 3:
-                await self.redis.delete(f"otp_recuperacion:{session_id}")
-                await self.redis.delete(f"recuperacion_sesion:{session_id}")
-                await self.redis.delete(fallos_key)
-                logger.warning(f"[RECUPERACION] 3 intentos erróneos de OTP para sesión {session_id}. Cancelando.")
-                raise ForbiddenException(
-                    message="Demasiados intentos erróneos. El proceso de recuperación ha sido cancelado por seguridad.",
-                    error_code="OTP_MAX_ATTEMPTS"
-                )
-            restantes = 3 - fallos
+        otp_str = otp_guardado if isinstance(otp_guardado, str) else otp_guardado.decode("utf-8")
+        if codigo.strip() != otp_str:
             raise BadRequestException(
-                message=f"Código de seguridad incorrecto. Le quedan {restantes} intento(s).",
-                error_code="OTP_INVALID",
-                details={"intentos_restantes": restantes}
+                message="Código de seguridad incorrecto.",
+                error_code="OTP_INVALID"
             )
 
-        # Destruir OTP utilizado (un solo uso)
+        # Destruir OTP usado
         await self.redis.delete(f"otp_recuperacion:{session_id}")
-        await self.redis.delete(f"otp_recuperacion_fallos:{session_id}")
-        await self.redis.delete(f"recuperacion_sesion:{session_id}")
 
-        # Emitir token temporal de autorización criptográfica (TTL: 10 min / 600 s)
-        token_recuperacion = f"rst_{secrets.token_hex(24)}"
-        await self.redis.set(
-            f"token_recuperacion_valido:{token_recuperacion}",
-            json.dumps(sesion),
-            ex=600
-        )
+        # Emitir token de recuperación temporal (TTL 10 min)
+        token_rec = f"rst_{secrets.token_hex(20)}"
+        await self.redis.set(f"token_recuperacion:{token_rec}", raw if isinstance(raw, str) else raw.decode("utf-8"), ex=600)
 
-        logger.info(f"[RECUPERACION] OTP verificado con éxito para socio {cod_socio}. Token emitido.")
         return {
             "mensaje": "Código verificado exitosamente. Proceda a definir su nueva contraseña.",
-            "token_recuperacion": token_recuperacion,
-            "cod_socio": cod_socio
+            "token_recuperacion": token_rec,
+            "cod_socio": datos["cod_socio"]
         }
 
     async def cambiar_pin_recuperacion(self, token_recuperacion: str, nuevo_pin: str) -> Dict[str, Any]:
         """
-        Paso 4: Valida el token_recuperacion, actualiza el hash bcrypt del PIN,
-        desbloquea la cuenta y revoca sesiones previas en otros dispositivos.
+        Paso 4 Recuperación: Actualiza el PIN con hash bcrypt y resetea bloqueos.
         """
-        token_recuperacion = str(token_recuperacion).strip()
-        nuevo_pin = str(nuevo_pin).strip()
-
-        token_key = f"token_recuperacion_valido:{token_recuperacion}"
-        sesion_raw = await self.redis.get(token_key)
-        if not sesion_raw:
+        raw = await self.redis.get(f"token_recuperacion:{token_recuperacion}")
+        if not raw:
             raise UnauthorizedException(
-                message="El token de recuperación es inválido o ha expirado.",
+                message="El pase de recuperación es inválido o ha expirado.",
                 error_code="INVALID_RECOVERY_TOKEN"
             )
+        datos = json.loads(raw if isinstance(raw, str) else raw.decode("utf-8"))
+        user_id_str = datos["user_id"]
+        cod_socio = datos["cod_socio"]
 
-        sesion = json.loads(sesion_raw)
-        user_id_str = sesion["user_id"]
-        cod_socio = sesion["cod_socio"]
+        pin_hash = get_password_hash(nuevo_pin)
 
-        # Generar nuevo hash bcrypt
-        nuevo_hash = get_password_hash(nuevo_pin)
-
-        # Actualizar en PostgreSQL
         if self.db:
-            try:
-                uid = uuid.UUID(user_id_str)
-                stmt = select(Usuario).where(Usuario.id == uid)
-                res = await self.db.execute(stmt)
-                user = res.scalars().first()
-                if user:
-                    user.password_hash = nuevo_hash
-                    user.intentos_fallidos = 0
-                    user.bloqueado_hasta = None
-                    await self.db.commit()
-            except Exception as e:
-                await self.db.rollback()
-                logger.error(f"[RECUPERACION] Error al persistir nuevo PIN en PostgreSQL: {e}")
-                raise AppException(
-                    message="Error interno al actualizar la contraseña.",
-                    status_code=500,
-                    error_code="DB_UPDATE_ERROR"
-                )
+            u_id = uuid.UUID(user_id_str)
+            stmt = select(Usuario).where(Usuario.id == u_id)
+            res = await self.db.execute(stmt)
+            u = res.scalars().first()
+            if u:
+                u.password_hash = pin_hash
+                await self.db.commit()
 
         if cod_socio in USUARIOS_REGISTRADOS_DB:
-            USUARIOS_REGISTRADOS_DB[cod_socio]["password_hash"] = nuevo_hash
+            USUARIOS_REGISTRADOS_DB[cod_socio]["password_hash"] = pin_hash
 
-        # Limpiar Redis: consumir token, resetear bloqueos y revocar sesiones activas
-        await self.redis.delete(token_key)
+        # Limpiar bloqueos de cuenta y token de recuperación
+        await self.redis.delete(f"token_recuperacion:{token_recuperacion}")
         await self.redis.delete(f"bloqueado:{cod_socio}")
         await self.redis.delete(f"intentos_fallidos:{cod_socio}")
         await self.redis.delete(f"sesion_activa:{user_id_str}")
 
-        logger.info(f"[RECUPERACION] PIN restablecido exitosamente para socio {cod_socio}. Cuenta desbloqueada.")
+        logger.info(f"[RECUPERACIÓN PIN COMPLETADA] PIN actualizado para socio {cod_socio}.")
+
         return {
             "mensaje": "¡Su contraseña ha sido actualizada exitosamente! Ya puede iniciar sesión con su nuevo PIN.",
             "cod_socio": cod_socio

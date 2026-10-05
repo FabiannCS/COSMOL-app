@@ -6,6 +6,8 @@ import '../models/verify_socio_response_model.dart';
 import '../models/otp_models.dart';
 import '../models/register_credentials_model.dart';
 import '../models/login_response_model.dart';
+import '../models/migrar_telefono_models.dart';
+import '../models/recuperar_password_models.dart';
 
 final authRemoteDataSourceProvider = Provider<AuthRemoteDataSource>((ref) {
   final dio = ref.watch(apiClientProvider);
@@ -109,6 +111,112 @@ class AuthRemoteDataSource {
         },
       );
       return LoginResponseModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  /// 6. Recuperación Paso 1: Validar Titular (cod_socio + CI)
+  Future<ValidarTitularResponseModel> validarTitularRecuperacion({
+    required String codSocio,
+    required String ci,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/autenticacion/recuperar-password/validar-titular',
+        data: {
+          'cod_socio': codSocio.trim(),
+          'ci': ci.trim(),
+        },
+      );
+      return ValidarTitularResponseModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  /// 7. Recuperación Paso 2: Solicitar OTP a teléfono registrado
+  Future<SolicitarOtpRecuperacionResponseModel> solicitarOtpRecuperacion({
+    required String sessionId,
+    String canal = 'WHATSAPP',
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/autenticacion/recuperar-password/solicitar-otp',
+        data: {
+          'session_id': sessionId.trim(),
+          'canal': canal.trim().toUpperCase(),
+        },
+      );
+      return SolicitarOtpRecuperacionResponseModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  /// 8. Recuperación Paso 3: Verificar código OTP de 6 dígitos
+  Future<VerificarOtpRecuperacionResponseModel> verificarOtpRecuperacion({
+    required String sessionId,
+    required String codigo,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/autenticacion/recuperar-password/verificar-otp',
+        data: {
+          'session_id': sessionId.trim(),
+          'codigo': codigo.trim(),
+        },
+      );
+      return VerificarOtpRecuperacionResponseModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  /// 9. Recuperación Paso 4: Cambiar Contraseña / PIN
+  Future<CambiarPinRecuperacionResponseModel> cambiarPinRecuperacion({
+    required String tokenRecuperacion,
+    required String nuevoPin,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/autenticacion/recuperar-password/cambiar-pin',
+        data: {
+          'token_recuperacion': tokenRecuperacion.trim(),
+          'nuevo_pin': nuevoPin.trim(),
+        },
+      );
+      return CambiarPinRecuperacionResponseModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  /// 10. Migración Paso 1: Iniciar migración de teléfono con PIN actual
+  Future<MigrarTelefonoIniciarResponseModel> iniciarMigracionTelefono({
+    required MigrarTelefonoIniciarRequestModel request,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/autenticacion/migrar-telefono/iniciar',
+        data: request.toJson(),
+      );
+      return MigrarTelefonoIniciarResponseModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  /// 11. Migración Paso 2: Confirmar migración de teléfono con código OTP
+  Future<MigrarTelefonoConfirmarResponseModel> confirmarMigracionTelefono({
+    required MigrarTelefonoConfirmarRequestModel request,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/autenticacion/migrar-telefono/confirmar',
+        data: request.toJson(),
+      );
+      return MigrarTelefonoConfirmarResponseModel.fromJson(response.data);
     } on DioException catch (e) {
       throw _handleDioError(e);
     }
