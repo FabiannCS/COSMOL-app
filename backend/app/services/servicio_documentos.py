@@ -119,17 +119,31 @@ class ServicioDocumentos:
         res_docs = await self.db.execute(stmt_docs)
         documentos_db = list(res_docs.scalars().all())
 
-        # 3. Auto-sincronización ligera de metadatos si no hay documentos registrados aún
-        if not documentos_db:
-            try:
-                import uuid as py_uuid
-                facturas_pendientes = await self.cosmol.obtener_deudas_socio(cod_socio) or []
+        # 3. Sincronización continua e incremental de facturas y avisos desde COSMOL
+        try:
+            import uuid as py_uuid
+            facturas_pendientes = await self.cosmol.obtener_deudas_socio(cod_socio)
+
+            if facturas_pendientes is not None:
+                # Consultar todos los documentos ya persistidos de este suministro para comparar periodos
+                stmt_existentes = select(Documento).where(Documento.cod_socio == cod_socio)
+                res_existentes = await self.db.execute(stmt_existentes)
+                existentes_todos = list(res_existentes.scalars().all())
+
+                mapa_existentes = {
+                    (d.tipo_documento, d.periodo): d for d in existentes_todos
+                }
+
+                periodos_pendientes = set()
+                hubo_cambios = False
 
                 for fac in facturas_pendientes:
                     try:
-                        anio = int(fac.get("ANIO") or fac.get("anio") or 2026)
+                        anio = int(fac.get("ANIO") or fac.get("anio") or date.today().year)
                         mes = int(fac.get("NMES") or fac.get("mes") or 1)
                         periodo = f"{mes:02d}/{anio}"
+                        periodos_pendientes.add(periodo)
+
                         monto_bs = round(float(fac.get("MONTOTOTAL") or fac.get("monto_bs") or 0.0), 2)
                         nro_factura = str(fac.get("NROFACTURA") or "").strip() or None
                         nro_facip = str(fac.get("NROFACIP") or "").strip() or None
@@ -138,28 +152,39 @@ class ServicioDocumentos:
                         fecha_venc = self.storage._determinar_fecha_vencimiento(anio, mes, fac)
                         identificador = nro_factura or nro_facip or py_uuid.uuid4().hex[:8]
 
-                        # 1. Metadato de Aviso de Cobranza
-                        s3_key_aviso = self.storage.construir_s3_key(cod_socio, "AVISO_COBRANZA", periodo, identificador)
-                        doc_aviso = Documento(
-                            cod_socio=cod_socio,
-                            tipo_documento="AVISO_COBRANZA",
-                            nro_factura=nro_factura,
-                            nro_facip=nro_facip,
-                            cod_autorizacion=cod_autorizacion,
-                            periodo=periodo,
-                            anio=anio,
-                            mes=mes,
-                            monto_bs=monto_bs,
-                            s3_key=s3_key_aviso,
-                            fecha_emision=fecha_emi,
-                            fecha_vencimiento=fecha_venc,
-                            estado_pago="PENDIENTE",
-                            suministro_id=suministro.id
-                        )
-                        self.db.add(doc_aviso)
+                        # 1. Asegurar Aviso de Cobranza para este periodo
+                        if ("AVISO_COBRANZA", periodo) not in mapa_existentes:
+                            s3_key_aviso = self.storage.construir_s3_key(cod_socio, "AVISO_COBRANZA", periodo, identificador)
+                            doc_aviso = Documento(
+                                cod_socio=cod_socio,
+                                tipo_documento="AVISO_COBRANZA",
+                                nro_factura=nro_factura,
+                                nro_facip=nro_facip,
+                                cod_autorizacion=cod_autorizacion,
+                                periodo=periodo,
+                                anio=anio,
+                                mes=mes,
+                                monto_bs=monto_bs,
+                                s3_key=s3_key_aviso,
+                                fecha_emision=fecha_emi,
+                                fecha_vencimiento=fecha_venc,
+                                estado_pago="PENDIENTE",
+                                suministro_id=suministro.id
+                            )
+                            self.db.add(doc_aviso)
+                            mapa_existentes[("AVISO_COBRANZA", periodo)] = doc_aviso
+                            hubo_cambios = True
+                        else:
+                            doc_exist = mapa_existentes[("AVISO_COBRANZA", periodo)]
+                            if doc_exist.estado_pago != "PENDIENTE":
+                                doc_exist.estado_pago = "PENDIENTE"
+                                hubo_cambios = True
+                            if nro_facip and not doc_exist.nro_facip:
+                                doc_exist.nro_facip = nro_facip
+                                hubo_cambios = True
 
-                        # 2. Metadato de Factura (solo si es titular)
-                        if rol_acceso == "TITULAR":
+                        # 2. Asegurar Factura Fiscal para este periodo (disponible en BD para el titular)
+                        if ("FACTURA", periodo) not in mapa_existentes:
                             s3_key_fac = self.storage.construir_s3_key(cod_socio, "FACTURA", periodo, identificador)
                             doc_fac = Documento(
                                 cod_socio=cod_socio,
@@ -178,10 +203,34 @@ class ServicioDocumentos:
                                 suministro_id=suministro.id
                             )
                             self.db.add(doc_fac)
+                            mapa_existentes[("FACTURA", periodo)] = doc_fac
+                            hubo_cambios = True
+                        else:
+                            doc_exist = mapa_existentes[("FACTURA", periodo)]
+                            if doc_exist.estado_pago != "PENDIENTE":
+                                doc_exist.estado_pago = "PENDIENTE"
+                                hubo_cambios = True
+                            if nro_factura and not doc_exist.nro_factura:
+                                doc_exist.nro_factura = nro_factura
+                                hubo_cambios = True
+                            if cod_autorizacion and not doc_exist.cod_autorizacion:
+                                doc_exist.cod_autorizacion = cod_autorizacion
+                                hubo_cambios = True
+
                     except Exception as err_item:
                         logger.warning(f"[DOCUMENTOS] Error al normalizar metadato de factura: {err_item}")
 
-                if len(facturas_pendientes) >= 2 and rol_acceso == "TITULAR":
+                # 3. Conciliar facturas y avisos históricos que ya fueron cancelados en COSMOL
+                if periodos_pendientes:
+                    for d in existentes_todos:
+                        if d.tipo_documento in ["FACTURA", "AVISO_COBRANZA"] and d.periodo not in periodos_pendientes:
+                            if d.estado_pago != "PAGADO":
+                                d.estado_pago = "PAGADO"
+                                hubo_cambios = True
+
+                # 4. Conciliar Aviso de Corte si aplica mora (2 o más facturas pendientes)
+                tiene_corte = any(d.tipo_documento == "AVISO_CORTE" for d in existentes_todos)
+                if len(facturas_pendientes) >= 2 and not tiene_corte and rol_acceso == "TITULAR":
                     s3_key_corte = self.storage.construir_s3_key(cod_socio, "AVISO_CORTE", "MORA", py_uuid.uuid4().hex[:8])
                     doc_corte = Documento(
                         cod_socio=cod_socio,
@@ -197,14 +246,16 @@ class ServicioDocumentos:
                         suministro_id=suministro.id
                     )
                     self.db.add(doc_corte)
+                    hubo_cambios = True
 
-                await self.db.commit()
+                if hubo_cambios:
+                    await self.db.commit()
+                    # Re-consultar documentos tras sincronización
+                    res_sync = await self.db.execute(stmt_docs)
+                    documentos_db = list(res_sync.scalars().all())
 
-                # Re-consultar documentos tras sincronización rápida
-                res_sync = await self.db.execute(stmt_docs)
-                documentos_db = list(res_sync.scalars().all())
-            except Exception as exc:
-                logger.warning(f"[DOCUMENTOS] Auto-sincronización ligera no ejecutada: {exc}")
+        except Exception as exc:
+            logger.warning(f"[DOCUMENTOS] Sincronización continua de facturas no ejecutada: {exc}")
 
         # 4. Auto-remediación rápida de fechas en BD (sin regeneración síncrona de archivos)
         modificado = False
@@ -309,8 +360,9 @@ class ServicioDocumentos:
                 error_code="DOCUMENT_ACCESS_DENIED"
             )
 
-        # 4. Asegurar que el archivo en MinIO S3 exista, regenerándolo si fuera necesario
-        if not self.s3.existe_archivo(doc.s3_key):
+        # 4. Asegurar que el archivo en MinIO S3 exista y esté actualizado con el formato oficial
+        # Para AVISO_COBRANZA siempre regeneramos para garantizar el diseño oficial y datos reales de consumo
+        if doc.tipo_documento == "AVISO_COBRANZA" or not self.s3.existe_archivo(doc.s3_key):
             try:
                 datos_socio = await self.cosmol.obtener_datos_socio(doc.cod_socio) or {}
             except Exception:
@@ -319,11 +371,12 @@ class ServicioDocumentos:
             try:
                 await self.storage.regenerar_pdf_desde_documento(doc, datos_socio)
             except Exception as exc:
-                logger.error(f"[STORAGE] Error al regenerar documento faltante para descarga: {exc}")
-                raise NotFoundException(
-                    message="No se pudo generar ni recuperar el archivo PDF solicitado.",
-                    error_code="PDF_GENERATION_FAILED"
-                )
+                logger.error(f"[STORAGE] Error al regenerar documento para descarga: {exc}")
+                if not self.s3.existe_archivo(doc.s3_key):
+                    raise NotFoundException(
+                        message="No se pudo generar ni recuperar el archivo PDF solicitado.",
+                        error_code="PDF_GENERATION_FAILED"
+                    )
 
         # 5. Obtener stream desde MinIO
         stream = self.s3.obtener_archivo_stream(doc.s3_key)

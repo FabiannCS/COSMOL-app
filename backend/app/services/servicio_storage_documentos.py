@@ -4,15 +4,16 @@ Orquesta la generación on-demand de PDFs con ReportLab, su persistencia en MinI
 y el registro de metadatos en la tabla 'documentos' de PostgreSQL.
 """
 import calendar
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Documento, Suministro
+from app.integrations.cosmol_client import CosmolLegacyClient, cosmol_client
 from app.integrations.minio_client import CosmolMinioClient, minio_client
 from app.services.generador_pdf import GeneradorPdfDocumento, generador_pdf
 
@@ -28,11 +29,13 @@ class ServicioStorageDocumentos:
         self,
         db: AsyncSession,
         s3_client: Optional[CosmolMinioClient] = None,
-        pdf_engine: Optional[GeneradorPdfDocumento] = None
+        pdf_engine: Optional[GeneradorPdfDocumento] = None,
+        cosmol: Optional[CosmolLegacyClient] = None,
     ):
         self.db = db
         self.s3 = s3_client or minio_client
         self.pdf = pdf_engine or generador_pdf
+        self.cosmol = cosmol or cosmol_client
 
     def _determinar_fecha_emision(self, anio: int, mes: int, datos: Dict[str, Any]) -> date:
         """
@@ -285,6 +288,138 @@ class ServicioStorageDocumentos:
 
         return pdf_bytes
 
+    async def _preparar_contexto_aviso(
+        self,
+        cod_socio: str,
+        periodo: str,
+        anio: int,
+        mes: int,
+        monto_bs: float,
+        nro_aviso: str,
+        fecha_emision: Optional[date],
+        fecha_vencimiento: Optional[date],
+        datos_socio: Optional[Dict[str, Any]] = None,
+        datos_extra: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        Prepara la información requerida por el generador vectorial del Aviso de Cobranza Oficial:
+        - Catastro real del socio (titular, CI, dirección, categoría, ubicación/ruta, distrito).
+        - Historial analítico de consumo real de los últimos 12 meses desde la API de COSMOL.
+        - Estado de pago (IMPAGA vs PAGADA) cruzado con la cartera de deudas pendientes.
+        - Lectura del ciclo comercial respectivo (anterior, actual, m3, fechas de lectura, días).
+        - Fecha límite de corte preventivo a 60 días según Art. 79 (D.S. N.º 510/92).
+        """
+        datos_extra = datos_extra or {}
+
+        # 1. Obtener datos catastrales completos del socio si faltan
+        if not datos_socio or len(datos_socio) <= 1:
+            try:
+                datos_socio = await self.cosmol.obtener_datos_socio(cod_socio) or {}
+            except Exception as exc:
+                logger.warning(f"[STORAGE] No se pudo obtener datos de socio '{cod_socio}': {exc}")
+                datos_socio = datos_socio or {"cod_socio": cod_socio}
+
+        # 2. Historial de consumo de 12 meses
+        historial_consumo: List[Dict[str, Any]] = []
+        try:
+            historial_consumo = await self.cosmol.obtener_historial_consumo(cod_socio, meses=12) or []
+        except Exception as exc:
+            logger.warning(f"[STORAGE] No se pudo obtener historial de consumo para socio '{cod_socio}': {exc}")
+
+        # 3. Consultar deudas pendientes para conciliar estado IMPAGA vs PAGADA
+        periodos_impagos = set()
+        try:
+            deudas = await self.cosmol.obtener_deudas_socio(cod_socio) or []
+            for d in deudas:
+                d_mes = int(d.get("NMES") or d.get("mes") or 0)
+                d_anio = int(d.get("ANIO") or d.get("anio") or 0)
+                if d_mes and d_anio:
+                    periodos_impagos.add(f"{d_mes:02d}/{d_anio}")
+                elif d.get("periodo"):
+                    periodos_impagos.add(str(d["periodo"]).strip())
+        except Exception as exc:
+            logger.warning(f"[STORAGE] Error al consultar deudas para conciliar avisos: {exc}")
+
+        # Asignar estado y fecha de pago a cada fila del historial
+        for h in historial_consumo:
+            p = str(h.get("periodo") or "").strip()
+            if p in periodos_impagos:
+                h["estado"] = "IMPAGA"
+                h["fecha_pago"] = ""
+            else:
+                h["estado"] = "PAGADA"
+                f_pago = h.get("fecha_pago") or h.get("fecha_lectura") or h.get("fecha") or ""
+                if f_pago and "-" in str(f_pago):
+                    try:
+                        pts = str(f_pago)[:10].split("-")
+                        if len(pts) == 3:
+                            f_pago = f"{pts[2]}/{pts[1]}/{pts[0]}"
+                    except Exception:
+                        pass
+                h["fecha_pago"] = f_pago
+
+        # Ordenar cronológicamente descendente (del mes más reciente al más antiguo)
+        # para que las facturas impagas y los últimos periodos se muestren arriba
+        historial_consumo.sort(
+            key=lambda x: (int(x.get("anio") or 0), int(x.get("mes") or 0)),
+            reverse=True
+        )
+
+        # 4. Datos de medición y lectura del ciclo
+        matching_h = next((h for h in historial_consumo if str(h.get("periodo", "")).strip() == periodo.strip()), None)
+        if not matching_h and historial_consumo:
+            matching_h = historial_consumo[0]
+
+        lect_ant = datos_extra.get("lectura_anterior")
+        lect_act = datos_extra.get("lectura_actual")
+        cons_m3 = datos_extra.get("consumo_m3")
+        f_lect_ant = str(datos_extra.get("fecha_lectura_anterior") or "")
+        f_lect_act = str(datos_extra.get("fecha_lectura_actual") or "")
+        obs = str(datos_extra.get("obs") or "")
+
+        if matching_h:
+            if lect_ant is None:
+                lect_ant = matching_h.get("lectura_anterior", 0.0)
+            if lect_act is None:
+                lect_act = matching_h.get("lectura_actual", 0.0)
+            if cons_m3 is None:
+                cons_m3 = matching_h.get("consumo_m3", 0.0)
+            if not f_lect_act:
+                f_lect_act = str(matching_h.get("fecha_lectura") or "")
+            if not obs:
+                obs = str(matching_h.get("estado_lectura") or "NORMAL")
+
+        # Fecha de corte (Art. 79: 60 días posteriores a emisión/vencimiento)
+        fecha_corte_str = str(datos_extra.get("fecha_corte") or "")
+        if not fecha_corte_str and fecha_vencimiento:
+            try:
+                fc = fecha_vencimiento + timedelta(days=60)
+                fecha_corte_str = fc.strftime("%d/%m/%Y")
+            except Exception:
+                pass
+
+        datos_aviso = {
+            "nro_factura": nro_aviso,
+            "nro_facip": nro_aviso,
+            "periodo": periodo,
+            "anio": anio,
+            "mes": mes,
+            "monto_total": monto_bs,
+            "monto_bs": monto_bs,
+            "fecha_emision": fecha_emision.strftime("%d/%m/%Y") if fecha_emision else "",
+            "fecha_vencimiento": fecha_vencimiento.strftime("%d/%m/%Y") if fecha_vencimiento else "",
+            "lectura_anterior": f"{float(lect_ant):.0f}" if lect_ant is not None else "0",
+            "lectura_actual": f"{float(lect_act):.0f}" if lect_act is not None else "0",
+            "consumo_m3": f"{float(cons_m3):.0f}" if cons_m3 is not None else "0",
+            "dias_consumo": str(datos_extra.get("dias_consumo") or "30"),
+            "fecha_lectura_anterior": f_lect_ant,
+            "fecha_lectura_actual": f_lect_act,
+            "obs": obs or "NORMAL",
+            "fecha_corte": fecha_corte_str,
+        }
+
+        return datos_aviso, datos_socio, historial_consumo
+
     async def obtener_o_generar_pdf_aviso_cobranza(
         self,
         cod_socio: str,
@@ -292,7 +427,7 @@ class ServicioStorageDocumentos:
         datos_socio: Dict[str, Any]
     ) -> bytes:
         """
-        Recupera o genera el Aviso de Cobranza preventivo en PDF.
+        Recupera o genera el Aviso de Cobranza Oficial de COSMOL en PDF.
         """
         nro_facip = str(datos_deuda.get("NROFACIP") or datos_deuda.get("nro_facip") or "aviso").strip()
         nmes = int(datos_deuda.get("NMES") or datos_deuda.get("mes") or 0)
@@ -303,42 +438,31 @@ class ServicioStorageDocumentos:
         fecha_emision = self._determinar_fecha_emision(anio, nmes, datos_deuda)
         fecha_vencimiento = self._determinar_fecha_vencimiento(anio, nmes, datos_deuda)
 
-        if self.s3.existe_archivo(s3_key):
-            try:
-                pdf_bytes = self.s3.obtener_archivo_bytes(s3_key)
-                stmt = select(Documento).where(
-                    Documento.cod_socio == cod_socio,
-                    Documento.tipo_documento == "AVISO_COBRANZA",
-                    Documento.periodo == periodo
-                )
-                res = await self.db.execute(stmt)
-                if not res.scalar_one_or_none():
-                    monto_val = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
-                    await self.guardar_documento(
-                        cod_socio=cod_socio,
-                        tipo_documento="AVISO_COBRANZA",
-                        periodo=periodo,
-                        anio=anio,
-                        mes=nmes,
-                        monto_bs=monto_val,
-                        pdf_bytes=pdf_bytes,
-                        nro_facip=nro_facip,
-                        fecha_emision=fecha_emision,
-                        fecha_vencimiento=fecha_vencimiento
-                    )
-                return pdf_bytes
-            except Exception as exc:
-                logger.warning(f"[STORAGE] Error al recuperar '{s3_key}': {exc}. Regenerando...")
+        # 1. Preparar contexto enriquecido con historial y catastro real
+        monto_bs = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
+        datos_aviso, datos_socio_completo, historial = await self._preparar_contexto_aviso(
+            cod_socio=cod_socio,
+            periodo=periodo,
+            anio=anio,
+            mes=nmes,
+            monto_bs=monto_bs,
+            nro_aviso=nro_facip,
+            fecha_emision=fecha_emision,
+            fecha_vencimiento=fecha_vencimiento,
+            datos_socio=datos_socio,
+            datos_extra=datos_deuda,
+        )
 
-        datos_deuda_pdf = dict(datos_deuda)
-        if not datos_deuda_pdf.get("fecha_vencimiento"):
-            datos_deuda_pdf["fecha_vencimiento"] = fecha_vencimiento.strftime("%d/%m/%Y")
-
-        pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(datos_deuda=datos_deuda_pdf, datos_socio=datos_socio)
+        # 2. Generar el PDF oficial con ReportLab Vectorial
+        pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
+            datos_deuda=datos_aviso,
+            datos_socio=datos_socio_completo,
+            fecha_emision=fecha_emision,
+            fecha_vencimiento=fecha_vencimiento,
+            historial_consumo=historial,
+        )
 
         try:
-            monto_bs = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
-
             await self.guardar_documento(
                 cod_socio=cod_socio,
                 tipo_documento="AVISO_COBRANZA",
@@ -420,16 +544,24 @@ class ServicioStorageDocumentos:
                 fecha_emision=doc.fecha_emision
             )
         elif doc.tipo_documento == "AVISO_COBRANZA":
-            datos_deuda = {
-                "NROFACIP": doc.nro_facip or "",
-                "periodo": doc.periodo,
-                "MONTOTOTAL": float(doc.monto_bs),
-            }
-            pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
-                datos_deuda=datos_deuda,
-                datos_socio=datos_socio,
+            nro_aviso = doc.nro_facip or doc.nro_factura or "aviso"
+            datos_aviso, datos_socio_completo, historial = await self._preparar_contexto_aviso(
+                cod_socio=doc.cod_socio,
+                periodo=doc.periodo,
+                anio=doc.anio or 0,
+                mes=doc.mes or 0,
+                monto_bs=float(doc.monto_bs),
+                nro_aviso=nro_aviso,
                 fecha_emision=doc.fecha_emision,
-                fecha_vencimiento=doc.fecha_vencimiento
+                fecha_vencimiento=doc.fecha_vencimiento,
+                datos_socio=datos_socio,
+            )
+            pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
+                datos_deuda=datos_aviso,
+                datos_socio=datos_socio_completo,
+                fecha_emision=doc.fecha_emision,
+                fecha_vencimiento=doc.fecha_vencimiento,
+                historial_consumo=historial,
             )
         elif doc.tipo_documento == "AVISO_CORTE":
             facturas_pendientes = [{

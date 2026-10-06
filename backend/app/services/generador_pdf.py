@@ -242,70 +242,27 @@ class GeneradorPdfDocumento:
         datos_socio: Dict[str, Any],
         fecha_emision: Optional[date] = None,
         fecha_vencimiento: Optional[date] = None,
+        historial_consumo: Optional[List[Dict[str, Any]]] = None,
+        conceptos: Optional[List[Dict[str, Any]]] = None,
     ) -> bytes:
         """
-        Genera un Aviso Mensual de Cobranza preventivo.
+        Genera el Aviso de Cobranza Oficial de COSMOL R.L. con el diseño idéntico
+        a aviso.html y aviso_datos.html (210 x 140 mm, formato institucional 1950x1299).
         """
-        buffer = io.BytesIO()
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=letter,
-            rightMargin=36,
-            leftMargin=36,
-            topMargin=36,
-            bottomMargin=36
-        )
-        story = []
+        from app.services.generador_aviso_cobranza import generador_aviso_cobranza
 
-        # Membrete
-        story.append(Paragraph("COSMOL R.L. — COOPERATIVA DE SERVICIOS PÚBLICOS", self.estilo_titulo))
-        story.append(Paragraph("AVISO MENSUAL DE COBRANZA", self.estilo_subtitulo))
-        story.append(HRFlowable(width="100%", thickness=1.5, color=COLOR_SECUNDARIO, spaceAfter=14))
-
-        cod_socio = str(datos_socio.get("CODIGO") or datos_socio.get("cod_socio") or "").strip()
-        nombre = str(datos_socio.get("NOMBRE") or datos_socio.get("nombre_titular") or "").strip()
-        periodo = str(datos_deuda.get("periodo") or "Actual").strip()
-        monto_bs = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
-
+        datos_aviso = dict(datos_deuda)
         if fecha_emision is not None:
-            fecha_emision_str = fecha_emision.strftime('%d/%m/%Y')
-        else:
-            fecha_emision_str = str(datos_deuda.get("fecha_emision") or "").strip()
-
+            datos_aviso["fecha_emision"] = fecha_emision.strftime("%d/%m/%Y")
         if fecha_vencimiento is not None:
-            fecha_venc_str = fecha_vencimiento.strftime('%d/%m/%Y')
-        else:
-            fecha_venc_str = str(datos_deuda.get("fecha_vencimiento") or "Fin de mes").strip()
+            datos_aviso["fecha_vencimiento"] = fecha_vencimiento.strftime("%d/%m/%Y")
 
-        info_fechas = f"<b>VENCIMIENTO:</b> {fecha_venc_str}"
-        if fecha_emision_str:
-            info_fechas = f"<b>EMISIÓN:</b> {fecha_emision_str}<br/>" + info_fechas
-
-        datos_aviso = [
-            [Paragraph(f"<b>CÓDIGO DE SOCIO:</b> {cod_socio}", self.estilo_celda), Paragraph(f"<b>PERIODO:</b> {periodo}", self.estilo_celda)],
-            [Paragraph(f"<b>TITULAR:</b> {nombre}", self.estilo_celda), Paragraph(info_fechas, self.estilo_celda)],
-            [Paragraph("<b>TOTAL A PAGAR:</b>", self.estilo_celda_negrita), Paragraph(f"<b>Bs {monto_bs:.2f}</b>", self.estilo_celda_negrita)],
-        ]
-        tabla = Table(datos_aviso, colWidths=[4.0 * inch, 3.5 * inch])
-        tabla.setStyle(TableStyle([
-            ("BOX", (0, 0), (-1, -1), 1, COLOR_SECUNDARIO),
-            ("BACKGROUND", (0, -1), (-1, -1), COLOR_GRIS_CLARO),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        story.append(tabla)
-        story.append(Spacer(1, 20))
-
-        story.append(Paragraph(
-            "Recuerde que puede pagar su aviso cómodamente desde la aplicación mediante código QR interbancario o banca móvil.",
-            self.estilo_celda
-        ))
-        story.append(Spacer(1, 10))
-        story.append(Paragraph("Evite filas y mantenga su servicio al día.", self.estilo_pie))
-
-        doc.build(story)
-        buffer.seek(0)
-        return buffer.getvalue()
+        return generador_aviso_cobranza.generar(
+            datos_aviso=datos_aviso,
+            datos_socio=datos_socio,
+            historial_consumo=historial_consumo,
+            conceptos=conceptos,
+        )
 
     def generar_pdf_aviso_corte(
         self,
