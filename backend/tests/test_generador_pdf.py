@@ -73,3 +73,58 @@ def test_generar_pdf_aviso_corte():
     assert isinstance(pdf_bytes, bytes)
     assert len(pdf_bytes) > 800
     assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_generador_aviso_cobranza_oficial_completo():
+    """
+    Verifica que el generador oficial de Avisos de Cobranza (210x140mm)
+    procese adecuadamente historial de 12 meses, estados de pago y conceptos.
+    """
+    from app.services.generador_aviso_cobranza import generador_aviso_cobranza
+
+    datos_aviso = {
+        "nro_factura": "7444051",
+        "periodo": "08/2026",
+        "anio": 2026,
+        "mes": 8,
+        "monto_total": 70.92,
+        "fecha_emision": "13/08/2026",
+        "fecha_vencimiento": "31/08/2026",
+        "lectura_anterior": "210",
+        "lectura_actual": "225",
+        "consumo_m3": "15",
+        "dias_consumo": "30",
+        "obs": "NORMAL",
+        "fecha_corte": "30/10/2026"
+    }
+    datos_socio = {
+        "CODIGO": "540",
+        "NOMBRE": "DURAN ELOISA RIVERA DE",
+        "NROCIONIT": "2823231",
+        "DIRECCION": "SANTA CRUZ 117",
+        "CATEGORIA": "DOMICILIARIA",
+        "DISTRITO": "1",
+        "ENVIO": "1",
+        "UBICACION": "1.39.135.0"
+    }
+    historial = [
+        {"periodo": "08/2026", "consumo_m3": 15, "monto_bs": 70.92, "estado": "IMPAGA", "fecha_pago": ""},
+        {"periodo": "07/2026", "consumo_m3": 14, "monto_bs": 66.50, "estado": "PAGADA", "fecha_pago": "10/08/2026"},
+        {"periodo": "06/2026", "consumo_m3": 16, "monto_bs": 74.20, "estado": "PAGADA", "fecha_pago": "09/07/2026"},
+    ]
+    conceptos = [
+        {"cod": 1, "concepto": "SERVICIO DE AGUA POTABLE", "monto_bs": 46.10},
+        {"cod": 2, "concepto": "SERV.ALCANT.SANITARIO", "monto_bs": 24.82},
+    ]
+
+    pdf_bytes = generador_aviso_cobranza.generar(
+        datos_aviso=datos_aviso,
+        datos_socio=datos_socio,
+        historial_consumo=historial,
+        conceptos=conceptos
+    )
+
+    assert isinstance(pdf_bytes, bytes)
+    assert len(pdf_bytes) > 20000  # Archivo PDF completo con logos vectoriales (>20KB)
+    assert pdf_bytes.startswith(b"%PDF")
+

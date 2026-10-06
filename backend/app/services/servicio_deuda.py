@@ -255,15 +255,15 @@ class ServicioDeuda:
         # Mensaje institucional preventivo
         if alerta_corte:
             mensaje_alerta = (
-                f"Posee {cantidad_facturas} facturas pendientes. "
-                "Evite el corte del servicio cancelando a la brevedad."
+                f"Tiene {cantidad_facturas} facturas pendientes. "
+                "Evite el corte del servicio cancelando sus respectivas facturas."
             )
         elif esta_vencido:
             mensaje_alerta = "Posee facturas vencidas. Regularice su pago para evitar corte del servicio."
         elif cantidad_facturas == 1:
             mensaje_alerta = "Tiene 1 factura pendiente de pago dentro del plazo reglamentario."
         else:
-            mensaje_alerta = "¡Felicidades! Su servicio se encuentra al día sin deudas pendientes."
+            mensaje_alerta = "Su servicio se encuentra al día sin deudas pendientes."
 
         # Fecha de próximo vencimiento
         proximo_vencimiento: Optional[date] = None
