@@ -4,9 +4,11 @@ Rutas y Endpoints REST para Autenticación, Onboarding Dual OTP y Multicuenta.
 from typing import Any, Dict, List
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_redis, get_token_payload
+from app.db.models import Suministro, Usuario
 from app.schemas.suministro import (
     DesvincularSuministroResponse,
     SuministroResponse,
@@ -160,15 +162,41 @@ async def login(
         device_id=datos.device_id,
         modelo_dispositivo=datos.modelo_dispositivo
     )
-    # Despachar evento de Login exitoso a COSMOL-Reportes en segundo plano
+    # Despachar evento de Login exitoso a COSMOL-Reportes en segundo plano con datos enriquecidos
     try:
         cod_socio_int = int(str(datos.cod_socio).strip())
     except (ValueError, TypeError):
         cod_socio_int = 0
+
+    # Rescatar nombre oficial del socio desde los suministros vinculados
+    nombre_titular = f"SOCIO {cod_socio_int}"
+    if respuesta.suministros:
+        for s in respuesta.suministros:
+            if str(s.cod_socio) == str(datos.cod_socio) and s.nombre:
+                nombre_titular = s.nombre
+                break
+        if nombre_titular == f"SOCIO {cod_socio_int}" and respuesta.suministros[0].nombre:
+            nombre_titular = respuesta.suministros[0].nombre
+
+    # Rescatar número celular personal verificado del usuario
+    telefono_socio = None
+    try:
+        stmt_tel = (
+            select(Usuario.telefono)
+            .join(Suministro, Suministro.usuario_id == Usuario.id)
+            .where(Suministro.cod_socio == datos.cod_socio)
+            .limit(1)
+        )
+        res_tel = await db.execute(stmt_tel)
+        telefono_socio = res_tel.scalar_one_or_none()
+    except Exception:
+        pass
+
     background_tasks.add_task(
         despachar_auditoria_reportes,
         codigo_socio=cod_socio_int,
-        nombres=f"SOCIO {cod_socio_int}",
+        nombres=nombre_titular,
+        telefono=telefono_socio,
         id_tipo=1,
         tipo_consulta="Autenticación / Acceso",
     )

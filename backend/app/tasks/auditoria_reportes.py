@@ -122,13 +122,15 @@ async def despachar_auditoria_reportes(
     id_tipo: int = 2,
     tipo_consulta: Optional[str] = None,
     tipo_ubicacion: str = "APP_MOVIL",
+    debounce_segundos: int = 0,
 ) -> None:
     """
     Función asíncrona inyectada en FastAPI BackgroundTasks:
     1. Prepara el payload con timestamp exacto de Montero (UTC-4).
-    2. Intenta el despacho directo a COSMOL-Reportes.
-    3. Si tiene éxito: Aprovecha la conexión viva para expulsar eventos acumulados en Redis.
-    4. Si falla (Reportes caído/timeout): Guarda el evento en la cola de Redis de forma no bloqueante.
+    2. Aplica debounce atómico en Redis si debounce_segundos > 0 para evitar spam de lecturas.
+    3. Intenta el despacho directo a COSMOL-Reportes.
+    4. Si tiene éxito: Aprovecha la conexión viva para expulsar eventos acumulados en Redis.
+    5. Si falla (Reportes caído/timeout): Guarda el evento en la cola de Redis de forma no bloqueante.
     """
     if not settings.REPORTES_ENABLED or not settings.REPORTES_API_URL:
         return
@@ -143,6 +145,21 @@ async def despachar_auditoria_reportes(
         tel_normalizado = str(telefono).strip() if telefono and str(telefono).strip() else None
         nombres_limpio = str(nombres or f"SOCIO {cod_socio_int}").strip()
         tipo_consulta_str = tipo_consulta or ReportesApiClient.CATALOGO_EVENTOS.get(id_tipo, "Consulta General")
+
+        # 2. Control Anti-Spam / Debounce atómico en Redis por código de socio
+        if debounce_segundos > 0 and cod_socio_int > 0:
+            try:
+                redis = await get_redis()
+                debounce_key = f"auditoria:debounce:{id_tipo}:{cod_socio_int}"
+                es_nuevo = await redis.set(debounce_key, "1", ex=debounce_segundos, nx=True)
+                if not es_nuevo:
+                    logger.debug(
+                        f"[AUDITORIA DEBOUNCE] Evento '{tipo_consulta_str}' (tipo={id_tipo}) para socio {cod_socio_int} "
+                        f"omitido por ventana activa de espera ({debounce_segundos}s)."
+                    )
+                    return
+            except Exception as err_redis:
+                logger.debug(f"[AUDITORIA DEBOUNCE] No se pudo verificar clave en Redis: {err_redis}")
 
         tz_bolivia = timezone(timedelta(hours=-4))
         ahora = datetime.now(tz_bolivia)

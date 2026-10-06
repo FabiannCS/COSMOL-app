@@ -9,9 +9,11 @@ from uuid import UUID
 import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id, get_db
+from app.db.models import Usuario
 from app.schemas.documento import ListaDocumentosResponse
 from app.services.servicio_documentos import ServicioDocumentos, registrar_auditoria_descarga
 from app.tasks.auditoria_reportes import despachar_auditoria_reportes
@@ -102,10 +104,19 @@ async def descargar_documento_pdf(
     except (ValueError, TypeError):
         cod_socio_int = 0
 
+    telefono_socio = None
+    try:
+        stmt_u = select(Usuario.telefono).where(Usuario.id == user_uuid)
+        res_u = await db.execute(stmt_u)
+        telefono_socio = res_u.scalar_one_or_none()
+    except Exception:
+        pass
+
     background_tasks.add_task(
         despachar_auditoria_reportes,
         codigo_socio=cod_socio_int,
         nombres=f"SOCIO {cod_socio_int}",
+        telefono=telefono_socio,
         id_tipo=9,
         tipo_consulta="Descarga de Factura PDF",
     )

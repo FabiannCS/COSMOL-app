@@ -16,13 +16,15 @@ class ReportesApiClient(BaseApiClient):
     Diseñado para operar en segundo plano con resiliencia total (cero crash).
     """
 
-    # Catálogo Oficial de Eventos pactado en el Contrato (§ 4)
+    # Catálogo Oficial de Eventos pactado en el Contrato con COSMOL-Reportes
     CATALOGO_EVENTOS = {
         1: "Autenticación / Acceso",
         2: "Consulta de Deuda",
-        3: "Historial de Facturas",
+        3: "Historial de Consumo",
         9: "Descarga de Factura PDF",
-        10: "Intento de Pago",
+        10: "Pago: Multipago",
+        11: "Pago: Pago al Paso",
+        12: "Pago: Código QR",
     }
 
     # Control de circuito / cooldown preventivo para no bloquear la app ante caídas de Reportes
