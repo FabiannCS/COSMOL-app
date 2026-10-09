@@ -7,9 +7,11 @@ from uuid import UUID
 import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id, get_db, get_redis
+from app.db.models import Usuario
 from app.schemas.deuda import (
     DashboardMultiSuministroResponse,
     ResumenDeudaResponse,
@@ -91,7 +93,7 @@ async def obtener_deuda_suministro(
     if resumen.saldo_pendiente_bs <= 0.0 or resumen.cantidad_facturas_pendientes == 0:
         await cerrar_ventana_verificacion(redis_client, cod_socio)
 
-    # Despachar evento de Consulta de Deuda a COSMOL-Reportes en segundo plano
+    # Despachar evento de Consulta de Deuda a COSMOL-Reportes en segundo plano con debounce
     try:
         cod_socio_int = int(str(cod_socio).strip())
     except (ValueError, TypeError):
@@ -103,12 +105,23 @@ async def obtener_deuda_suministro(
         else None
     ) or f"SOCIO {cod_socio_int}"
 
+    telefono_socio = None
+    try:
+        user_uuid = UUID(current_user_id)
+        stmt_u = select(Usuario.telefono).where(Usuario.id == user_uuid)
+        res_u = await db.execute(stmt_u)
+        telefono_socio = res_u.scalar_one_or_none()
+    except Exception:
+        pass
+
     background_tasks.add_task(
         despachar_auditoria_reportes,
         codigo_socio=cod_socio_int,
         nombres=nombre_titular,
+        telefono=telefono_socio,
         id_tipo=2,
         tipo_consulta="Consulta de Deuda",
+        debounce_segundos=900,  # Ventana de 15 minutos por código de socio
     )
 
     return resumen

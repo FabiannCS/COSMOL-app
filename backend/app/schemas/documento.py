@@ -30,6 +30,7 @@ class DocumentoResponse(BaseModel):
     fecha_emision: date = Field(..., description="Fecha de emisión del documento")
     fecha_vencimiento: Optional[date] = Field(None, description="Fecha de vencimiento reglamentaria")
     estado_pago: str = Field("PENDIENTE", description="Estado de pago: 'PENDIENTE' o 'PAGADO'")
+    fecha_pago: Optional[str] = Field(None, description="Fecha de pago registrada (ej: '2026-09-05')")
     s3_key: Optional[str] = Field(None, description="Clave de almacenamiento del objeto en MinIO S3")
     permite_descarga: bool = Field(True, description="Indica si el usuario actual tiene permisos de descarga")
     url_descarga: Optional[str] = Field(None, description="Ruta relativa o prefirmada para descarga directa")

@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """
     # Entorno y Depuración
     PROJECT_NAME: str = "COSMOL R.L. - Backend API"
-    VERSION: str = "1.0.2"
+    VERSION: str = "1.0.5"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
@@ -102,7 +102,7 @@ class Settings(BaseSettings):
     REPORTES_API_URL: str = ""       # Ej: "http://cosmol-reportes:80" o URL de producción
     REPORTES_API_TOKEN: str = ""     # Token validado por cabecera X-Reportes-Token
     REPORTES_ID_USUARIO_APP: int = 3 # Usuario 3 = App Móvil (Usuario 2 = Chatbot WhatsApp)
-    REPORTES_TIMEOUT_SECONDS: float = 3.0
+    REPORTES_TIMEOUT_SECONDS: float = 2.0
     REPORTES_ENABLED: bool = True
 
     model_config = SettingsConfigDict(

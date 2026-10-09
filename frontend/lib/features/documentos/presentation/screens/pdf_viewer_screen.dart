@@ -76,7 +76,7 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
     if (path != null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Documento guardado en:\n$path'),
+          content: Text('Documento guardado'),
           backgroundColor: const Color(0xFF00A86B),
           duration: const Duration(seconds: 4),
           action: SnackBarAction(
@@ -199,7 +199,7 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Cargando documento oficial...',
+              'Cargando documento...',
               style: AppTextStyles.subtitle2.copyWith(color: Colors.white70),
             ),
           ],

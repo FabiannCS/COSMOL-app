@@ -152,5 +152,78 @@ void main() {
       expect(bytes[2], 68); // 'D'
       expect(bytes[3], 70); // 'F'
     });
+
+    test('cambiarFiltroFacturas filtra correctamente entre todas, pagadas y pendientes', () async {
+      mockRepository.mockResponse = ListaDocumentosModel(
+        codSocio: '23807',
+        rolAcceso: 'TITULAR',
+        totalDocumentos: 3,
+        facturas: [
+          DocumentoModel(
+            id: 'doc-factura-1',
+            codSocio: '23807',
+            tipoDocumento: 'FACTURA',
+            nroFactura: '84920',
+            periodo: '08/2026',
+            anio: 2026,
+            mes: 8,
+            montoBs: 85.50,
+            fechaEmision: DateTime(2026, 8, 1),
+            fechaVencimiento: DateTime(2026, 8, 25),
+            estadoPago: 'PAGADO',
+            fechaPago: '2026-08-25',
+          ),
+          DocumentoModel(
+            id: 'doc-factura-2',
+            codSocio: '23807',
+            tipoDocumento: 'FACTURA',
+            nroFactura: '84921',
+            periodo: '07/2026',
+            anio: 2026,
+            mes: 7,
+            montoBs: 70.00,
+            fechaEmision: DateTime(2026, 7, 1),
+            fechaVencimiento: DateTime(2026, 7, 25),
+            estadoPago: 'PAGADO',
+            fechaPago: '2026-07-28',
+          ),
+          DocumentoModel(
+            id: 'doc-factura-3',
+            codSocio: '23807',
+            tipoDocumento: 'FACTURA',
+            nroFactura: '84922',
+            periodo: '09/2026',
+            anio: 2026,
+            mes: 9,
+            montoBs: 90.00,
+            fechaEmision: DateTime(2026, 9, 1),
+            fechaVencimiento: DateTime(2026, 9, 25),
+            estadoPago: 'PENDIENTE',
+            fechaPago: null,
+          ),
+        ],
+        avisosCobranza: const [],
+        avisosCorte: const [],
+        documentos: const [],
+      );
+
+      await notifier.cargarDocumentos(codSocio: '23807');
+
+      // Todas
+      expect(notifier.state.facturas.length, 3);
+      expect(notifier.state.totalFacturasPagadasCount, 2);
+      expect(notifier.state.totalFacturasPendientesCount, 1);
+
+      // Filtrar por Pagadas
+      notifier.cambiarFiltroFacturas(FiltroEstadoFactura.pagadas);
+      expect(notifier.state.facturas.length, 2);
+      expect(notifier.state.facturas.every((f) => f.isPagado), isTrue);
+
+      // Filtrar por Pendientes
+      notifier.cambiarFiltroFacturas(FiltroEstadoFactura.pendientes);
+      expect(notifier.state.facturas.length, 1);
+      expect(notifier.state.facturas.first.isPendiente, isTrue);
+    });
   });
 }
+

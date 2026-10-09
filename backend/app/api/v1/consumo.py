@@ -8,9 +8,11 @@ from uuid import UUID
 import logging
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id, get_db, get_redis
+from app.db.models import Suministro, Usuario
 from app.schemas.consumo import HistorialConsumoResponse
 from app.services.servicio_consumo import ServicioConsumo
 from app.tasks.auditoria_reportes import despachar_auditoria_reportes
@@ -59,18 +61,39 @@ async def obtener_historial_consumo(
         meses=meses,
     )
 
-    # Despachar evento de Historial de Facturas a COSMOL-Reportes en segundo plano
+    # Despachar evento de Historial de Consumo a COSMOL-Reportes en segundo plano con debounce
     try:
         cod_socio_int = int(str(cod_socio).strip())
     except (ValueError, TypeError):
         cod_socio_int = 0
 
+    nombre_socio = f"SOCIO {cod_socio_int}"
+    telefono_socio = None
+    try:
+        user_uuid = UUID(current_user_id)
+        stmt_u = select(Usuario.telefono).where(Usuario.id == user_uuid)
+        res_u = await db.execute(stmt_u)
+        telefono_socio = res_u.scalar_one_or_none()
+
+        stmt_s = select(Suministro.alias).where(
+            Suministro.usuario_id == user_uuid,
+            Suministro.cod_socio == cod_socio
+        )
+        res_s = await db.execute(stmt_s)
+        alias_s = res_s.scalar_one_or_none()
+        if alias_s:
+            nombre_socio = f"SOCIO {cod_socio_int} ({alias_s})"
+    except Exception:
+        pass
+
     background_tasks.add_task(
         despachar_auditoria_reportes,
         codigo_socio=cod_socio_int,
-        nombres=f"SOCIO {cod_socio_int}",
+        nombres=nombre_socio,
+        telefono=telefono_socio,
         id_tipo=3,
-        tipo_consulta="Historial de Facturas",
+        tipo_consulta="Historial de Consumo",
+        debounce_segundos=900,  # Ventana de 15 minutos por código de socio
     )
 
     return historial

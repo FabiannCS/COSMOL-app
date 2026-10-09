@@ -128,6 +128,13 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
                           color: AppColors.textPrimary,
                         ),
                       ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Historial de comprobantes y avisos de cobranza',
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -214,7 +221,7 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('Facturas'),
+                        const Text('Factura'),
                         if (facturasCount > 0) ...[
                           const SizedBox(width: 4),
                           _buildCountBadge(facturasCount, isSelected: _tabController.index == 0),
@@ -238,7 +245,7 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text('Cortes'),
+                        const Text('Corte'),
                         if (avisosCorteCount > 0) ...[
                           const SizedBox(width: 4),
                           _buildCountBadge(
@@ -253,7 +260,13 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
                 ],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
+
+            // Selector de filtro de facturas (Todas, Pagadas, Pendientes)
+            if (_tabController.index == 0) ...[
+              _buildFiltroFacturas(state),
+              const SizedBox(height: 12),
+            ],
 
             // Contenido de la lista según la pestaña seleccionada
             if (state.isLoading && state.documentosResponse == null) ...[
@@ -261,6 +274,88 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
             ] else ...[
               _buildDocumentList(state, activeSuministro),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFiltroFacturas(DocumentosState state) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          _buildFilterChip(
+            label: 'Todas (${state.facturasUnificadas.length})',
+            isSelected: state.filtroFacturas == FiltroEstadoFactura.todas,
+            onSelected: () => ref
+                .read(documentosProvider.notifier)
+                .cambiarFiltroFacturas(FiltroEstadoFactura.todas),
+          ),
+          const SizedBox(width: 8),
+          _buildFilterChip(
+            label: 'Pagadas (${state.totalFacturasPagadasCount})',
+            isSelected: state.filtroFacturas == FiltroEstadoFactura.pagadas,
+            selectedColor: AppColors.primary,
+            onSelected: () => ref
+                .read(documentosProvider.notifier)
+                .cambiarFiltroFacturas(FiltroEstadoFactura.pagadas),
+          ),
+          const SizedBox(width: 8),
+          _buildFilterChip(
+            label: 'Pendientes (${state.totalFacturasPendientesCount})',
+            isSelected: state.filtroFacturas == FiltroEstadoFactura.pendientes,
+            selectedColor: AppColors.primary,
+            onSelected: () => ref
+                .read(documentosProvider.notifier)
+                .cambiarFiltroFacturas(FiltroEstadoFactura.pendientes),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip({
+    required String label,
+    IconData? icon,
+    required bool isSelected,
+    Color? selectedColor,
+    required VoidCallback onSelected,
+  }) {
+    final color = selectedColor ?? AppColors.primary;
+    return InkWell(
+      onTap: onSelected,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected ? color.withValues(alpha: 0.12) : AppColors.cardSurface,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected ? color : AppColors.borderSubtle,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(
+                icon,
+                size: 14,
+                color: isSelected ? color : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? color : AppColors.textPrimary,
+              ),
+            ),
           ],
         ),
       ),
@@ -324,13 +419,13 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
   Widget _buildLoadingShimmer() {
     return Column(
       children: List.generate(
-        3,
+        5,
         (index) => Container(
-          margin: const EdgeInsets.only(bottom: 14),
-          height: 160,
+          margin: const EdgeInsets.only(bottom: 10),
+          height: 68,
           decoration: BoxDecoration(
             color: AppColors.cardSurface,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppColors.borderSubtle),
           ),
           child: const Center(

@@ -4,17 +4,19 @@ Orquesta la generación on-demand de PDFs con ReportLab, su persistencia en MinI
 y el registro de metadatos en la tabla 'documentos' de PostgreSQL.
 """
 import calendar
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Documento, Suministro
+from app.integrations.cosmol_client import CosmolLegacyClient, cosmol_client
 from app.integrations.minio_client import CosmolMinioClient, minio_client
 from app.services.generador_pdf import GeneradorPdfDocumento, generador_pdf
+from app.services.generador_factura_digital import generador_factura_digital
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +30,13 @@ class ServicioStorageDocumentos:
         self,
         db: AsyncSession,
         s3_client: Optional[CosmolMinioClient] = None,
-        pdf_engine: Optional[GeneradorPdfDocumento] = None
+        pdf_engine: Optional[GeneradorPdfDocumento] = None,
+        cosmol: Optional[CosmolLegacyClient] = None,
     ):
         self.db = db
         self.s3 = s3_client or minio_client
         self.pdf = pdf_engine or generador_pdf
+        self.cosmol = cosmol or cosmol_client
 
     def _determinar_fecha_emision(self, anio: int, mes: int, datos: Dict[str, Any]) -> date:
         """
@@ -108,22 +112,45 @@ class ServicioStorageDocumentos:
         cod_socio: str,
         tipo_documento: str,
         periodo: str,
-        identificador: str
+        identificador: str,
+        estado_pago: str = "PENDIENTE",
+        anio: Optional[int] = None
     ) -> str:
         """
-        Construye la clave canónica de almacenamiento en MinIO según el tipo de documento:
-        - Facturas: facturas/{cod_socio}/{periodo_slug}_{identificador}.pdf
-        - Avisos de Cobranza: avisos_cobranza/{cod_socio}/{periodo_slug}_{identificador}.pdf
-        - Avisos de Corte: avisos_corte/{cod_socio}/{periodo_slug}_{identificador}.pdf
+        Construye la clave canónica modular de almacenamiento en MinIO S3 según tipo, estado y año:
+        - Facturas Impagas: facturas/impagas/{cod_socio}/{anio}/FAC_{identificador}_{periodo_slug}.pdf
+        - Facturas Pagadas: facturas/pagadas/{cod_socio}/{anio}/FAC_{identificador}_{periodo_slug}.pdf
+        - Avisos de Cobranza: avisos_cobranza/{cod_socio}/{anio}/AVISO_{identificador}_{periodo_slug}.pdf
+        - Avisos de Corte: avisos_corte/{cod_socio}/{anio}/CORTE_{cod_socio}_{periodo_slug}.pdf
         """
-        periodo_slug = periodo.replace("/", "_")
-        carpeta = {
-            "FACTURA": "facturas",
-            "AVISO_COBRANZA": "avisos_cobranza",
-            "AVISO_CORTE": "avisos_corte",
-        }.get(tipo_documento, "otros")
+        periodo_slug = periodo.replace("/", "_").replace(" ", "_")
+        anio_efectivo = anio
+        if not anio_efectivo:
+            if "/" in periodo:
+                parts = periodo.split("/")
+                if len(parts) == 2:
+                    try:
+                        anio_efectivo = int(parts[1])
+                    except (ValueError, TypeError):
+                        pass
+            elif "_" in periodo:
+                parts = periodo.split("_")
+                if len(parts) == 2:
+                    try:
+                        anio_efectivo = int(parts[1])
+                    except (ValueError, TypeError):
+                        pass
+        anio_str = str(anio_efectivo or date.today().year)
 
-        return f"{carpeta}/{cod_socio}/{periodo_slug}_{identificador}.pdf"
+        if tipo_documento == "FACTURA":
+            subcarpeta = "pagadas" if str(estado_pago).upper() in ["PAGADO", "PAGADA", "CANCELADA"] else "impagas"
+            return f"facturas/{subcarpeta}/{cod_socio}/{anio_str}/FAC_{identificador}_{periodo_slug}.pdf"
+        elif tipo_documento == "AVISO_COBRANZA":
+            return f"avisos_cobranza/{cod_socio}/{anio_str}/AVISO_{identificador}_{periodo_slug}.pdf"
+        elif tipo_documento == "AVISO_CORTE":
+            return f"avisos_corte/{cod_socio}/{anio_str}/CORTE_{cod_socio}_{periodo_slug}.pdf"
+        else:
+            return f"otros/{cod_socio}/{anio_str}/DOC_{identificador}_{periodo_slug}.pdf"
 
     async def guardar_documento(
         self,
@@ -139,13 +166,22 @@ class ServicioStorageDocumentos:
         cod_autorizacion: Optional[str] = None,
         fecha_emision: Optional[date] = None,
         fecha_vencimiento: Optional[date] = None,
-        suministro_id: Optional[uuid.UUID] = None
+        suministro_id: Optional[uuid.UUID] = None,
+        estado_pago: str = "PENDIENTE"
     ) -> Documento:
         """
         Sube el archivo binario a MinIO S3 e inserta o actualiza el registro en PostgreSQL.
+        Si el documento cambia de ruta en MinIO (ej. de impagas/ a pagadas/), elimina el binario previo.
         """
         identificador = nro_factura or nro_facip or uuid.uuid4().hex[:8]
-        s3_key = self.construir_s3_key(cod_socio, tipo_documento, periodo, identificador)
+        s3_key = self.construir_s3_key(
+            cod_socio=cod_socio,
+            tipo_documento=tipo_documento,
+            periodo=periodo,
+            identificador=identificador,
+            estado_pago=estado_pago,
+            anio=anio
+        )
 
         fecha_emi = fecha_emision or self._determinar_fecha_emision(anio, mes, {})
         fecha_venc = fecha_vencimiento or self._determinar_fecha_vencimiento(anio, mes, {})
@@ -173,8 +209,16 @@ class ServicioStorageDocumentos:
         doc_db = res_doc.scalar_one_or_none()
 
         if doc_db:
+            # Si cambió de clave S3 (ej. transición de impagas a pagadas), eliminar archivo anterior
+            if doc_db.s3_key and doc_db.s3_key != s3_key:
+                try:
+                    self.s3.eliminar_archivo(doc_db.s3_key)
+                except Exception as exc_del:
+                    logger.warning(f"[STORAGE] No se pudo eliminar archivo anterior '{doc_db.s3_key}': {exc_del}")
+
             doc_db.monto_bs = monto_bs
             doc_db.s3_key = s3_key
+            doc_db.estado_pago = estado_pago
             doc_db.nro_factura = nro_factura or doc_db.nro_factura
             doc_db.nro_facip = nro_facip or doc_db.nro_facip
             doc_db.cod_autorizacion = cod_autorizacion or doc_db.cod_autorizacion
@@ -196,7 +240,7 @@ class ServicioStorageDocumentos:
                 s3_key=s3_key,
                 fecha_emision=fecha_emi,
                 fecha_vencimiento=fecha_venc,
-                estado_pago="PENDIENTE",
+                estado_pago=estado_pago,
                 suministro_id=suministro_id
             )
             self.db.add(doc_db)
@@ -219,7 +263,23 @@ class ServicioStorageDocumentos:
         nmes = int(datos_factura.get("NMES") or datos_factura.get("mes") or 0)
         anio = int(datos_factura.get("ANIO") or datos_factura.get("anio") or 0)
         periodo = str(datos_factura.get("periodo") or f"{nmes:02d}/{anio}").strip()
-        s3_key = self.construir_s3_key(cod_socio, "FACTURA", periodo, nro_factura)
+
+        # Determinar si ya viene marcada como pagada
+        raw_estado = str(datos_factura.get("ESTADO") or datos_factura.get("estado_pago") or "").strip().upper()
+        es_pagada = (
+            bool(datos_factura.get("FECHAPAGO"))
+            or raw_estado in ["PAGADA", "PAGADO", "CANCELADA"]
+        )
+        estado_pago = "PAGADO" if es_pagada else "PENDIENTE"
+
+        s3_key = self.construir_s3_key(
+            cod_socio=cod_socio,
+            tipo_documento="FACTURA",
+            periodo=periodo,
+            identificador=nro_factura,
+            estado_pago=estado_pago,
+            anio=anio
+        )
 
         fecha_emision = self._determinar_fecha_emision(anio, nmes, datos_factura)
         fecha_vencimiento = self._determinar_fecha_vencimiento(anio, nmes, datos_factura)
@@ -235,8 +295,9 @@ class ServicioStorageDocumentos:
                     Documento.periodo == periodo
                 )
                 res = await self.db.execute(stmt)
-                if not res.scalar_one_or_none():
-                    monto_bs = float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or 0.0)
+                doc_exist = res.scalar_one_or_none()
+                if not doc_exist:
+                    monto_bs = float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or datos_factura.get("TOTAL") or 0.0)
                     cod_aut = str(datos_factura.get("CODAUTORIZACION") or datos_factura.get("cod_autorizacion") or "")
                     await self.guardar_documento(
                         cod_socio=cod_socio,
@@ -249,22 +310,59 @@ class ServicioStorageDocumentos:
                         nro_factura=nro_factura,
                         cod_autorizacion=cod_aut,
                         fecha_emision=fecha_emision,
-                        fecha_vencimiento=fecha_vencimiento
+                        fecha_vencimiento=fecha_vencimiento,
+                        estado_pago=estado_pago
                     )
                 return pdf_bytes
             except Exception as exc:
                 logger.warning(f"[STORAGE] Error al recuperar '{s3_key}' de MinIO: {exc}. Regenerando...")
 
-        # 2. Generar on-demand con fecha_emision del ciclo
-        pdf_bytes = self.pdf.generar_pdf_factura(
-            datos_factura=datos_factura,
-            datos_socio=datos_socio,
-            fecha_emision=fecha_emision
-        )
+        # 2. Generar on-demand con formato SIAT oficial de COSMOL
+        detalle_factura = None
+        if nro_factura:
+            try:
+                detalle_factura = await self.cosmol.obtener_detalle_factura(nro_factura)
+            except Exception as exc:
+                logger.warning(f"[STORAGE] No se pudo consultar detalle oficial de factura '{nro_factura}': {exc}")
+
+        if detalle_factura:
+            if detalle_factura.get("FECHAPAGO") or str(detalle_factura.get("ESTADO", "")).upper() in ["PAGADA", "PAGADO", "CANCELADA"]:
+                estado_pago = "PAGADO"
+                # Re-evaluar s3_key en caso de confirmarse el pago por SIAT
+                s3_key = self.construir_s3_key(
+                    cod_socio=cod_socio,
+                    tipo_documento="FACTURA",
+                    periodo=periodo,
+                    identificador=nro_factura,
+                    estado_pago=estado_pago,
+                    anio=anio
+                )
+            pdf_bytes = generador_factura_digital.generar_pdf(detalle_factura)
+        else:
+            contexto_factura = {
+                "NROFACTURA": nro_factura,
+                "NROFACTURAIMP": str(datos_factura.get("NROFACIP") or nro_factura),
+                "CODAUTORIZACION": str(datos_factura.get("CODAUTORIZACION") or datos_factura.get("cod_autorizacion") or ""),
+                "PERIODOMES": nmes,
+                "PERIODOANIO": anio,
+                "periodo": periodo,
+                "TOTAL": float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or datos_factura.get("TOTAL") or 0.0),
+                "FECHAEMISION": fecha_emision.strftime("%Y-%m-%d") if fecha_emision else "",
+                "FECHAPAGO": datos_factura.get("FECHAPAGO"),
+                "HORAPAGO": datos_factura.get("HORAPAGO"),
+                "CAJAPAGO": datos_factura.get("CAJAPAGO"),
+                "ESTADO": "PAGADA" if estado_pago == "PAGADO" else "PENDIENTE",
+                "CODSOCIO": cod_socio,
+                "NOMBRE": str(datos_socio.get("NOMBRE") or datos_socio.get("nombre_titular") or ""),
+                "NITCI": str(datos_socio.get("NROCIONIT") or datos_socio.get("ci_nit") or ""),
+                "DIRECCION": str(datos_socio.get("DIRECCION") or datos_socio.get("direccion") or ""),
+                "CODUBICACION": str(datos_socio.get("ubicacion") or "1.4.64.0"),
+            }
+            pdf_bytes = generador_factura_digital.generar_pdf(contexto_factura)
 
         # 3. Persistir en MinIO y PostgreSQL
         try:
-            monto_bs = float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or 0.0)
+            monto_bs = float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or datos_factura.get("TOTAL") or 0.0)
             cod_aut = str(datos_factura.get("CODAUTORIZACION") or datos_factura.get("cod_autorizacion") or "")
 
             await self.guardar_documento(
@@ -278,12 +376,145 @@ class ServicioStorageDocumentos:
                 nro_factura=nro_factura,
                 cod_autorizacion=cod_aut,
                 fecha_emision=fecha_emision,
-                fecha_vencimiento=fecha_vencimiento
+                fecha_vencimiento=fecha_vencimiento,
+                estado_pago=estado_pago
             )
         except Exception as exc:
             logger.error(f"[STORAGE] Fallo al indexar factura generada en BD: {exc}")
 
         return pdf_bytes
+
+    async def _preparar_contexto_aviso(
+        self,
+        cod_socio: str,
+        periodo: str,
+        anio: int,
+        mes: int,
+        monto_bs: float,
+        nro_aviso: str,
+        fecha_emision: Optional[date],
+        fecha_vencimiento: Optional[date],
+        datos_socio: Optional[Dict[str, Any]] = None,
+        datos_extra: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[Dict[str, Any], Dict[str, Any], List[Dict[str, Any]]]:
+        """
+        Prepara la información requerida por el generador vectorial del Aviso de Cobranza Oficial:
+        - Catastro real del socio (titular, CI, dirección, categoría, ubicación/ruta, distrito).
+        - Historial analítico de consumo real de los últimos 12 meses desde la API de COSMOL.
+        - Estado de pago (IMPAGA vs PAGADA) cruzado con la cartera de deudas pendientes.
+        - Lectura del ciclo comercial respectivo (anterior, actual, m3, fechas de lectura, días).
+        - Fecha límite de corte preventivo a 60 días según Art. 79 (D.S. N.º 510/92).
+        """
+        datos_extra = datos_extra or {}
+
+        # 1. Obtener datos catastrales completos del socio si faltan
+        if not datos_socio or len(datos_socio) <= 1:
+            try:
+                datos_socio = await self.cosmol.obtener_datos_socio(cod_socio) or {}
+            except Exception as exc:
+                logger.warning(f"[STORAGE] No se pudo obtener datos de socio '{cod_socio}': {exc}")
+                datos_socio = datos_socio or {"cod_socio": cod_socio}
+
+        # 2. Historial de consumo de 12 meses
+        historial_consumo: List[Dict[str, Any]] = []
+        try:
+            historial_consumo = await self.cosmol.obtener_historial_consumo(cod_socio, meses=12) or []
+        except Exception as exc:
+            logger.warning(f"[STORAGE] No se pudo obtener historial de consumo para socio '{cod_socio}': {exc}")
+
+        # 3. Consultar deudas pendientes para conciliar estado IMPAGA vs PAGADA
+        periodos_impagos = set()
+        try:
+            deudas = await self.cosmol.obtener_deudas_socio(cod_socio) or []
+            for d in deudas:
+                d_mes = int(d.get("NMES") or d.get("mes") or 0)
+                d_anio = int(d.get("ANIO") or d.get("anio") or 0)
+                if d_mes and d_anio:
+                    periodos_impagos.add(f"{d_mes:02d}/{d_anio}")
+                elif d.get("periodo"):
+                    periodos_impagos.add(str(d["periodo"]).strip())
+        except Exception as exc:
+            logger.warning(f"[STORAGE] Error al consultar deudas para conciliar avisos: {exc}")
+
+        # Asignar estado y fecha de pago a cada fila del historial
+        for h in historial_consumo:
+            p = str(h.get("periodo") or "").strip()
+            if p in periodos_impagos:
+                h["estado"] = "IMPAGA"
+                h["fecha_pago"] = ""
+            else:
+                h["estado"] = "PAGADA"
+                f_pago = h.get("fecha_pago") or h.get("fecha_lectura") or h.get("fecha") or ""
+                if f_pago and "-" in str(f_pago):
+                    try:
+                        pts = str(f_pago)[:10].split("-")
+                        if len(pts) == 3:
+                            f_pago = f"{pts[2]}/{pts[1]}/{pts[0]}"
+                    except Exception:
+                        pass
+                h["fecha_pago"] = f_pago
+
+        # Ordenar cronológicamente descendente (del mes más reciente al más antiguo)
+        # para que las facturas impagas y los últimos periodos se muestren arriba
+        historial_consumo.sort(
+            key=lambda x: (int(x.get("anio") or 0), int(x.get("mes") or 0)),
+            reverse=True
+        )
+
+        # 4. Datos de medición y lectura del ciclo
+        matching_h = next((h for h in historial_consumo if str(h.get("periodo", "")).strip() == periodo.strip()), None)
+        if not matching_h and historial_consumo:
+            matching_h = historial_consumo[0]
+
+        lect_ant = datos_extra.get("lectura_anterior")
+        lect_act = datos_extra.get("lectura_actual")
+        cons_m3 = datos_extra.get("consumo_m3")
+        f_lect_ant = str(datos_extra.get("fecha_lectura_anterior") or "")
+        f_lect_act = str(datos_extra.get("fecha_lectura_actual") or "")
+        obs = str(datos_extra.get("obs") or "")
+
+        if matching_h:
+            if lect_ant is None:
+                lect_ant = matching_h.get("lectura_anterior", 0.0)
+            if lect_act is None:
+                lect_act = matching_h.get("lectura_actual", 0.0)
+            if cons_m3 is None:
+                cons_m3 = matching_h.get("consumo_m3", 0.0)
+            if not f_lect_act:
+                f_lect_act = str(matching_h.get("fecha_lectura") or "")
+            if not obs:
+                obs = str(matching_h.get("estado_lectura") or "NORMAL")
+
+        # Fecha de corte (Art. 79: 60 días posteriores a emisión/vencimiento)
+        fecha_corte_str = str(datos_extra.get("fecha_corte") or "")
+        if not fecha_corte_str and fecha_vencimiento:
+            try:
+                fc = fecha_vencimiento + timedelta(days=60)
+                fecha_corte_str = fc.strftime("%d/%m/%Y")
+            except Exception:
+                pass
+
+        datos_aviso = {
+            "nro_factura": nro_aviso,
+            "nro_facip": nro_aviso,
+            "periodo": periodo,
+            "anio": anio,
+            "mes": mes,
+            "monto_total": monto_bs,
+            "monto_bs": monto_bs,
+            "fecha_emision": fecha_emision.strftime("%d/%m/%Y") if fecha_emision else "",
+            "fecha_vencimiento": fecha_vencimiento.strftime("%d/%m/%Y") if fecha_vencimiento else "",
+            "lectura_anterior": f"{float(lect_ant):.0f}" if lect_ant is not None else "0",
+            "lectura_actual": f"{float(lect_act):.0f}" if lect_act is not None else "0",
+            "consumo_m3": f"{float(cons_m3):.0f}" if cons_m3 is not None else "0",
+            "dias_consumo": str(datos_extra.get("dias_consumo") or "30"),
+            "fecha_lectura_anterior": f_lect_ant,
+            "fecha_lectura_actual": f_lect_act,
+            "obs": obs or "NORMAL",
+            "fecha_corte": fecha_corte_str,
+        }
+
+        return datos_aviso, datos_socio, historial_consumo
 
     async def obtener_o_generar_pdf_aviso_cobranza(
         self,
@@ -292,53 +523,48 @@ class ServicioStorageDocumentos:
         datos_socio: Dict[str, Any]
     ) -> bytes:
         """
-        Recupera o genera el Aviso de Cobranza preventivo en PDF.
+        Recupera o genera el Aviso de Cobranza Oficial de COSMOL en PDF.
         """
         nro_facip = str(datos_deuda.get("NROFACIP") or datos_deuda.get("nro_facip") or "aviso").strip()
         nmes = int(datos_deuda.get("NMES") or datos_deuda.get("mes") or 0)
         anio = int(datos_deuda.get("ANIO") or datos_deuda.get("anio") or 0)
         periodo = str(datos_deuda.get("periodo") or f"{nmes:02d}/{anio}").strip()
-        s3_key = self.construir_s3_key(cod_socio, "AVISO_COBRANZA", periodo, nro_facip)
+        s3_key = self.construir_s3_key(
+            cod_socio=cod_socio,
+            tipo_documento="AVISO_COBRANZA",
+            periodo=periodo,
+            identificador=nro_facip,
+            anio=anio
+        )
 
         fecha_emision = self._determinar_fecha_emision(anio, nmes, datos_deuda)
         fecha_vencimiento = self._determinar_fecha_vencimiento(anio, nmes, datos_deuda)
 
-        if self.s3.existe_archivo(s3_key):
-            try:
-                pdf_bytes = self.s3.obtener_archivo_bytes(s3_key)
-                stmt = select(Documento).where(
-                    Documento.cod_socio == cod_socio,
-                    Documento.tipo_documento == "AVISO_COBRANZA",
-                    Documento.periodo == periodo
-                )
-                res = await self.db.execute(stmt)
-                if not res.scalar_one_or_none():
-                    monto_val = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
-                    await self.guardar_documento(
-                        cod_socio=cod_socio,
-                        tipo_documento="AVISO_COBRANZA",
-                        periodo=periodo,
-                        anio=anio,
-                        mes=nmes,
-                        monto_bs=monto_val,
-                        pdf_bytes=pdf_bytes,
-                        nro_facip=nro_facip,
-                        fecha_emision=fecha_emision,
-                        fecha_vencimiento=fecha_vencimiento
-                    )
-                return pdf_bytes
-            except Exception as exc:
-                logger.warning(f"[STORAGE] Error al recuperar '{s3_key}': {exc}. Regenerando...")
+        # 1. Preparar contexto enriquecido con historial y catastro real
+        monto_bs = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
+        datos_aviso, datos_socio_completo, historial = await self._preparar_contexto_aviso(
+            cod_socio=cod_socio,
+            periodo=periodo,
+            anio=anio,
+            mes=nmes,
+            monto_bs=monto_bs,
+            nro_aviso=nro_facip,
+            fecha_emision=fecha_emision,
+            fecha_vencimiento=fecha_vencimiento,
+            datos_socio=datos_socio,
+            datos_extra=datos_deuda,
+        )
 
-        datos_deuda_pdf = dict(datos_deuda)
-        if not datos_deuda_pdf.get("fecha_vencimiento"):
-            datos_deuda_pdf["fecha_vencimiento"] = fecha_vencimiento.strftime("%d/%m/%Y")
-
-        pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(datos_deuda=datos_deuda_pdf, datos_socio=datos_socio)
+        # 2. Generar el PDF oficial con ReportLab Vectorial
+        pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
+            datos_deuda=datos_aviso,
+            datos_socio=datos_socio_completo,
+            fecha_emision=fecha_emision,
+            fecha_vencimiento=fecha_vencimiento,
+            historial_consumo=historial,
+        )
 
         try:
-            monto_bs = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
-
             await self.guardar_documento(
                 cod_socio=cod_socio,
                 tipo_documento="AVISO_COBRANZA",
@@ -366,7 +592,13 @@ class ServicioStorageDocumentos:
         Recupera o genera la Notificación de Corte formal en PDF.
         """
         periodo_reciente = date.today().strftime("%m/%Y")
-        s3_key = self.construir_s3_key(cod_socio, "AVISO_CORTE", periodo_reciente, "corte_inminente")
+        s3_key = self.construir_s3_key(
+            cod_socio=cod_socio,
+            tipo_documento="AVISO_CORTE",
+            periodo=periodo_reciente,
+            identificador="corte_inminente",
+            anio=date.today().year
+        )
 
         if self.s3.existe_archivo(s3_key):
             try:
@@ -401,35 +633,59 @@ class ServicioStorageDocumentos:
         Regenera el archivo PDF a partir de los metadatos persistidos en el modelo Documento,
         garantizando que la fecha de emisión y vencimiento impresas coincidan al 100% con
         los datos de la base de datos y la vista de la app.
-        Guarda y actualiza el binario en MinIO S3 en 'doc.s3_key'.
+        Guarda y actualiza el binario en MinIO S3 en la clave modular canónica.
         """
         datos_socio = datos_socio or {"cod_socio": doc.cod_socio}
 
         if doc.tipo_documento == "FACTURA":
-            datos_factura = {
-                "NROFACTURA": doc.nro_factura or "",
-                "CODAUTORIZACION": doc.cod_autorizacion or "N/A",
-                "NMES": doc.mes,
-                "ANIO": doc.anio,
-                "periodo": doc.periodo,
-                "MONTOTOTAL": float(doc.monto_bs)
-            }
-            pdf_bytes = self.pdf.generar_pdf_factura(
-                datos_factura=datos_factura,
-                datos_socio=datos_socio,
-                fecha_emision=doc.fecha_emision
-            )
+            detalle_factura = None
+            if doc.nro_factura:
+                try:
+                    detalle_factura = await self.cosmol.obtener_detalle_factura(doc.nro_factura)
+                except Exception as exc:
+                    logger.warning(f"[STORAGE] Error al consultar detalle de factura '{doc.nro_factura}': {exc}")
+
+            if detalle_factura:
+                if detalle_factura.get("FECHAPAGO") or str(detalle_factura.get("ESTADO", "")).upper() in ["PAGADA", "PAGADO", "CANCELADA"]:
+                    doc.estado_pago = "PAGADO"
+                pdf_bytes = generador_factura_digital.generar_pdf(detalle_factura)
+            else:
+                datos_factura = {
+                    "NROFACTURA": doc.nro_factura or "",
+                    "NROFACTURAIMP": doc.nro_facip or doc.nro_factura or "",
+                    "CODAUTORIZACION": doc.cod_autorizacion or "N/A",
+                    "PERIODOMES": doc.mes,
+                    "PERIODOANIO": doc.anio,
+                    "periodo": doc.periodo,
+                    "TOTAL": float(doc.monto_bs),
+                    "FECHAEMISION": doc.fecha_emision.strftime("%Y-%m-%d") if doc.fecha_emision else "",
+                    "CODSOCIO": doc.cod_socio,
+                    "NOMBRE": str(datos_socio.get("NOMBRE") or datos_socio.get("nombre_titular") or ""),
+                    "NITCI": str(datos_socio.get("NROCIONIT") or datos_socio.get("ci_nit") or ""),
+                    "DIRECCION": str(datos_socio.get("DIRECCION") or datos_socio.get("direccion") or ""),
+                    "CODUBICACION": str(datos_socio.get("ubicacion") or "1.4.64.0"),
+                    "ESTADO": "PAGADA" if doc.estado_pago == "PAGADO" else "PENDIENTE",
+                }
+                pdf_bytes = generador_factura_digital.generar_pdf(datos_factura)
         elif doc.tipo_documento == "AVISO_COBRANZA":
-            datos_deuda = {
-                "NROFACIP": doc.nro_facip or "",
-                "periodo": doc.periodo,
-                "MONTOTOTAL": float(doc.monto_bs),
-            }
-            pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
-                datos_deuda=datos_deuda,
-                datos_socio=datos_socio,
+            nro_aviso = doc.nro_facip or doc.nro_factura or "aviso"
+            datos_aviso, datos_socio_completo, historial = await self._preparar_contexto_aviso(
+                cod_socio=doc.cod_socio,
+                periodo=doc.periodo,
+                anio=doc.anio or 0,
+                mes=doc.mes or 0,
+                monto_bs=float(doc.monto_bs),
+                nro_aviso=nro_aviso,
                 fecha_emision=doc.fecha_emision,
-                fecha_vencimiento=doc.fecha_vencimiento
+                fecha_vencimiento=doc.fecha_vencimiento,
+                datos_socio=datos_socio,
+            )
+            pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
+                datos_deuda=datos_aviso,
+                datos_socio=datos_socio_completo,
+                fecha_emision=doc.fecha_emision,
+                fecha_vencimiento=doc.fecha_vencimiento,
+                historial_consumo=historial,
             )
         elif doc.tipo_documento == "AVISO_CORTE":
             facturas_pendientes = [{
@@ -446,6 +702,25 @@ class ServicioStorageDocumentos:
         else:
             raise ValueError(f"Tipo de documento desconocido: {doc.tipo_documento}")
 
-        # Guardar en MinIO sobrescribiendo el archivo previo
+        # Recalcular clave modular canónica y limpiar archivo anterior si cambió de ruta
+        identificador = doc.nro_factura or doc.nro_facip or str(doc.id)[:8]
+        nueva_s3_key = self.construir_s3_key(
+            cod_socio=doc.cod_socio,
+            tipo_documento=doc.tipo_documento,
+            periodo=doc.periodo,
+            identificador=identificador,
+            estado_pago=doc.estado_pago,
+            anio=doc.anio
+        )
+
+        if doc.s3_key and doc.s3_key != nueva_s3_key:
+            try:
+                self.s3.eliminar_archivo(doc.s3_key)
+            except Exception as e_del:
+                logger.warning(f"[STORAGE] No se pudo eliminar clave anterior '{doc.s3_key}': {e_del}")
+            doc.s3_key = nueva_s3_key
+            await self.db.commit()
+
+        # Guardar en MinIO
         self.s3.subir_archivo_bytes(doc.s3_key, pdf_bytes, "application/pdf")
         return pdf_bytes

@@ -11,6 +11,9 @@ import '../../data/models/documento_model.dart';
 import '../../data/repositories/documentos_repository_impl.dart';
 import '../../domain/repositories/documentos_repository.dart';
 
+/// Filtro de visualización para la pestaña de facturas
+enum FiltroEstadoFactura { todas, pagadas, pendientes }
+
 class DocumentosState {
   final bool isLoading;
   final bool isDownloading;
@@ -19,6 +22,7 @@ class DocumentosState {
   final ListaDocumentosModel? documentosResponse;
   final int selectedTabIndex; // 0: Facturas, 1: Avisos Cobranza, 2: Avisos Corte
   final String? currentCodSocio;
+  final FiltroEstadoFactura filtroFacturas;
 
   const DocumentosState({
     this.isLoading = false,
@@ -28,6 +32,7 @@ class DocumentosState {
     this.documentosResponse,
     this.selectedTabIndex = 0,
     this.currentCodSocio,
+    this.filtroFacturas = FiltroEstadoFactura.todas,
   });
 
   DocumentosState copyWith({
@@ -38,6 +43,7 @@ class DocumentosState {
     ListaDocumentosModel? documentosResponse,
     int? selectedTabIndex,
     String? currentCodSocio,
+    FiltroEstadoFactura? filtroFacturas,
     bool clearError = false,
     bool clearDownloading = false,
   }) {
@@ -49,32 +55,63 @@ class DocumentosState {
       documentosResponse: documentosResponse ?? this.documentosResponse,
       selectedTabIndex: selectedTabIndex ?? this.selectedTabIndex,
       currentCodSocio: currentCodSocio ?? this.currentCodSocio,
+      filtroFacturas: filtroFacturas ?? this.filtroFacturas,
     );
   }
 
-  List<DocumentoModel> get facturas => documentosResponse?.facturas ?? [];
+  /// Lista unificada de facturas ordenada cronológicamente (más recientes primero)
+  List<DocumentoModel> get facturasUnificadas {
+    if (isInquilino) return const [];
+    final docs = List<DocumentoModel>.from(documentosResponse?.facturas ?? []);
+    docs.sort((a, b) {
+      final compAnio = b.anio.compareTo(a.anio);
+      if (compAnio != 0) return compAnio;
+      return b.mes.compareTo(a.mes);
+    });
+    return docs;
+  }
+
+  /// Facturas filtradas según el estado seleccionado (Todas, Pagadas, Pendientes)
+  List<DocumentoModel> get facturas {
+    final list = facturasUnificadas;
+    switch (filtroFacturas) {
+      case FiltroEstadoFactura.pagadas:
+        return list.where((f) => f.isPagado).toList();
+      case FiltroEstadoFactura.pendientes:
+        return list.where((f) => f.isPendiente).toList();
+      case FiltroEstadoFactura.todas:
+        return list;
+    }
+  }
+
+  int get totalFacturasPagadasCount =>
+      facturasUnificadas.where((f) => f.isPagado).length;
+
+  int get totalFacturasPendientesCount =>
+      facturasUnificadas.where((f) => f.isPendiente).length;
+
   List<DocumentoModel> get avisosCobranza => documentosResponse?.avisosCobranza ?? [];
   
   /// Regla Oficial de Negocio COSMOL R.L.:
-  /// Un aviso de corte únicamente aplica y se notifica cuando el socio tiene 3 o más facturas pendientes (NO cuando debe 1 o 2).
+  /// Un aviso de corte únicamente aplica y se notifica cuando el socio tiene 3 o más facturas pendientes.
   List<DocumentoModel> get avisosCorte {
     final rawAvisos = documentosResponse?.avisosCorte ?? [];
     if (rawAvisos.isEmpty) return [];
 
-    final facturasPendientesCount = facturas.where((doc) => doc.isPendiente).length;
+    final facturasPendientesCount = facturasUnificadas.where((doc) => doc.isPendiente).length;
     final cobranzasPendientesCount = avisosCobranza.where((doc) => doc.isPendiente).length;
 
     final cantidadFacturasPendientes = facturasPendientesCount > 0
         ? facturasPendientesCount
         : cobranzasPendientesCount;
 
-    // Si el socio debe menos de 3 facturas (1 o 2), se filtra y NO se muestra el aviso de corte.
     if (cantidadFacturasPendientes < 3) {
       return [];
     }
 
     return rawAvisos;
   }
+
   List<DocumentoModel> get todosDocumentos => documentosResponse?.documentos ?? [];
 
   List<DocumentoModel> get documentosTabActual {
@@ -123,7 +160,11 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
     state = state.copyWith(selectedTabIndex: index);
   }
 
-  /// Carga la lista de documentos para el socio especificado o actual.
+  void cambiarFiltroFacturas(FiltroEstadoFactura filtro) {
+    state = state.copyWith(filtroFacturas: filtro);
+  }
+
+  /// Carga la lista de documentos y el historial de 12 meses para el socio especificado o actual.
   Future<void> cargarDocumentos({
     String? codSocio,
     bool forceRefresh = false,
@@ -136,7 +177,6 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
 
     final cleanCodSocio = targetCodSocio.trim();
 
-    // Evitar recargas duplicadas si ya está cargado para este socio y no se fuerza
     if (!forceRefresh &&
         state.documentosResponse != null &&
         state.currentCodSocio == cleanCodSocio &&
@@ -152,12 +192,8 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
     );
 
     try {
-      final response = await repository.obtenerDocumentos(
-        codSocio: cleanCodSocio,
-      );
+      final response = await repository.obtenerDocumentos(codSocio: cleanCodSocio);
 
-      // Si el socio es inquilino (CONSULTA_PAGO) y estaba en pestaña de facturas (0),
-      // moverlo automáticamente a la pestaña de Avisos de Cobranza (1)
       int newTabIndex = state.selectedTabIndex;
       if (response.isInquilino && state.selectedTabIndex != 1) {
         newTabIndex = 1;
@@ -192,7 +228,6 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
   }
 
   /// Descarga el archivo PDF y lo guarda en el directorio local del dispositivo.
-  /// Retorna la ruta completa al archivo guardado o null si ocurre un error.
   Future<String?> guardarDocumentoLocal(DocumentoModel doc) async {
     if (!mounted) return null;
     state = state.copyWith(
@@ -253,7 +288,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
     return await OpenFilex.open(filePath);
   }
 
-  /// Descarga temporalmente el documento y dispara el diálogo nativo de compartir (WhatsApp, email, etc.)
+  /// Descarga temporalmente el documento y dispara el diálogo nativo de compartir
   Future<bool> compartirDocumento(DocumentoModel doc) async {
     if (!mounted) return false;
     state = state.copyWith(

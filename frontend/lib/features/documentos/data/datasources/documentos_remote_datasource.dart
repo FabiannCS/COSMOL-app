@@ -130,14 +130,14 @@ class DocumentosRemoteDataSource {
 
     if (response?.statusCode == 403) {
       return const ValidationException(
-        message: 'Acceso denegado: este documento fiscal o aviso de corte está reservado exclusivamente para el titular.',
+        message: 'Acceso denegado: este documento fiscal está reservado exclusivamente para el titular.',
         code: 'DOCUMENT_ACCESS_DENIED',
       );
     }
 
     if (response?.statusCode == 404) {
       return const ValidationException(
-        message: 'El documento solicitado no fue encontrado en el repositorio digital.',
+        message: 'El documento o factura solicitada no fue encontrada.',
         code: 'DOCUMENTO_NOT_FOUND',
       );
     }

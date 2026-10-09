@@ -6,7 +6,7 @@ en el bucket privado 'cosmol-docs'.
 from datetime import timedelta
 import io
 import logging
-from typing import BinaryIO, Generator, Optional
+from typing import BinaryIO, Generator, List, Optional
 
 from minio import Minio
 from minio.error import S3Error
@@ -197,6 +197,52 @@ class CosmolMinioClient:
         except Exception as exc:
             logger.error(f"[MINIO] Error al eliminar '{object_name}': {exc}")
             return False
+
+    def listar_objetos(
+        self,
+        prefix: str = "",
+        recursive: bool = True,
+        bucket_name: Optional[str] = None
+    ) -> List[str]:
+        """
+        Lista todas las claves (object_name) dentro de un bucket o bajo un prefijo determinado.
+        """
+        bucket = bucket_name or self.default_bucket
+        if not self.asegurar_bucket_existe(bucket):
+            return []
+        try:
+            objects = self.client.list_objects(bucket, prefix=prefix, recursive=recursive)
+            return [obj.object_name for obj in objects]
+        except Exception as exc:
+            logger.error(f"[MINIO] Error al listar objetos en '{bucket}' (prefix='{prefix}'): {exc}")
+            return []
+
+    def eliminar_objetos_por_prefijo(
+        self,
+        prefix: str,
+        bucket_name: Optional[str] = None
+    ) -> int:
+        """
+        Elimina todos los objetos que inicien con un prefijo específico.
+        Retorna la cantidad de objetos eliminados.
+        """
+        bucket = bucket_name or self.default_bucket
+        keys = self.listar_objetos(prefix=prefix, recursive=True, bucket_name=bucket)
+        eliminados = 0
+        for key in keys:
+            if self.eliminar_archivo(key, bucket_name=bucket):
+                eliminados += 1
+        logger.info(f"[MINIO] Se eliminaron {eliminados} objetos bajo el prefijo '{prefix}' en '{bucket}'.")
+        return eliminados
+
+    def purgar_bucket(self, bucket_name: Optional[str] = None) -> int:
+        """
+        Elimina TODOS los objetos almacenados en el bucket para permitir un reinicio
+        limpio (Clean-Slate) del repositorio digital de PDFs.
+        Retorna la cantidad de objetos purgados.
+        """
+        bucket = bucket_name or self.default_bucket
+        return self.eliminar_objetos_por_prefijo(prefix="", bucket_name=bucket)
 
     def generar_url_prefirmada(
         self,

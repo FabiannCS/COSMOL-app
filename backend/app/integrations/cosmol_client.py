@@ -164,6 +164,53 @@ class CosmolLegacyClient(BaseApiClient):
                 error_code="COSMOL_DEBT_NETWORK_ERROR"
             )
 
+    async def obtener_detalle_factura(self, nro_factura: str) -> Optional[Dict[str, Any]]:
+        """
+        Recupera el detalle fiscal completo de una factura emitida o pendiente de COSMOL.
+        Endpoint oficial: GET /facturas/{nro_factura}
+        Retorna diccionario con todos los campos SIAT y la lista 'detalle' de conceptos,
+        o None si no existe o la API falla.
+        """
+        nro = str(nro_factura).strip()
+        if not nro:
+            return None
+
+        endpoint = f"/facturas/{nro}"
+        try:
+            response = await self.request("GET", endpoint)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("estado") == "exito":
+                    datos = data.get("datos", {})
+                    if isinstance(datos, dict):
+                        clean_datos = self._limpiar_campos_dict(datos)
+                        detalle = datos.get("detalle", [])
+                        if isinstance(detalle, list):
+                            clean_datos["detalle"] = [
+                                self._limpiar_campos_dict(item)
+                                for item in detalle
+                                if isinstance(item, dict)
+                            ]
+                        return clean_datos
+                return None
+            elif response.status_code == 404:
+                logger.info(f"Factura '{nro}' no encontrada en el sistema comercial (HTTP 404)")
+                return None
+            else:
+                logger.warning(
+                    f"Error al consultar detalle de factura '{nro}' (HTTP {response.status_code}): {response.text}"
+                )
+                return None
+        except httpx.TimeoutException as exc:
+            logger.warning(f"Timeout al consultar factura '{nro}' en COSMOL ({settings.COSMOL_LEGACY_URL}): {exc}")
+            return None
+        except httpx.RequestError as exc:
+            logger.warning(f"Error de red al consultar factura '{nro}' con COSMOL: {exc}")
+            return None
+        except Exception as exc:
+            logger.error(f"Error inesperado al consultar factura '{nro}': {exc}")
+            return None
+
     def _normalizar_consumo_legado(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """
         Normaliza un registro de consumo devuelto por la API oficial de COSMOL
@@ -261,16 +308,30 @@ class CosmolLegacyClient(BaseApiClient):
         if fecha_lectura is not None:
             fecha_lectura = str(fecha_lectura).strip()
 
+        nro_factura = str(clean.get("NROFACTURA") or clean.get("nro_factura") or "").strip() or None
+        cod_socio = str(clean.get("CODIGO") or clean.get("cod_socio") or "").strip() or None
+        nombre = str(clean.get("NOMBRE") or clean.get("nombre") or "").strip() or None
+
         return {
             "periodo": periodo,
             "mes": mes,
             "anio": anio,
+            "nro_factura": nro_factura,
+            "NROFACTURA": nro_factura,
+            "cod_socio": cod_socio,
+            "CODIGO": cod_socio,
+            "nombre": nombre,
+            "NOMBRE": nombre,
             "lectura_anterior": lectura_anterior,
             "lectura_actual": lectura_actual,
             "consumo_m3": consumo_m3,
             "monto_bs": monto_bs,
             "estado_lectura": estado_lectura,
             "fecha_lectura": fecha_lectura,
+            "fecha_pago": fecha_lectura,
+            "fecha": fecha_lectura,
+            "FECHA": fecha_lectura,
+            "estado": clean.get("ESTADO"),
         }
 
     async def obtener_historial_consumo(

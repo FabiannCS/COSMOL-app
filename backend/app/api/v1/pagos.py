@@ -6,9 +6,11 @@ import logging
 from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from redis.asyncio import Redis
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id, get_db, get_redis
+from app.db.models import Suministro, Usuario
 from app.schemas.pago import (
     CanalesPagoResponse,
     RegistrarIntentoPagoRequest,
@@ -77,18 +79,51 @@ async def registrar_intento_pago(
         ip_origen=ip_origen
     )
 
-    # Despachar evento de Intento de Pago a COSMOL-Reportes en segundo plano (Contrato § 4)
+    # Despachar evento específico de pasarela a COSMOL-Reportes en segundo plano (Contrato § 4)
     try:
         cod_socio_int = int(str(cod_socio).strip())
     except (ValueError, TypeError):
         cod_socio_int = 0
 
+    # Mapeo exacto de la pasarela seleccionada
+    canal_norm = (payload.canal_id or "").strip().lower()
+    if "pago_al_paso" in canal_norm or "pagoalpaso" in canal_norm:
+        id_tipo_pago = 11
+        tipo_nombre = "Pago: Pago al Paso"
+    elif "qr" in canal_norm:
+        id_tipo_pago = 12
+        tipo_nombre = "Pago: Código QR"
+    else:
+        id_tipo_pago = 10
+        tipo_nombre = "Pago: Multipago"
+
+    # Enriquecer datos de socio y celular verificado
+    nombre_socio = f"SOCIO {cod_socio_int}"
+    telefono_socio = None
+    try:
+        user_uuid = UUID(current_user_id)
+        stmt_u = select(Usuario.telefono).where(Usuario.id == user_uuid)
+        res_u = await db.execute(stmt_u)
+        telefono_socio = res_u.scalar_one_or_none()
+
+        stmt_s = select(Suministro.alias).where(
+            Suministro.usuario_id == user_uuid,
+            Suministro.cod_socio == cod_socio
+        )
+        res_s = await db.execute(stmt_s)
+        alias_s = res_s.scalar_one_or_none()
+        if alias_s:
+            nombre_socio = f"SOCIO {cod_socio_int} ({alias_s})"
+    except Exception:
+        pass
+
     background_tasks.add_task(
         despachar_auditoria_reportes,
         codigo_socio=cod_socio_int,
-        nombres=f"SOCIO {cod_socio_int}",
-        id_tipo=10,
-        tipo_consulta="Intento de Pago",
+        nombres=nombre_socio,
+        telefono=telefono_socio,
+        id_tipo=id_tipo_pago,
+        tipo_consulta=tipo_nombre,
     )
 
     return respuesta
