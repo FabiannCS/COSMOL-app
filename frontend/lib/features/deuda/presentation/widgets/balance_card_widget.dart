@@ -145,277 +145,271 @@ class BalanceCardWidget extends ConsumerWidget {
                   topRight: Radius.circular(24),
                 ),
               ),
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Barra de arrastre superior
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: AppColors.borderSubtle,
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
+              child: SafeArea(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(ctx).size.height * 0.85,
                   ),
-
-                  // Encabezado
-                  Row(
-                    children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceContainerLow,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: const Icon(
-                          Icons.shield_outlined,
-                          color: AppColors.primary,
-                          size: 26,
-                        ),
-                      ),
-                      const SizedBox(width: 14),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Canales de Pago Seguro',
-                              style: AppTextStyles.h3.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.darkNavy,
-                              ),
-                            ),
-                            const SizedBox(height: 2),
-                            Text(
-                              'Total: Bs $deudaMonto',
-                              style: AppTextStyles.caption.copyWith(
-                                color: AppColors.textSecondary,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.close, color: AppColors.textSecondary),
-                        onPressed: () => Navigator.of(ctx).pop(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  Text(
-                    'Selecciona una plataforma autorizada de COSMOL R.L.:',
-                    style: AppTextStyles.body2.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Estado de Carga
-                  if (pagosState.isLoading && pagosState.canales.isEmpty) ...[
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 32),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            CircularProgressIndicator(strokeWidth: 3),
-                            SizedBox(height: 12),
-                            Text(
-                              'Consultando pasarelas oficiales...',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: AppColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ]
-                  // Estado de Error
-                  else if (pagosState.errorMessage != null && pagosState.canales.isEmpty) ...[
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Column(
-                        children: [
-                          Text(
-                            pagosState.errorMessage!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: AppColors.errorRed,
-                              fontSize: 13,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          ElevatedButton.icon(
-                            onPressed: () {
-                              refConsumer.read(pagosProvider.notifier).cargarCanales(codSocio);
-                            },
-                            icon: const Icon(Icons.refresh, size: 16),
-                            label: const Text('Reintentar'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ]
-                  // Catálogo Dinámico de Canales
-                  else ...[
-                    ...pagosState.canales.map((canal) {
-                      final isStore = canal.icono == 'storefront';
-
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: InkWell(
-                          onTap: pagosState.isRegistering
-                              ? null
-                              : () async {
-                                  // 1. Registrar intento en Backend para activar ventana de verificación en Redis
-                                  final url = await refConsumer
-                                      .read(pagosProvider.notifier)
-                                      .registrarIntentoYObtenerUrl(
-                                        codSocio: codSocio,
-                                        canalId: canal.id,
-                                      );
-
-                                  if (context.mounted) {
-                                    Navigator.of(ctx).pop();
-                                  }
-
-                                  // 2. Abrir pasarela oficial en navegador
-                                  final urlFinal = (url != null && url.isNotEmpty)
-                                      ? url
-                                      : canal.urlRedireccion;
-
-                                  if (context.mounted) {
-                                    await _launchPaymentUrl(context, urlFinal);
-                                  }
-
-                                  // 3. Al volver de la pasarela, forzar refresco de deuda para Smart Polling
-                                  if (codSocio.isNotEmpty) {
-                                    refConsumer
-                                        .read(deudaProvider.notifier)
-                                        .cargarDeuda(codSocio, forzarRefresco: true);
-                                  }
-                                },
-                          borderRadius: BorderRadius.circular(16),
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Barra de arrastre superior
+                        Center(
                           child: Container(
-                            padding: const EdgeInsets.all(16),
+                            width: 40,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
                             decoration: BoxDecoration(
-                              color: AppColors.pureWhite,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: AppColors.borderSubtle),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: AppColors.shadowColor,
-                                  blurRadius: 6,
-                                  offset: Offset(0, 2),
+                              color: AppColors.borderSubtle,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
+                          ),
+                        ),
+
+                        // Encabezado
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Canales de Pago Seguro',
+                                    style: AppTextStyles.subtitle1.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.darkNavy,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Total: Bs $deudaMonto',
+                                    style: AppTextStyles.caption.copyWith(
+                                      color: AppColors.textSecondary,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.close, color: AppColors.textSecondary),
+                              onPressed: () => Navigator.of(ctx).pop(),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        Text(
+                          'Selecciona una plataforma autorizada de COSMOL R.L.:',
+                          style: AppTextStyles.body2.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // Estado de Carga
+                        if (pagosState.isLoading && pagosState.canales.isEmpty) ...[
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 32),
+                            child: Center(
+                              child: Column(
+                                children: [
+                                  CircularProgressIndicator(strokeWidth: 3),
+                                  SizedBox(height: 12),
+                                  Text(
+                                    'Consultando pasarelas oficiales...',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ]
+                        // Estado de Error
+                        else if (pagosState.errorMessage != null && pagosState.canales.isEmpty) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            child: Column(
+                              children: [
+                                Text(
+                                  pagosState.errorMessage!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    color: AppColors.errorRed,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                ElevatedButton.icon(
+                                  onPressed: () {
+                                    refConsumer.read(pagosProvider.notifier).cargarCanales(codSocio);
+                                  },
+                                  icon: const Icon(Icons.refresh, size: 16),
+                                  label: const Text('Reintentar'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                  ),
                                 ),
                               ],
                             ),
-                            child: Row(
-                              children: [
-                                _buildCanalLogo(canal, isStore),
-                                const SizedBox(width: 14),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                          ),
+                        ]
+                        // Catálogo Dinámico de Canales
+                        else ...[
+                          ...pagosState.canales.map((canal) {
+                            final isStore = canal.icono == 'storefront';
+
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: InkWell(
+                                onTap: pagosState.isRegistering
+                                    ? null
+                                    : () async {
+                                        // 1. Registrar intento en Backend para activar ventana de verificación en Redis
+                                        final url = await refConsumer
+                                            .read(pagosProvider.notifier)
+                                            .registrarIntentoYObtenerUrl(
+                                              codSocio: codSocio,
+                                              canalId: canal.id,
+                                            );
+
+                                        if (context.mounted) {
+                                          Navigator.of(ctx).pop();
+                                        }
+
+                                        // 2. Abrir pasarela oficial en navegador
+                                        final urlFinal = (url != null && url.isNotEmpty)
+                                            ? url
+                                            : canal.urlRedireccion;
+
+                                        if (context.mounted) {
+                                          await _launchPaymentUrl(context, urlFinal);
+                                        }
+
+                                        // 3. Al volver de la pasarela, forzar refresco de deuda para Smart Polling
+                                        if (codSocio.isNotEmpty) {
+                                          refConsumer
+                                              .read(deudaProvider.notifier)
+                                              .cargarDeuda(codSocio, forzarRefresco: true);
+                                        }
+                                      },
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  padding: const EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.pureWhite,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: AppColors.borderSubtle),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        color: AppColors.shadowColor,
+                                        blurRadius: 6,
+                                        offset: Offset(0, 2),
+                                      ),
+                                    ],
+                                  ),
+                                  child: Row(
                                     children: [
-                                      Row(
-                                        children: [
-                                          Text(
-                                            canal.nombre,
-                                            style: AppTextStyles.subtitle1.copyWith(
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                          if (canal.soportaQr) ...[
-                                            const SizedBox(width: 8),
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 6,
-                                                vertical: 2,
-                                              ),
-                                              decoration: BoxDecoration(
-                                                color: const Color(0xFFE8F5E9),
-                                                borderRadius: BorderRadius.circular(6),
-                                              ),
-                                              child: const Text(
-                                                'QR SIMPLE',
-                                                style: TextStyle(
-                                                  fontSize: 9,
-                                                  fontWeight: FontWeight.bold,
-                                                  color: Color(0xFF2E7D32),
+                                      _buildCanalLogo(canal, isStore),
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    canal.nombre,
+                                                    style: AppTextStyles.subtitle1.copyWith(
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
                                                 ),
+                                                if (canal.soportaQr) ...[
+                                                  const SizedBox(width: 8),
+                                                  Container(
+                                                    padding: const EdgeInsets.symmetric(
+                                                      horizontal: 6,
+                                                      vertical: 2,
+                                                    ),
+                                                    decoration: BoxDecoration(
+                                                      color: const Color(0xFFE8F5E9),
+                                                      borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              canal.descripcion,
+                                              style: AppTextStyles.caption.copyWith(
+                                                color: AppColors.textSecondary,
                                               ),
                                             ),
                                           ],
-                                        ],
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        canal.descripcion,
-                                        style: AppTextStyles.caption.copyWith(
-                                          color: AppColors.textSecondary,
                                         ),
+                                      ),
+                                      const Icon(
+                                        Icons.arrow_forward_ios,
+                                        size: 16,
+                                        color: AppColors.textMuted,
                                       ),
                                     ],
                                   ),
                                 ),
-                                const Icon(
-                                  Icons.arrow_forward_ios,
-                                  size: 16,
-                                  color: AppColors.textMuted,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    }),
-                  ],
-                  const SizedBox(height: 8),
+                              ),
+                            );
+                          }),
+                        ],
+                        const SizedBox(height: 8),
 
-                  // Aviso de Seguridad PCI / Transparencia
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AppColors.surfaceContainerLow,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Icon(
-                          Icons.lock_outline,
-                          size: 18,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'COSMOL R.L. no almacena datos de tarjetas ni contraseñas bancarias. Tu transacción se procesa de forma directa y segura en la pasarela seleccionada.',
-                            style: AppTextStyles.caption.copyWith(
-                              fontSize: 11,
-                              color: AppColors.onSurfaceVariant,
-                            ),
+                        // Aviso de Seguridad PCI / Transparencia
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: AppColors.surfaceContainerLow,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Icon(
+                                Icons.lock_outline,
+                                size: 18,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'COSMOL R.L. no almacena datos de tarjetas ni contraseñas bancarias. Tu transacción se procesa de forma directa y segura en la pasarela seleccionada.',
+                                  style: AppTextStyles.caption.copyWith(
+                                    fontSize: 11,
+                                    color: AppColors.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
             );
           },
