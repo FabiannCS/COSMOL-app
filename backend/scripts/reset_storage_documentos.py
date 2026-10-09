@@ -27,7 +27,7 @@ sys.path.insert(0, str(BASE_DIR))
 from app.core.config import settings
 from app.core.redis import get_redis
 from app.db.models.documento import Documento
-from app.db.session import async_session_factory
+from app.db.session import AsyncSessionLocal
 from app.integrations.minio_client import minio_client
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -61,7 +61,7 @@ async def resetear_base_de_datos() -> int:
     """
     logger.info("[DB] Limpiando tabla 'documentos' en PostgreSQL...")
     try:
-        async with async_session_factory() as session:
+        async with AsyncSessionLocal() as session:
             stmt = delete(Documento)
             result = await session.execute(stmt)
             await session.commit()
