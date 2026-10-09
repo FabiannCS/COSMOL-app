@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../domain/repositories/documentos_repository.dart';
 import '../datasources/documentos_remote_datasource.dart';
 import '../models/documento_model.dart';
+import '../models/historial_factura_item_model.dart';
 
 final documentosRepositoryProvider = Provider<DocumentosRepository>((ref) {
   final remoteDataSource = ref.watch(documentosRemoteDataSourceProvider);
@@ -31,6 +32,15 @@ class DocumentosRepositoryImpl implements DocumentosRepository {
   }) {
     return _remoteDataSource.descargarPdfBytes(
       docId: docId,
+    );
+  }
+
+  @override
+  Future<List<HistorialFacturaItemModel>> obtenerHistorial12Meses({
+    required String codSocio,
+  }) {
+    return _remoteDataSource.obtenerHistorial12Meses(
+      codSocio: codSocio,
     );
   }
 }

@@ -23,6 +23,12 @@ class AppConfig {
     defaultValue: 'https://$_envDomain:$_envPort/api/v1',
   );
 
+  /// URL del servidor de consultas de COSMOL R.L. (informix legado)
+  static const String cosmolLegacyUrl = String.fromEnvironment(
+    'COSMOL_LEGACY_URL',
+    defaultValue: 'http://api.cosmol.com.bo/api-consultas',
+  );
+
   /// Detecta la URL base según la plataforma o entorno de ejecución
   static String get baseUrl {
     // 1. Si se define explícitamente en tiempo de compilación o ejecución (ej: desde .env):

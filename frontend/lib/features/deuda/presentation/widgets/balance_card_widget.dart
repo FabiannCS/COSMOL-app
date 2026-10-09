@@ -562,27 +562,27 @@ class BalanceCardWidget extends ConsumerWidget {
                               ],
                             ),
                             Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  'Bs ${f.montoBs.toStringAsFixed(2)}',
-                                  style: AppTextStyles.subtitle2.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text(
-                                  f.estaVencida ? 'Vencida' : 'Impaga',
-                                  style: AppTextStyles.caption.copyWith(
-                                    color: f.estaVencida
-                                        ? AppColors.errorRed
-                                        : const Color(0xFFE65100),
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text(
+                                      'Bs ${f.montoBs.toStringAsFixed(2)}',
+                                      style: AppTextStyles.subtitle2.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    Text(
+                                      f.estaVencida ? 'Vencida' : 'Impaga',
+                                      style: AppTextStyles.caption.copyWith(
+                                        color: f.estaVencida
+                                            ? AppColors.errorRed
+                                            : const Color(0xFFE65100),
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
                         if (!isLast)
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 8),
