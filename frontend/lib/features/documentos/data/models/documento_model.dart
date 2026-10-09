@@ -18,6 +18,7 @@ class DocumentoModel {
   final String? s3Key;
   final bool permiteDescarga;
   final String? urlDescarga;
+  final String? fechaPago;
 
   const DocumentoModel({
     required this.id,
@@ -36,6 +37,7 @@ class DocumentoModel {
     this.s3Key,
     this.permiteDescarga = true,
     this.urlDescarga,
+    this.fechaPago,
   });
 
   factory DocumentoModel.fromJson(Map<String, dynamic> json) {
@@ -60,6 +62,7 @@ class DocumentoModel {
       s3Key: json['s3_key']?.toString(),
       permiteDescarga: json['permite_descarga'] == true || json['permite_descarga'] == null,
       urlDescarga: json['url_descarga']?.toString(),
+      fechaPago: json['fecha_pago']?.toString() ?? json['FECHA']?.toString(),
     );
   }
 
@@ -81,7 +84,48 @@ class DocumentoModel {
       's3_key': s3Key,
       'permite_descarga': permiteDescarga,
       'url_descarga': urlDescarga,
+      'fecha_pago': fechaPago,
     };
+  }
+
+  DocumentoModel copyWith({
+    String? id,
+    String? codSocio,
+    String? tipoDocumento,
+    String? nroFactura,
+    String? nroFacip,
+    String? codAutorizacion,
+    String? periodo,
+    int? anio,
+    int? mes,
+    double? montoBs,
+    DateTime? fechaEmision,
+    DateTime? fechaVencimiento,
+    String? estadoPago,
+    String? s3Key,
+    bool? permiteDescarga,
+    String? urlDescarga,
+    String? fechaPago,
+  }) {
+    return DocumentoModel(
+      id: id ?? this.id,
+      codSocio: codSocio ?? this.codSocio,
+      tipoDocumento: tipoDocumento ?? this.tipoDocumento,
+      nroFactura: nroFactura ?? this.nroFactura,
+      nroFacip: nroFacip ?? this.nroFacip,
+      codAutorizacion: codAutorizacion ?? this.codAutorizacion,
+      periodo: periodo ?? this.periodo,
+      anio: anio ?? this.anio,
+      mes: mes ?? this.mes,
+      montoBs: montoBs ?? this.montoBs,
+      fechaEmision: fechaEmision ?? this.fechaEmision,
+      fechaVencimiento: fechaVencimiento ?? this.fechaVencimiento,
+      estadoPago: estadoPago ?? this.estadoPago,
+      s3Key: s3Key ?? this.s3Key,
+      permiteDescarga: permiteDescarga ?? this.permiteDescarga,
+      urlDescarga: urlDescarga ?? this.urlDescarga,
+      fechaPago: fechaPago ?? this.fechaPago,
+    );
   }
 
   // Getters de utilidad
@@ -135,6 +179,16 @@ class DocumentoModel {
   String get fechaVencimientoFormateada {
     if (fechaVencimiento == null) return 'No especificada';
     return DateFormat('dd/MM/yyyy').format(fechaVencimiento!);
+  }
+
+  String get fechaPagoFormateada {
+    if (fechaPago == null || fechaPago!.isEmpty) return '';
+    try {
+      final parsed = DateTime.parse(fechaPago!);
+      return DateFormat('dd/MM/yyyy').format(parsed);
+    } catch (_) {
+      return fechaPago!;
+    }
   }
 
   String get montoBsFormateado {

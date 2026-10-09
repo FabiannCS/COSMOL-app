@@ -199,7 +199,7 @@ class _PdfViewerScreenState extends ConsumerState<PdfViewerScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              'Cargando documento oficial...',
+              'Cargando documento...',
               style: AppTextStyles.subtitle2.copyWith(color: Colors.white70),
             ),
           ],

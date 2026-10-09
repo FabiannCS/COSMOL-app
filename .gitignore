@@ -1,10 +1,175 @@
+# ==============================================================================
+# COSMOL RL - Monorepo .gitignore
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Environment & Secrets
+# ------------------------------------------------------------------------------
 .env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.cert
+*.crt
+
+# ------------------------------------------------------------------------------
+# 2. Python / Backend (FastAPI, Pytest, Coverage, Virtualenvs)
+# ------------------------------------------------------------------------------
 __pycache__/
+**/__pycache__/
 *.py[cod]
 *$py.class
-.pytest_cache/
-.coverage
-htmlcov/
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+/lib/
+/lib64/
+!frontend/lib/
+!frontend/lib/**
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
 .venv/
-env/
 venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Testing & Linting
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.ruff_cache/
+
+# Databases & local storage
+*.sqlite3
+*.sqlite
+*.db
+
+# ------------------------------------------------------------------------------
+# 3. Flutter / Dart / Frontend
+# ------------------------------------------------------------------------------
+**/.dart_tool/
+**/.pub-cache/
+**/.pub/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/doc/api/
+**/build/
+**/coverage/
+.widget_preview/
+migrate_working_dir/
+
+# Symbols & Obfuscation
+app.*.symbols
+app.*.map.json
+
+# ------------------------------------------------------------------------------
+# 4. Android (Gradle, Studio, APKs, Keystores)
+# ------------------------------------------------------------------------------
+**/.gradle/
+**/local.properties
+**/GeneratedPluginRegistrant.java
+**/.cxx/
+**/captures/
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+
+# Keystores y firmas sensibles
+*.keystore
+*.jks
+key.properties
+
+# ------------------------------------------------------------------------------
+# 5. iOS / macOS (Xcode, CocoaPods)
+# ------------------------------------------------------------------------------
+**/ios/Pods/
+**/macos/Pods/
+**/.symlinks/
+**/Flutter/Flutter.framework
+**/Flutter/Flutter.podspec
+**/Flutter/ephemeral/
+**/ios/Flutter/.last_build_id
+**/xcuserdata/
+*.mode1v3
+*.mode2v3
+*.pbxuser
+*.perspectivev3
+DerivedData/
+
+# ------------------------------------------------------------------------------
+# 6. IDEs & Editors (VS Code, JetBrains, Eclipse)
+# ------------------------------------------------------------------------------
+.idea/
+**/.idea/
+*.iml
+*.ipr
+*.iws
+
+# Visual Studio Code
+.vscode/
+**/.vscode/
+!.vscode/extensions.json
+
+# Otros editores
+*.swp
+*.swo
+*~
+.history/
+*.sublime-project
+*.sublime-workspace
+
+# ------------------------------------------------------------------------------
+# 7. Operating System Artifacts
+# ------------------------------------------------------------------------------
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ------------------------------------------------------------------------------
+# 8. Logs & Temporary Files
+# ------------------------------------------------------------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ------------------------------------------------------------------------------
+# 9. Docker & Local Volumes
+# ------------------------------------------------------------------------------
+postgres_data/
+redis_data/
+minio_data/
+storage_data/
+docker-compose.override.yml

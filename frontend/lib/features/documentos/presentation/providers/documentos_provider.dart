@@ -8,8 +8,12 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../multicuenta/presentation/providers/multicuenta_provider.dart';
 import '../../data/models/documento_model.dart';
+import '../../data/models/historial_factura_item_model.dart';
 import '../../data/repositories/documentos_repository_impl.dart';
 import '../../domain/repositories/documentos_repository.dart';
+
+/// Filtro de visualización para la pestaña de facturas
+enum FiltroEstadoFactura { todas, pagadas, pendientes }
 
 class DocumentosState {
   final bool isLoading;
@@ -19,6 +23,8 @@ class DocumentosState {
   final ListaDocumentosModel? documentosResponse;
   final int selectedTabIndex; // 0: Facturas, 1: Avisos Cobranza, 2: Avisos Corte
   final String? currentCodSocio;
+  final FiltroEstadoFactura filtroFacturas;
+  final List<HistorialFacturaItemModel> historial12Meses;
 
   const DocumentosState({
     this.isLoading = false,
@@ -28,6 +34,8 @@ class DocumentosState {
     this.documentosResponse,
     this.selectedTabIndex = 0,
     this.currentCodSocio,
+    this.filtroFacturas = FiltroEstadoFactura.todas,
+    this.historial12Meses = const [],
   });
 
   DocumentosState copyWith({
@@ -38,6 +46,8 @@ class DocumentosState {
     ListaDocumentosModel? documentosResponse,
     int? selectedTabIndex,
     String? currentCodSocio,
+    FiltroEstadoFactura? filtroFacturas,
+    List<HistorialFacturaItemModel>? historial12Meses,
     bool clearError = false,
     bool clearDownloading = false,
   }) {
@@ -49,32 +59,108 @@ class DocumentosState {
       documentosResponse: documentosResponse ?? this.documentosResponse,
       selectedTabIndex: selectedTabIndex ?? this.selectedTabIndex,
       currentCodSocio: currentCodSocio ?? this.currentCodSocio,
+      filtroFacturas: filtroFacturas ?? this.filtroFacturas,
+      historial12Meses: historial12Meses ?? this.historial12Meses,
     );
   }
 
-  List<DocumentoModel> get facturas => documentosResponse?.facturas ?? [];
+  /// Lista unificada y enriquecida de facturas de los últimos 12 meses
+  List<DocumentoModel> get facturasUnificadas {
+    if (isInquilino) return const [];
+    final docsDb = documentosResponse?.facturas ?? [];
+    final Map<String, DocumentoModel> mapaDocs = {
+      for (final d in docsDb) '${d.anio}_${d.mes}': d,
+    };
+
+    final List<DocumentoModel> resultado = [];
+
+    // 1. Integrar elementos del historial de 12 meses de COSMOL
+    for (final item in historial12Meses) {
+      final key = '${item.anio}_${item.mes}';
+      if (mapaDocs.containsKey(key)) {
+        final docOriginal = mapaDocs.remove(key)!;
+        resultado.add(
+          docOriginal.copyWith(
+            fechaPago: item.fechaPago ?? docOriginal.fechaPago,
+            estadoPago: item.isPagado ? 'PAGADO' : docOriginal.estadoPago,
+            nroFactura: docOriginal.nroFactura ?? item.nroFactura,
+          ),
+        );
+      } else {
+        resultado.add(
+          DocumentoModel(
+            id: 'hist_${item.anio}_${item.mes}',
+            codSocio: item.codigo,
+            tipoDocumento: 'FACTURA',
+            nroFactura: item.nroFactura,
+            periodo: item.periodo,
+            anio: item.anio,
+            mes: item.mes,
+            montoBs: item.monto,
+            fechaEmision: DateTime(item.anio, item.mes, 14),
+            fechaVencimiento: null,
+            estadoPago: item.isPagado ? 'PAGADO' : 'PENDIENTE',
+            fechaPago: item.fechaPago,
+            permiteDescarga: false,
+          ),
+        );
+      }
+    }
+
+    // 2. Agregar cualquier factura de la BD que no haya estado en el historial
+    resultado.addAll(mapaDocs.values);
+
+    // 3. Ordenar cronológicamente descendente (más recientes primero)
+    resultado.sort((a, b) {
+      final compAnio = b.anio.compareTo(a.anio);
+      if (compAnio != 0) return compAnio;
+      return b.mes.compareTo(a.mes);
+    });
+
+    return resultado;
+  }
+
+  /// Facturas filtradas según el estado seleccionado (Todas, Pagadas, Pendientes)
+  List<DocumentoModel> get facturas {
+    final list = facturasUnificadas;
+    switch (filtroFacturas) {
+      case FiltroEstadoFactura.pagadas:
+        return list.where((f) => f.isPagado).toList();
+      case FiltroEstadoFactura.pendientes:
+        return list.where((f) => f.isPendiente).toList();
+      case FiltroEstadoFactura.todas:
+        return list;
+    }
+  }
+
+  int get totalFacturasPagadasCount =>
+      facturasUnificadas.where((f) => f.isPagado).length;
+
+  int get totalFacturasPendientesCount =>
+      facturasUnificadas.where((f) => f.isPendiente).length;
+
   List<DocumentoModel> get avisosCobranza => documentosResponse?.avisosCobranza ?? [];
   
   /// Regla Oficial de Negocio COSMOL R.L.:
-  /// Un aviso de corte únicamente aplica y se notifica cuando el socio tiene 3 o más facturas pendientes (NO cuando debe 1 o 2).
+  /// Un aviso de corte únicamente aplica y se notifica cuando el socio tiene 3 o más facturas pendientes.
   List<DocumentoModel> get avisosCorte {
     final rawAvisos = documentosResponse?.avisosCorte ?? [];
     if (rawAvisos.isEmpty) return [];
 
-    final facturasPendientesCount = facturas.where((doc) => doc.isPendiente).length;
+    final facturasPendientesCount = facturasUnificadas.where((doc) => doc.isPendiente).length;
     final cobranzasPendientesCount = avisosCobranza.where((doc) => doc.isPendiente).length;
 
     final cantidadFacturasPendientes = facturasPendientesCount > 0
         ? facturasPendientesCount
         : cobranzasPendientesCount;
 
-    // Si el socio debe menos de 3 facturas (1 o 2), se filtra y NO se muestra el aviso de corte.
     if (cantidadFacturasPendientes < 3) {
       return [];
     }
 
     return rawAvisos;
   }
+
   List<DocumentoModel> get todosDocumentos => documentosResponse?.documentos ?? [];
 
   List<DocumentoModel> get documentosTabActual {
@@ -123,7 +209,11 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
     state = state.copyWith(selectedTabIndex: index);
   }
 
-  /// Carga la lista de documentos para el socio especificado o actual.
+  void cambiarFiltroFacturas(FiltroEstadoFactura filtro) {
+    state = state.copyWith(filtroFacturas: filtro);
+  }
+
+  /// Carga la lista de documentos y el historial de 12 meses para el socio especificado o actual.
   Future<void> cargarDocumentos({
     String? codSocio,
     bool forceRefresh = false,
@@ -136,7 +226,6 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
 
     final cleanCodSocio = targetCodSocio.trim();
 
-    // Evitar recargas duplicadas si ya está cargado para este socio y no se fuerza
     if (!forceRefresh &&
         state.documentosResponse != null &&
         state.currentCodSocio == cleanCodSocio &&
@@ -152,12 +241,15 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
     );
 
     try {
-      final response = await repository.obtenerDocumentos(
-        codSocio: cleanCodSocio,
-      );
+      // Consultar en paralelo los documentos organizados y el historial de 12 meses
+      final results = await Future.wait([
+        repository.obtenerDocumentos(codSocio: cleanCodSocio),
+        repository.obtenerHistorial12Meses(codSocio: cleanCodSocio).catchError((_) => <HistorialFacturaItemModel>[]),
+      ]);
 
-      // Si el socio es inquilino (CONSULTA_PAGO) y estaba en pestaña de facturas (0),
-      // moverlo automáticamente a la pestaña de Avisos de Cobranza (1)
+      final response = results[0] as ListaDocumentosModel;
+      final historial12 = results[1] as List<HistorialFacturaItemModel>;
+
       int newTabIndex = state.selectedTabIndex;
       if (response.isInquilino && state.selectedTabIndex != 1) {
         newTabIndex = 1;
@@ -167,6 +259,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
       state = state.copyWith(
         isLoading: false,
         documentosResponse: response,
+        historial12Meses: historial12,
         currentCodSocio: cleanCodSocio,
         selectedTabIndex: newTabIndex,
         clearError: true,
@@ -192,7 +285,6 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
   }
 
   /// Descarga el archivo PDF y lo guarda en el directorio local del dispositivo.
-  /// Retorna la ruta completa al archivo guardado o null si ocurre un error.
   Future<String?> guardarDocumentoLocal(DocumentoModel doc) async {
     if (!mounted) return null;
     state = state.copyWith(
@@ -253,7 +345,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
     return await OpenFilex.open(filePath);
   }
 
-  /// Descarga temporalmente el documento y dispara el diálogo nativo de compartir (WhatsApp, email, etc.)
+  /// Descarga temporalmente el documento y dispara el diálogo nativo de compartir
   Future<bool> compartirDocumento(DocumentoModel doc) async {
     if (!mounted) return false;
     state = state.copyWith(

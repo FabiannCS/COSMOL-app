@@ -30,7 +30,7 @@ class PagosRemoteDataSource {
       }
 
       throw const ServerException(
-        message: 'Respuesta inválida del servidor al consultar canales de pago.',
+        message: 'Respuesta inválida al consultar canales de pago.',
       );
     } on DioException catch (e) {
       throw _handleDioError(e);

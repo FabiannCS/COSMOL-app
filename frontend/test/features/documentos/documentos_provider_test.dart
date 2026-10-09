@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cosmol_app/features/documentos/data/models/documento_model.dart';
+import 'package:cosmol_app/features/documentos/data/models/historial_factura_item_model.dart';
 import 'package:cosmol_app/features/documentos/domain/repositories/documentos_repository.dart';
 import 'package:cosmol_app/features/documentos/presentation/providers/documentos_provider.dart';
 
@@ -69,6 +70,18 @@ class MockDocumentosRepository implements DocumentosRepository {
       throw Exception('Error de descarga');
     }
     return mockPdfBytes ?? Uint8List.fromList([37, 80, 68, 70, 45, 49, 46, 52]); // %PDF-1.4
+  }
+
+  List<HistorialFacturaItemModel>? mockHistorial;
+
+  @override
+  Future<List<HistorialFacturaItemModel>> obtenerHistorial12Meses({
+    required String codSocio,
+  }) async {
+    if (shouldThrow) {
+      throw Exception('Error al obtener historial');
+    }
+    return mockHistorial ?? [];
   }
 }
 
@@ -152,5 +165,58 @@ void main() {
       expect(bytes[2], 68); // 'D'
       expect(bytes[3], 70); // 'F'
     });
+
+    test('cambiarFiltroFacturas filtra correctamente entre todas, pagadas y pendientes', () async {
+      mockRepository.mockHistorial = [
+        const HistorialFacturaItemModel(
+          codigo: '23807',
+          nombre: 'JUAN PEREZ',
+          mes: 8,
+          anio: 2026,
+          monto: 85.50,
+          estado: '1',
+          consumoM3: 20,
+          fechaPago: '2026-08-25',
+        ),
+        const HistorialFacturaItemModel(
+          codigo: '23807',
+          nombre: 'JUAN PEREZ',
+          mes: 7,
+          anio: 2026,
+          monto: 70.00,
+          estado: '1',
+          consumoM3: 18,
+          fechaPago: '2026-07-28',
+        ),
+        const HistorialFacturaItemModel(
+          codigo: '23807',
+          nombre: 'JUAN PEREZ',
+          mes: 9,
+          anio: 2026,
+          monto: 90.00,
+          estado: '0',
+          consumoM3: 22,
+          fechaPago: null,
+        ),
+      ];
+
+      await notifier.cargarDocumentos(codSocio: '23807');
+
+      // Todas
+      expect(notifier.state.facturas.length, 3);
+      expect(notifier.state.totalFacturasPagadasCount, 2);
+      expect(notifier.state.totalFacturasPendientesCount, 1);
+
+      // Filtrar por Pagadas
+      notifier.cambiarFiltroFacturas(FiltroEstadoFactura.pagadas);
+      expect(notifier.state.facturas.length, 2);
+      expect(notifier.state.facturas.every((f) => f.isPagado), isTrue);
+
+      // Filtrar por Pendientes
+      notifier.cambiarFiltroFacturas(FiltroEstadoFactura.pendientes);
+      expect(notifier.state.facturas.length, 1);
+      expect(notifier.state.facturas.first.isPendiente, isTrue);
+    });
   });
 }
+
