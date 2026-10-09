@@ -328,6 +328,9 @@ class CosmolLegacyClient(BaseApiClient):
             "monto_bs": monto_bs,
             "estado_lectura": estado_lectura,
             "fecha_lectura": fecha_lectura,
+            "fecha_pago": fecha_lectura,
+            "fecha": fecha_lectura,
+            "FECHA": fecha_lectura,
             "estado": clean.get("ESTADO"),
         }
 

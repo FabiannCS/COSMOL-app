@@ -123,6 +123,7 @@ class ServicioDocumentos:
         )
         res_docs = await self.db.execute(stmt_docs)
         documentos_db = list(res_docs.scalars().all())
+        mapa_fechas_pago: Dict[str, Optional[str]] = {}
 
         # 3. Sincronización continua e incremental de facturas y avisos desde COSMOL
         try:
@@ -272,6 +273,16 @@ class ServicioDocumentos:
                             h_periodo = f"{h_mes:02d}/{h_anio}"
                             h_nro_factura = h_item.get("nro_factura") or h_item.get("NROFACTURA")
                             h_monto = float(h_item.get("monto_bs") or 0.0)
+                            h_fecha = h_item.get("fecha_pago") or h_item.get("fecha") or h_item.get("FECHA")
+                            if h_fecha:
+                                mapa_fechas_pago[h_periodo] = str(h_fecha).strip()
+
+                            # Enriquecer nro_factura si la factura ya existía (ej: pendiente) y no lo tenía
+                            if ("FACTURA", h_periodo) in mapa_existentes:
+                                doc_exist_f = mapa_existentes[("FACTURA", h_periodo)]
+                                if not doc_exist_f.nro_factura and h_nro_factura:
+                                    doc_exist_f.nro_factura = str(h_nro_factura)
+                                    hubo_cambios = True
 
                             # Si no está en deudas pendientes y tiene nro_factura, es una factura PAGADA
                             if h_periodo not in periodos_pendientes and h_nro_factura:
@@ -418,6 +429,10 @@ class ServicioDocumentos:
         todos_los_docs: List[DocumentoResponse] = []
 
         for doc in documentos_db:
+            fecha_pago_val = None
+            if doc.estado_pago == "PAGADO":
+                fecha_pago_val = mapa_fechas_pago.get(doc.periodo)
+
             doc_item = DocumentoResponse(
                 id=doc.id,
                 cod_socio=doc.cod_socio,
@@ -432,6 +447,7 @@ class ServicioDocumentos:
                 fecha_emision=doc.fecha_emision,
                 fecha_vencimiento=doc.fecha_vencimiento,
                 estado_pago=doc.estado_pago,
+                fecha_pago=fecha_pago_val,
                 s3_key=doc.s3_key,
                 permite_descarga=True,
                 url_descarga=f"/api/v1/documentos/{doc.id}/descargar"

@@ -8,7 +8,6 @@ import 'package:share_plus/share_plus.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../multicuenta/presentation/providers/multicuenta_provider.dart';
 import '../../data/models/documento_model.dart';
-import '../../data/models/historial_factura_item_model.dart';
 import '../../data/repositories/documentos_repository_impl.dart';
 import '../../domain/repositories/documentos_repository.dart';
 
@@ -24,7 +23,6 @@ class DocumentosState {
   final int selectedTabIndex; // 0: Facturas, 1: Avisos Cobranza, 2: Avisos Corte
   final String? currentCodSocio;
   final FiltroEstadoFactura filtroFacturas;
-  final List<HistorialFacturaItemModel> historial12Meses;
 
   const DocumentosState({
     this.isLoading = false,
@@ -35,7 +33,6 @@ class DocumentosState {
     this.selectedTabIndex = 0,
     this.currentCodSocio,
     this.filtroFacturas = FiltroEstadoFactura.todas,
-    this.historial12Meses = const [],
   });
 
   DocumentosState copyWith({
@@ -47,7 +44,6 @@ class DocumentosState {
     int? selectedTabIndex,
     String? currentCodSocio,
     FiltroEstadoFactura? filtroFacturas,
-    List<HistorialFacturaItemModel>? historial12Meses,
     bool clearError = false,
     bool clearDownloading = false,
   }) {
@@ -60,64 +56,19 @@ class DocumentosState {
       selectedTabIndex: selectedTabIndex ?? this.selectedTabIndex,
       currentCodSocio: currentCodSocio ?? this.currentCodSocio,
       filtroFacturas: filtroFacturas ?? this.filtroFacturas,
-      historial12Meses: historial12Meses ?? this.historial12Meses,
     );
   }
 
-  /// Lista unificada y enriquecida de facturas de los últimos 12 meses
+  /// Lista unificada de facturas ordenada cronológicamente (más recientes primero)
   List<DocumentoModel> get facturasUnificadas {
     if (isInquilino) return const [];
-    final docsDb = documentosResponse?.facturas ?? [];
-    final Map<String, DocumentoModel> mapaDocs = {
-      for (final d in docsDb) '${d.anio}_${d.mes}': d,
-    };
-
-    final List<DocumentoModel> resultado = [];
-
-    // 1. Integrar elementos del historial de 12 meses de COSMOL
-    for (final item in historial12Meses) {
-      final key = '${item.anio}_${item.mes}';
-      if (mapaDocs.containsKey(key)) {
-        final docOriginal = mapaDocs.remove(key)!;
-        resultado.add(
-          docOriginal.copyWith(
-            fechaPago: item.fechaPago ?? docOriginal.fechaPago,
-            estadoPago: item.isPagado ? 'PAGADO' : docOriginal.estadoPago,
-            nroFactura: docOriginal.nroFactura ?? item.nroFactura,
-          ),
-        );
-      } else {
-        resultado.add(
-          DocumentoModel(
-            id: 'hist_${item.anio}_${item.mes}',
-            codSocio: item.codigo,
-            tipoDocumento: 'FACTURA',
-            nroFactura: item.nroFactura,
-            periodo: item.periodo,
-            anio: item.anio,
-            mes: item.mes,
-            montoBs: item.monto,
-            fechaEmision: DateTime(item.anio, item.mes, 14),
-            fechaVencimiento: null,
-            estadoPago: item.isPagado ? 'PAGADO' : 'PENDIENTE',
-            fechaPago: item.fechaPago,
-            permiteDescarga: false,
-          ),
-        );
-      }
-    }
-
-    // 2. Agregar cualquier factura de la BD que no haya estado en el historial
-    resultado.addAll(mapaDocs.values);
-
-    // 3. Ordenar cronológicamente descendente (más recientes primero)
-    resultado.sort((a, b) {
+    final docs = List<DocumentoModel>.from(documentosResponse?.facturas ?? []);
+    docs.sort((a, b) {
       final compAnio = b.anio.compareTo(a.anio);
       if (compAnio != 0) return compAnio;
       return b.mes.compareTo(a.mes);
     });
-
-    return resultado;
+    return docs;
   }
 
   /// Facturas filtradas según el estado seleccionado (Todas, Pagadas, Pendientes)
@@ -241,14 +192,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
     );
 
     try {
-      // Consultar en paralelo los documentos organizados y el historial de 12 meses
-      final results = await Future.wait([
-        repository.obtenerDocumentos(codSocio: cleanCodSocio),
-        repository.obtenerHistorial12Meses(codSocio: cleanCodSocio).catchError((_) => <HistorialFacturaItemModel>[]),
-      ]);
-
-      final response = results[0] as ListaDocumentosModel;
-      final historial12 = results[1] as List<HistorialFacturaItemModel>;
+      final response = await repository.obtenerDocumentos(codSocio: cleanCodSocio);
 
       int newTabIndex = state.selectedTabIndex;
       if (response.isInquilino && state.selectedTabIndex != 1) {
@@ -259,7 +203,6 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
       state = state.copyWith(
         isLoading: false,
         documentosResponse: response,
-        historial12Meses: historial12,
         currentCodSocio: cleanCodSocio,
         selectedTabIndex: newTabIndex,
         clearError: true,
