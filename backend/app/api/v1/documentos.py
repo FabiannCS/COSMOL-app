@@ -15,12 +15,44 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user_id, get_db
 from app.db.models import Usuario
 from app.schemas.documento import ListaDocumentosResponse
+from app.schemas.factura import FacturaDetalleResponse
 from app.services.servicio_documentos import ServicioDocumentos, registrar_auditoria_descarga
 from app.tasks.auditoria_reportes import despachar_auditoria_reportes
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+@router.get(
+    "/facturas/{nro_factura}",
+    response_model=FacturaDetalleResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Consultar detalle estructurado de factura fiscal SIAT",
+    description=(
+        "Obtiene el detalle fiscal completo de una factura emitida o pendiente de COSMOL R.L., "
+        "incluyendo desglose de servicios, montos, leyendas normativas y URL del código QR. "
+        "Aplica validación de permisos: los inquilinos (CONSULTA_PAGO) tienen restringido el acceso."
+    ),
+    responses={
+        200: {"description": "Detalle fiscal de la factura recuperado con éxito."},
+        403: {"description": "Acceso denegado (el rol de consulta no puede ver documentos fiscales del titular)."},
+        404: {"description": "Factura no encontrada."},
+    }
+)
+async def obtener_detalle_factura(
+    nro_factura: str,
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> FacturaDetalleResponse:
+    """
+    Retorna el detalle completo de la factura para visualización nativa en Flutter.
+    """
+    servicio = ServicioDocumentos(db=db)
+    return await servicio.obtener_detalle_factura_socio(
+        usuario_id=UUID(current_user_id),
+        nro_factura=nro_factura.strip()
+    )
 
 
 @router.get(

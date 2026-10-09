@@ -16,6 +16,7 @@ from app.db.models import Documento, Suministro
 from app.integrations.cosmol_client import CosmolLegacyClient, cosmol_client
 from app.integrations.minio_client import CosmolMinioClient, minio_client
 from app.services.generador_pdf import GeneradorPdfDocumento, generador_pdf
+from app.services.generador_factura_digital import generador_factura_digital
 
 logger = logging.getLogger(__name__)
 
@@ -258,12 +259,33 @@ class ServicioStorageDocumentos:
             except Exception as exc:
                 logger.warning(f"[STORAGE] Error al recuperar '{s3_key}' de MinIO: {exc}. Regenerando...")
 
-        # 2. Generar on-demand con fecha_emision del ciclo
-        pdf_bytes = self.pdf.generar_pdf_factura(
-            datos_factura=datos_factura,
-            datos_socio=datos_socio,
-            fecha_emision=fecha_emision
-        )
+        # 2. Generar on-demand con formato SIAT oficial de COSMOL
+        detalle_factura = None
+        if nro_factura:
+            try:
+                detalle_factura = await self.cosmol.obtener_detalle_factura(nro_factura)
+            except Exception as exc:
+                logger.warning(f"[STORAGE] No se pudo consultar detalle oficial de factura '{nro_factura}': {exc}")
+
+        if detalle_factura:
+            pdf_bytes = generador_factura_digital.generar_pdf(detalle_factura)
+        else:
+            contexto_factura = {
+                "NROFACTURA": nro_factura,
+                "NROFACTURAIMP": str(datos_factura.get("NROFACIP") or nro_factura),
+                "CODAUTORIZACION": str(datos_factura.get("CODAUTORIZACION") or datos_factura.get("cod_autorizacion") or ""),
+                "PERIODOMES": nmes,
+                "PERIODOANIO": anio,
+                "periodo": periodo,
+                "TOTAL": float(datos_factura.get("MONTOTOTAL") or datos_factura.get("monto_bs") or 0.0),
+                "FECHAEMISION": fecha_emision.strftime("%Y-%m-%d") if fecha_emision else "",
+                "CODSOCIO": cod_socio,
+                "NOMBRE": str(datos_socio.get("NOMBRE") or datos_socio.get("nombre_titular") or ""),
+                "NITCI": str(datos_socio.get("NROCIONIT") or datos_socio.get("ci_nit") or ""),
+                "DIRECCION": str(datos_socio.get("DIRECCION") or datos_socio.get("direccion") or ""),
+                "CODUBICACION": str(datos_socio.get("ubicacion") or "1.4.64.0"),
+            }
+            pdf_bytes = generador_factura_digital.generar_pdf(contexto_factura)
 
         # 3. Persistir en MinIO y PostgreSQL
         try:
@@ -530,19 +552,32 @@ class ServicioStorageDocumentos:
         datos_socio = datos_socio or {"cod_socio": doc.cod_socio}
 
         if doc.tipo_documento == "FACTURA":
-            datos_factura = {
-                "NROFACTURA": doc.nro_factura or "",
-                "CODAUTORIZACION": doc.cod_autorizacion or "N/A",
-                "NMES": doc.mes,
-                "ANIO": doc.anio,
-                "periodo": doc.periodo,
-                "MONTOTOTAL": float(doc.monto_bs)
-            }
-            pdf_bytes = self.pdf.generar_pdf_factura(
-                datos_factura=datos_factura,
-                datos_socio=datos_socio,
-                fecha_emision=doc.fecha_emision
-            )
+            detalle_factura = None
+            if doc.nro_factura:
+                try:
+                    detalle_factura = await self.cosmol.obtener_detalle_factura(doc.nro_factura)
+                except Exception as exc:
+                    logger.warning(f"[STORAGE] Error al consultar detalle de factura '{doc.nro_factura}': {exc}")
+
+            if detalle_factura:
+                pdf_bytes = generador_factura_digital.generar_pdf(detalle_factura)
+            else:
+                datos_factura = {
+                    "NROFACTURA": doc.nro_factura or "",
+                    "NROFACTURAIMP": doc.nro_facip or doc.nro_factura or "",
+                    "CODAUTORIZACION": doc.cod_autorizacion or "N/A",
+                    "PERIODOMES": doc.mes,
+                    "PERIODOANIO": doc.anio,
+                    "periodo": doc.periodo,
+                    "TOTAL": float(doc.monto_bs),
+                    "FECHAEMISION": doc.fecha_emision.strftime("%Y-%m-%d") if doc.fecha_emision else "",
+                    "CODSOCIO": doc.cod_socio,
+                    "NOMBRE": str(datos_socio.get("NOMBRE") or datos_socio.get("nombre_titular") or ""),
+                    "NITCI": str(datos_socio.get("NROCIONIT") or datos_socio.get("ci_nit") or ""),
+                    "DIRECCION": str(datos_socio.get("DIRECCION") or datos_socio.get("direccion") or ""),
+                    "CODUBICACION": str(datos_socio.get("ubicacion") or "1.4.64.0"),
+                }
+                pdf_bytes = generador_factura_digital.generar_pdf(datos_factura)
         elif doc.tipo_documento == "AVISO_COBRANZA":
             nro_aviso = doc.nro_facip or doc.nro_factura or "aviso"
             datos_aviso, datos_socio_completo, historial = await self._preparar_contexto_aviso(

@@ -29,6 +29,11 @@ from app.schemas.documento import (
     ListaDocumentosResponse,
 )
 
+from app.schemas.factura import (
+    ItemFacturaDetalle,
+    FacturaDetalleResponse,
+)
+
 from app.schemas.consumo import (
     ConsumoPeriodoResponse,
     EstadisticasConsumoResponse,
@@ -51,6 +56,8 @@ __all__ = [
     "DashboardMultiSuministroResponse",
     "DocumentoResponse",
     "ListaDocumentosResponse",
+    "ItemFacturaDetalle",
+    "FacturaDetalleResponse",
     "ConsumoPeriodoResponse",
     "EstadisticasConsumoResponse",
     "HistorialConsumoResponse",

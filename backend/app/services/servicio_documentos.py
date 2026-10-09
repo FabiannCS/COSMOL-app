@@ -13,14 +13,19 @@ import logging
 from typing import Any, Dict, Generator, List, Optional, Tuple
 from uuid import UUID
 
+import json
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import ForbiddenException, NotFoundException
+from app.core.redis import get_redis
 from app.db.models import Documento, Suministro
 from app.integrations.cosmol_client import CosmolLegacyClient, cosmol_client
 from app.integrations.minio_client import CosmolMinioClient, minio_client
 from app.schemas.documento import DocumentoResponse, ListaDocumentosResponse
+from app.schemas.factura import FacturaDetalleResponse, ItemFacturaDetalle
+from app.services.generador_factura_digital import generador_factura_digital
 from app.services.servicio_storage_documentos import ServicioStorageDocumentos
 
 logger = logging.getLogger(__name__)
@@ -361,8 +366,8 @@ class ServicioDocumentos:
             )
 
         # 4. Asegurar que el archivo en MinIO S3 exista y esté actualizado con el formato oficial
-        # Para AVISO_COBRANZA siempre regeneramos para garantizar el diseño oficial y datos reales de consumo
-        if doc.tipo_documento == "AVISO_COBRANZA" or not self.s3.existe_archivo(doc.s3_key):
+        # Para AVISO_COBRANZA y FACTURA siempre regeneramos para garantizar el diseño oficial y datos reales
+        if doc.tipo_documento in ["AVISO_COBRANZA", "FACTURA"] or not self.s3.existe_archivo(doc.s3_key):
             try:
                 datos_socio = await self.cosmol.obtener_datos_socio(doc.cod_socio) or {}
             except Exception:
@@ -392,3 +397,239 @@ class ServicioDocumentos:
         filename = f"{prefijo}_{doc.cod_socio}_{periodo_slug}.pdf"
 
         return stream, filename, doc
+
+    async def obtener_detalle_factura_socio(
+        self,
+        usuario_id: UUID,
+        nro_factura: str
+    ) -> FacturaDetalleResponse:
+        """
+        Recupera el detalle fiscal estructurado de una factura oficial de COSMOL R.L.
+        - Valida que el usuario tenga vinculado el suministro correspondiente a la factura.
+        - Valida restricción fiscal: si el rol es 'CONSULTA_PAGO' (inquilino), se deniega el acceso (403 Forbidden).
+        - Consulta primero la caché en Redis (<20ms).
+        - Si no está en caché, consulta la API oficial externa GET /facturas/{nro_factura}.
+        - Si la API no responde, realiza fallback con datos persistidos en PostgreSQL.
+        - Guarda en Redis (TTL 10 min) y retorna FacturaDetalleResponse.
+        """
+        nro_clean = str(nro_factura).strip()
+        if not nro_clean:
+            raise NotFoundException(
+                message="Número de factura no válido o no especificado.",
+                error_code="INVALID_INVOICE_NUMBER"
+            )
+
+        # 1. Buscar si el documento ya está persistido en PostgreSQL
+        stmt_doc = select(Documento).where(
+            (Documento.nro_factura == nro_clean) | (Documento.nro_facip == nro_clean)
+        )
+        res_doc = await self.db.execute(stmt_doc)
+        doc = res_doc.scalar_one_or_none()
+
+        # 2. Validar pertenencia del suministro al usuario
+        stmt_suministros = select(Suministro).where(Suministro.usuario_id == usuario_id)
+        res_sum = await self.db.execute(stmt_suministros)
+        suministros_usuario = list(res_sum.scalars().all())
+        mapa_suministros = {s.cod_socio: s for s in suministros_usuario}
+
+        if doc:
+            if doc.cod_socio not in mapa_suministros:
+                raise ForbiddenException(
+                    message="No tiene autorización para consultar facturas de este suministro.",
+                    error_code="SUMINISTRO_ACCESS_DENIED"
+                )
+            suministro = mapa_suministros[doc.cod_socio]
+            if suministro.rol == "CONSULTA_PAGO":
+                raise ForbiddenException(
+                    message="Acceso denegado: solo el titular registrado puede consultar el detalle de facturas fiscales.",
+                    error_code="DOCUMENT_ACCESS_DENIED"
+                )
+
+        # 3. Intentar recuperar desde Redis (<20ms)
+        redis_key = f"factura:detalle:{nro_clean}"
+        redis = None
+        try:
+            redis = await get_redis()
+            cached = await redis.get(redis_key)
+            if cached:
+                cached_dict = json.loads(cached)
+                cod_socio_cached = cached_dict.get("cod_socio")
+                if cod_socio_cached and cod_socio_cached not in mapa_suministros:
+                    raise ForbiddenException(
+                        message="No tiene autorización para consultar facturas de este suministro.",
+                        error_code="SUMINISTRO_ACCESS_DENIED"
+                    )
+                return FacturaDetalleResponse(**cached_dict)
+        except ForbiddenException:
+            raise
+        except Exception as err_redis:
+            logger.debug(f"[REDIS] Error al leer caché de factura: {err_redis}")
+
+        # 4. Consultar API oficial de COSMOL
+        datos_api = await self.cosmol.obtener_detalle_factura(nro_clean)
+
+        # Si no vino de la API y tampoco teníamos doc en BD -> 404
+        if not datos_api and not doc:
+            raise NotFoundException(
+                message=f"No se encontró la factura N° '{nro_clean}' en el sistema comercial.",
+                error_code="INVOICE_NOT_FOUND"
+            )
+
+        # Si vino de la API, validar que pertenezca a uno de los suministros del usuario
+        if datos_api:
+            cod_socio_api = str(datos_api.get("CODSOCIO") or "").strip()
+            if cod_socio_api:
+                if cod_socio_api not in mapa_suministros:
+                    raise ForbiddenException(
+                        message="No tiene autorización para consultar facturas de este suministro.",
+                        error_code="SUMINISTRO_ACCESS_DENIED"
+                    )
+                suministro = mapa_suministros[cod_socio_api]
+                if suministro.rol == "CONSULTA_PAGO":
+                    raise ForbiddenException(
+                        message="Acceso denegado: solo el titular registrado puede consultar el detalle de facturas fiscales.",
+                        error_code="DOCUMENT_ACCESS_DENIED"
+                    )
+
+        # 5. Construir DTO estructurado
+        if datos_api:
+            items_detalle = []
+            for item in datos_api.get("detalle", []):
+                try:
+                    pu = float(item.get("PRECIOUNITARIO") or 0.0)
+                    des = float(item.get("DESCUENTO") or 0.0)
+                    sub = float(item.get("SUBTOTAL") or pu)
+                    cant = float(item.get("CANTIDAD") or 1.0)
+                except Exception:
+                    pu, des, sub, cant = 0.0, 0.0, 0.0, 1.0
+
+                items_detalle.append(ItemFacturaDetalle(
+                    prefijo=str(item.get("PREFIJO") or "").strip() or None,
+                    codigo_servicio=str(item.get("CODIGOSERVICIO") or "1").strip(),
+                    cantidad=cant,
+                    unidad_medida=str(item.get("UNIDADMEDIDA") or "SERVICIO").strip(),
+                    concepto=str(item.get("CONCEPTO") or "").strip(),
+                    precio_unitario=pu,
+                    descuento=des,
+                    subtotal=sub,
+                ))
+
+            try:
+                tot = float(datos_api.get("TOTAL") or 0.0)
+                desc_tot = float(datos_api.get("DESCUENTO") or 0.0)
+                subtot = tot + desc_tot
+                cred_fisc = float(datos_api.get("IMPORTECREDITOFISCAL") or tot)
+            except Exception:
+                tot, desc_tot, subtot, cred_fisc = 0.0, 0.0, 0.0, 0.0
+
+            pmes = int(datos_api.get("PERIODOMES") or (doc.mes if doc else 1))
+            panio = int(datos_api.get("PERIODOANIO") or (doc.anio if doc else 2026))
+
+            response_dto = FacturaDetalleResponse(
+                nro_factura=str(datos_api.get("NROFACTURA") or nro_clean).strip(),
+                nro_factura_imp=str(datos_api.get("NROFACTURAIMP") or nro_clean).strip(),
+                cod_autorizacion=str(datos_api.get("CODAUTORIZACION") or "").strip(),
+                tipo_factura=str(datos_api.get("TIPOFACTURA") or "1").strip(),
+                nit_emisor=str(datos_api.get("NITEMISOR") or "1028317027").strip(),
+                empresa=str(datos_api.get("EMPRESA") or "COSMOL RL").strip(),
+                actividad_economica=str(datos_api.get("ACTIVIDADECO") or "CAPTACIÓN Y DISTRIBUCIÓN DE AGUA").strip(),
+                casa_matriz=str(datos_api.get("CASAMATRIZ") or "CASA MATRIZ").strip(),
+                punto_venta=str(datos_api.get("PUNTODEVENTA") or "No. punto de venta 0").strip(),
+                ciudad=str(datos_api.get("CIUDAD") or "MONTERO").strip(),
+                dir_empresa=str(datos_api.get("DIREMPRESA") or "CALLE ISAIAS PARADA Nro. 219").strip(),
+                telf_empresa=str(datos_api.get("TELFEMPRESA") or "TELEFONO 392-20212 - 61555507").strip(),
+                cod_socio=str(datos_api.get("CODSOCIO") or (doc.cod_socio if doc else "")).strip(),
+                nombre_razon_social=str(datos_api.get("NOMBRE") or "").strip(),
+                nit_ci=str(datos_api.get("NITCI") or "").strip(),
+                direccion=str(datos_api.get("DIRECCION") or "").strip(),
+                cod_ubicacion=str(datos_api.get("CODUBICACION") or "").strip(),
+                consumo_m3=int(datos_api.get("CONSUMOM3") or 0),
+                periodo_mes=pmes,
+                periodo_anio=panio,
+                periodo_formateado=f"{pmes:02d}/{panio}",
+                fecha_emision=str(datos_api.get("FECHAEMISION") or "").strip(),
+                subtotal=subtot,
+                descuento=desc_tot,
+                total=tot,
+                monto_gift_card=0.0,
+                monto_a_pagar=tot,
+                importe_credito_fiscal=cred_fisc,
+                total_literal=generador_factura_digital.numero_a_letras(tot),
+                estado_factura=str(datos_api.get("ESTADOFACTURA") or "0").strip(),
+                fecha_pago=str(datos_api.get("FECHAPAGO")).strip() if datos_api.get("FECHAPAGO") else None,
+                hora_pago=str(datos_api.get("HORAPAGO")).strip() if datos_api.get("HORAPAGO") else None,
+                caja_pago=str(datos_api.get("CAJAPAGO")).strip() if datos_api.get("CAJAPAGO") else None,
+                codigo_qr=str(datos_api.get("CODIGOQR") or "").strip(),
+                des_leyenda=str(datos_api.get("DESLEYENDA") or "").strip(),
+                leyenda_1=str(datos_api.get("LEYENDA1") or "").strip(),
+                leyenda_3=str(datos_api.get("LEYENDA3") or "").strip(),
+                detalle=items_detalle,
+                url_descarga_pdf=f"/api/v1/documentos/{doc.id}/descargar" if doc else None,
+            )
+        else:
+            datos_socio = {}
+            try:
+                datos_socio = await self.cosmol.obtener_datos_socio(doc.cod_socio) or {}
+            except Exception:
+                pass
+
+            tot = float(doc.monto_bs)
+            response_dto = FacturaDetalleResponse(
+                nro_factura=doc.nro_factura or nro_clean,
+                nro_factura_imp=doc.nro_facip or doc.nro_factura or nro_clean,
+                cod_autorizacion=doc.cod_autorizacion or "N/A",
+                tipo_factura="1",
+                nit_emisor="1028317027",
+                empresa="COSMOL RL",
+                actividad_economica="CAPTACIÓN Y DISTRIBUCIÓN DE AGUA",
+                casa_matriz="CASA MATRIZ",
+                punto_venta="No. punto de venta 0",
+                ciudad="MONTERO",
+                dir_empresa="CALLE ISAIAS PARADA Nro. 219",
+                telf_empresa="TELEFONO 392-20212 - 61555507",
+                cod_socio=doc.cod_socio,
+                nombre_razon_social=str(datos_socio.get("NOMBRE") or datos_socio.get("nombre_titular") or f"SOCIO {doc.cod_socio}").strip(),
+                nit_ci=str(datos_socio.get("NROCIONIT") or datos_socio.get("ci_nit") or "").strip(),
+                direccion=str(datos_socio.get("DIRECCION") or datos_socio.get("direccion") or "").strip(),
+                cod_ubicacion=str(datos_socio.get("ubicacion") or "1.4.64.0").strip(),
+                consumo_m3=0,
+                periodo_mes=doc.mes,
+                periodo_anio=doc.anio,
+                periodo_formateado=doc.periodo,
+                fecha_emision=doc.fecha_emision.strftime("%Y-%m-%d") if doc.fecha_emision else "",
+                subtotal=tot,
+                descuento=0.0,
+                total=tot,
+                monto_gift_card=0.0,
+                monto_a_pagar=tot,
+                importe_credito_fiscal=tot,
+                total_literal=generador_factura_digital.numero_a_letras(tot),
+                estado_factura="1" if doc.estado_pago == "PAGADO" else "0",
+                fecha_pago=None,
+                hora_pago=None,
+                caja_pago=None,
+                codigo_qr=f"https://siat.impuestos.gob.bo/consulta/QR?nit=1028317027&cuf={doc.cod_autorizacion or ''}&numero={doc.nro_factura or ''}&t=2",
+                des_leyenda="Ley N° 453: El proveedor deberá suministrar el servicio en las modalidades y términos ofertados o convenidos.",
+                leyenda_1="ESTA FACTURA CONTRIBUYE AL DESARROLLO DEL PAIS. EL USO ILÍCITO DE ESTA SERÁ SANCIONADO DE ACUERDO A LEY.",
+                leyenda_3="Este documento es la representacion Gráfica de un Documento Fiscal Digital emitido en una Modalidad de Facturacion Electrónica en Linea.",
+                detalle=[ItemFacturaDetalle(
+                    prefijo="1",
+                    codigo_servicio="1",
+                    cantidad=1.0,
+                    unidad_medida="SERVICIO",
+                    concepto="SERVICIO DE AGUA POTABLE Y ALCANTARILLADO",
+                    precio_unitario=tot,
+                    descuento=0.0,
+                    subtotal=tot,
+                )],
+                url_descarga_pdf=f"/api/v1/documentos/{doc.id}/descargar",
+            )
+
+        # 6. Almacenar en Redis (TTL 600 segundos)
+        if redis:
+            try:
+                await redis.set(redis_key, response_dto.model_dump_json(), ex=600)
+            except Exception as err_set:
+                logger.debug(f"[REDIS] Error al escribir en caché: {err_set}")
+
+        return response_dto
