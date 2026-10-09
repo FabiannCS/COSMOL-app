@@ -159,7 +159,13 @@ class ServicioDocumentos:
 
                         # 1. Asegurar Aviso de Cobranza para este periodo
                         if ("AVISO_COBRANZA", periodo) not in mapa_existentes:
-                            s3_key_aviso = self.storage.construir_s3_key(cod_socio, "AVISO_COBRANZA", periodo, identificador)
+                            s3_key_aviso = self.storage.construir_s3_key(
+                                cod_socio=cod_socio,
+                                tipo_documento="AVISO_COBRANZA",
+                                periodo=periodo,
+                                identificador=identificador,
+                                anio=anio
+                            )
                             doc_aviso = Documento(
                                 cod_socio=cod_socio,
                                 tipo_documento="AVISO_COBRANZA",
@@ -190,7 +196,14 @@ class ServicioDocumentos:
 
                         # 2. Asegurar Factura Fiscal para este periodo (disponible en BD para el titular)
                         if ("FACTURA", periodo) not in mapa_existentes:
-                            s3_key_fac = self.storage.construir_s3_key(cod_socio, "FACTURA", periodo, identificador)
+                            s3_key_fac = self.storage.construir_s3_key(
+                                cod_socio=cod_socio,
+                                tipo_documento="FACTURA",
+                                periodo=periodo,
+                                identificador=identificador,
+                                estado_pago="PENDIENTE",
+                                anio=anio
+                            )
                             doc_fac = Documento(
                                 cod_socio=cod_socio,
                                 tipo_documento="FACTURA",
@@ -225,18 +238,137 @@ class ServicioDocumentos:
                     except Exception as err_item:
                         logger.warning(f"[DOCUMENTOS] Error al normalizar metadato de factura: {err_item}")
 
-                # 3. Conciliar facturas y avisos históricos que ya fueron cancelados en COSMOL
+                # 3. Conciliar facturas y avisos que ya fueron cancelados en COSMOL
                 if periodos_pendientes:
                     for d in existentes_todos:
                         if d.tipo_documento in ["FACTURA", "AVISO_COBRANZA"] and d.periodo not in periodos_pendientes:
                             if d.estado_pago != "PAGADO":
                                 d.estado_pago = "PAGADO"
+                                ident = d.nro_factura or d.nro_facip or str(d.id)[:8]
+                                nueva_key = self.storage.construir_s3_key(
+                                    cod_socio=cod_socio,
+                                    tipo_documento=d.tipo_documento,
+                                    periodo=d.periodo,
+                                    identificador=ident,
+                                    estado_pago="PAGADO",
+                                    anio=d.anio
+                                )
+                                if d.s3_key != nueva_key:
+                                    if d.s3_key:
+                                        try:
+                                            self.s3.eliminar_archivo(d.s3_key)
+                                        except Exception:
+                                            pass
+                                    d.s3_key = nueva_key
                                 hubo_cambios = True
 
-                # 4. Conciliar Aviso de Corte si aplica mora (2 o más facturas pendientes)
+                # 4. Sincronizar facturas pagadas históricas desde GET /socios/{cod_socio}/historial-facturas
+                try:
+                    historial_docs = await self.cosmol.obtener_historial_consumo(cod_socio, meses=12)
+                    if historial_docs:
+                        for h_item in historial_docs:
+                            h_mes = int(h_item.get("mes") or 1)
+                            h_anio = int(h_item.get("anio") or date.today().year)
+                            h_periodo = f"{h_mes:02d}/{h_anio}"
+                            h_nro_factura = h_item.get("nro_factura") or h_item.get("NROFACTURA")
+                            h_monto = float(h_item.get("monto_bs") or 0.0)
+
+                            # Si no está en deudas pendientes y tiene nro_factura, es una factura PAGADA
+                            if h_periodo not in periodos_pendientes and h_nro_factura:
+                                fecha_emi_h = self.storage._determinar_fecha_emision(h_anio, h_mes, h_item)
+                                fecha_venc_h = self.storage._determinar_fecha_vencimiento(h_anio, h_mes, h_item)
+
+                                if ("FACTURA", h_periodo) not in mapa_existentes:
+                                    s3_key_fac_pagada = self.storage.construir_s3_key(
+                                        cod_socio=cod_socio,
+                                        tipo_documento="FACTURA",
+                                        periodo=h_periodo,
+                                        identificador=str(h_nro_factura),
+                                        estado_pago="PAGADO",
+                                        anio=h_anio
+                                    )
+                                    doc_h = Documento(
+                                        cod_socio=cod_socio,
+                                        tipo_documento="FACTURA",
+                                        nro_factura=str(h_nro_factura),
+                                        periodo=h_periodo,
+                                        anio=h_anio,
+                                        mes=h_mes,
+                                        monto_bs=round(h_monto, 2),
+                                        s3_key=s3_key_fac_pagada,
+                                        fecha_emision=fecha_emi_h,
+                                        fecha_vencimiento=fecha_venc_h,
+                                        estado_pago="PAGADO",
+                                        suministro_id=suministro.id
+                                    )
+                                    self.db.add(doc_h)
+                                    mapa_existentes[("FACTURA", h_periodo)] = doc_h
+                                    hubo_cambios = True
+                                else:
+                                    doc_exist_h = mapa_existentes[("FACTURA", h_periodo)]
+                                    if doc_exist_h.estado_pago != "PAGADO":
+                                        doc_exist_h.estado_pago = "PAGADO"
+                                        hubo_cambios = True
+                                    if not doc_exist_h.nro_factura and h_nro_factura:
+                                        doc_exist_h.nro_factura = str(h_nro_factura)
+                                        hubo_cambios = True
+                                    nueva_key_h = self.storage.construir_s3_key(
+                                        cod_socio=cod_socio,
+                                        tipo_documento="FACTURA",
+                                        periodo=h_periodo,
+                                        identificador=doc_exist_h.nro_factura or str(h_nro_factura),
+                                        estado_pago="PAGADO",
+                                        anio=h_anio
+                                    )
+                                    if doc_exist_h.s3_key != nueva_key_h:
+                                        if doc_exist_h.s3_key:
+                                            try:
+                                                self.s3.eliminar_archivo(doc_exist_h.s3_key)
+                                            except Exception:
+                                                pass
+                                        doc_exist_h.s3_key = nueva_key_h
+                                        hubo_cambios = True
+
+                                # Asegurar Aviso de Cobranza histórico para este periodo
+                                if ("AVISO_COBRANZA", h_periodo) not in mapa_existentes:
+                                    s3_key_aviso_h = self.storage.construir_s3_key(
+                                        cod_socio=cod_socio,
+                                        tipo_documento="AVISO_COBRANZA",
+                                        periodo=h_periodo,
+                                        identificador=str(h_nro_factura),
+                                        anio=h_anio
+                                    )
+                                    doc_aviso_h = Documento(
+                                        cod_socio=cod_socio,
+                                        tipo_documento="AVISO_COBRANZA",
+                                        nro_factura=str(h_nro_factura),
+                                        nro_facip=str(h_nro_factura),
+                                        periodo=h_periodo,
+                                        anio=h_anio,
+                                        mes=h_mes,
+                                        monto_bs=round(h_monto, 2),
+                                        s3_key=s3_key_aviso_h,
+                                        fecha_emision=fecha_emi_h,
+                                        fecha_vencimiento=fecha_venc_h,
+                                        estado_pago="PAGADO",
+                                        suministro_id=suministro.id
+                                    )
+                                    self.db.add(doc_aviso_h)
+                                    mapa_existentes[("AVISO_COBRANZA", h_periodo)] = doc_aviso_h
+                                    hubo_cambios = True
+                except Exception as exc_hist:
+                    logger.warning(f"[DOCUMENTOS] Error al sincronizar facturas pagadas históricas: {exc_hist}")
+
+                # 5. Conciliar Aviso de Corte si aplica mora (2 o más facturas pendientes)
                 tiene_corte = any(d.tipo_documento == "AVISO_CORTE" for d in existentes_todos)
                 if len(facturas_pendientes) >= 2 and not tiene_corte and rol_acceso == "TITULAR":
-                    s3_key_corte = self.storage.construir_s3_key(cod_socio, "AVISO_CORTE", "MORA", py_uuid.uuid4().hex[:8])
+                    s3_key_corte = self.storage.construir_s3_key(
+                        cod_socio=cod_socio,
+                        tipo_documento="AVISO_CORTE",
+                        periodo="AVISO_DE_CORTE",
+                        identificador=py_uuid.uuid4().hex[:8],
+                        anio=date.today().year
+                    )
                     doc_corte = Documento(
                         cod_socio=cod_socio,
                         tipo_documento="AVISO_CORTE",

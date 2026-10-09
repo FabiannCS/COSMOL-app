@@ -308,16 +308,27 @@ class CosmolLegacyClient(BaseApiClient):
         if fecha_lectura is not None:
             fecha_lectura = str(fecha_lectura).strip()
 
+        nro_factura = str(clean.get("NROFACTURA") or clean.get("nro_factura") or "").strip() or None
+        cod_socio = str(clean.get("CODIGO") or clean.get("cod_socio") or "").strip() or None
+        nombre = str(clean.get("NOMBRE") or clean.get("nombre") or "").strip() or None
+
         return {
             "periodo": periodo,
             "mes": mes,
             "anio": anio,
+            "nro_factura": nro_factura,
+            "NROFACTURA": nro_factura,
+            "cod_socio": cod_socio,
+            "CODIGO": cod_socio,
+            "nombre": nombre,
+            "NOMBRE": nombre,
             "lectura_anterior": lectura_anterior,
             "lectura_actual": lectura_actual,
             "consumo_m3": consumo_m3,
             "monto_bs": monto_bs,
             "estado_lectura": estado_lectura,
             "fecha_lectura": fecha_lectura,
+            "estado": clean.get("ESTADO"),
         }
 
     async def obtener_historial_consumo(
