@@ -3,7 +3,10 @@ Batería de pruebas automatizadas para el motor de generación de PDFs (DEV 1).
 Verifica que las Facturas Oficiales, Avisos de Cobranza y Avisos de Corte
 se generen con el formato binario estándar de PDF (%PDF) y contenido consistente.
 """
-import pytest
+try:
+    import pytest
+except ImportError:
+    pytest = None
 from app.services.generador_pdf import generador_pdf
 
 

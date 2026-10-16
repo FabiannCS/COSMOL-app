@@ -137,7 +137,12 @@ class ServicioDeuda:
             dias_mora = (hoy - fecha_vencimiento).days if esta_vencida else 0
 
             factura = FacturaPendienteResponse(
-                nro_facip=str(item.get("NROFACIP", "")).strip(),
+                nro_facip=str(
+                    item.get("NROAVISO")
+                    or item.get("NRO_AVISO")
+                    or item.get("nro_aviso")
+                    or item.get("NROFACIP", "")
+                ).strip(),
                 nro_factura=str(item.get("NROFACTURA", "")).strip(),
                 cod_autorizacion=str(item.get("CODAUTORIZACION", "")).strip(),
                 periodo=f"{mes:02d}/{anio}",

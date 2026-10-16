@@ -525,44 +525,59 @@ class ServicioStorageDocumentos:
         """
         Recupera o genera el Aviso de Cobranza Oficial de COSMOL en PDF.
         """
-        nro_facip = str(datos_deuda.get("NROFACIP") or datos_deuda.get("nro_facip") or "aviso").strip()
+        nro_facip = str(
+            datos_deuda.get("NROAVISO")
+            or datos_deuda.get("NRO_AVISO")
+            or datos_deuda.get("nro_aviso")
+            or datos_deuda.get("NROFACIP")
+            or datos_deuda.get("nro_facip")
+            or "aviso"
+        ).strip()
         nmes = int(datos_deuda.get("NMES") or datos_deuda.get("mes") or 0)
         anio = int(datos_deuda.get("ANIO") or datos_deuda.get("anio") or 0)
         periodo = str(datos_deuda.get("periodo") or f"{nmes:02d}/{anio}").strip()
-        s3_key = self.construir_s3_key(
-            cod_socio=cod_socio,
-            tipo_documento="AVISO_COBRANZA",
-            periodo=periodo,
-            identificador=nro_facip,
-            anio=anio
-        )
+        monto_bs = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
 
         fecha_emision = self._determinar_fecha_emision(anio, nmes, datos_deuda)
         fecha_vencimiento = self._determinar_fecha_vencimiento(anio, nmes, datos_deuda)
 
-        # 1. Preparar contexto enriquecido con historial y catastro real
-        monto_bs = float(datos_deuda.get("MONTOTOTAL") or datos_deuda.get("monto_bs") or 0.0)
-        datos_aviso, datos_socio_completo, historial = await self._preparar_contexto_aviso(
-            cod_socio=cod_socio,
-            periodo=periodo,
-            anio=anio,
-            mes=nmes,
-            monto_bs=monto_bs,
-            nro_aviso=nro_facip,
-            fecha_emision=fecha_emision,
-            fecha_vencimiento=fecha_vencimiento,
-            datos_socio=datos_socio,
-            datos_extra=datos_deuda,
-        )
+        # 1. Intentar consultar el detalle oficial del aviso directamente desde la API de COSMOL
+        detalle_aviso_api = None
+        if nro_facip and nro_facip != "aviso":
+            try:
+                detalle_aviso_api = await self.cosmol.obtener_detalle_aviso(nro_facip)
+            except Exception as exc:
+                logger.warning(f"[STORAGE] No se pudo obtener detalle directo del aviso '{nro_facip}': {exc}")
 
-        # 2. Generar el PDF oficial con ReportLab Vectorial
-        pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
-            datos_deuda=datos_aviso,
-            datos_socio=datos_socio_completo,
-            fecha_emision=fecha_emision,
-            fecha_vencimiento=fecha_vencimiento,
-            historial_consumo=historial,
-        )
+        # 2. Generar el PDF oficial con ReportLab Vectorial (directo o con fallback enriquecido)
+        if detalle_aviso_api:
+            from app.services.generador_aviso_cobranza import generador_aviso_cobranza
+            pdf_bytes = generador_aviso_cobranza.generar(
+                datos_aviso=detalle_aviso_api,
+                datos_socio=detalle_aviso_api,
+                historial_consumo=detalle_aviso_api.get("HISTORIAL") or detalle_aviso_api.get("historial"),
+                conceptos=detalle_aviso_api.get("DETALLE") or detalle_aviso_api.get("detalle")
+            )
+        else:
+            datos_aviso, datos_socio_completo, historial = await self._preparar_contexto_aviso(
+                cod_socio=cod_socio,
+                periodo=periodo,
+                anio=anio,
+                mes=nmes,
+                monto_bs=monto_bs,
+                nro_aviso=nro_facip,
+                fecha_emision=fecha_emision,
+                fecha_vencimiento=fecha_vencimiento,
+                datos_socio=datos_socio,
+                datos_extra=datos_deuda,
+            )
+            pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
+                datos_deuda=datos_aviso,
+                datos_socio=datos_socio_completo,
+                fecha_emision=fecha_emision,
+                fecha_vencimiento=fecha_vencimiento,
+                historial_consumo=historial,
+            )
 
         try:
             await self.guardar_documento(
@@ -669,24 +684,40 @@ class ServicioStorageDocumentos:
                 pdf_bytes = generador_factura_digital.generar_pdf(datos_factura)
         elif doc.tipo_documento == "AVISO_COBRANZA":
             nro_aviso = doc.nro_facip or doc.nro_factura or "aviso"
-            datos_aviso, datos_socio_completo, historial = await self._preparar_contexto_aviso(
-                cod_socio=doc.cod_socio,
-                periodo=doc.periodo,
-                anio=doc.anio or 0,
-                mes=doc.mes or 0,
-                monto_bs=float(doc.monto_bs),
-                nro_aviso=nro_aviso,
-                fecha_emision=doc.fecha_emision,
-                fecha_vencimiento=doc.fecha_vencimiento,
-                datos_socio=datos_socio,
-            )
-            pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
-                datos_deuda=datos_aviso,
-                datos_socio=datos_socio_completo,
-                fecha_emision=doc.fecha_emision,
-                fecha_vencimiento=doc.fecha_vencimiento,
-                historial_consumo=historial,
-            )
+            detalle_aviso_api = None
+            if doc.nro_facip and doc.nro_facip != "aviso":
+                try:
+                    detalle_aviso_api = await self.cosmol.obtener_detalle_aviso(doc.nro_facip)
+                except Exception as exc:
+                    logger.warning(f"[STORAGE] Error al consultar detalle de aviso '{doc.nro_facip}' en COSMOL: {exc}")
+
+            if detalle_aviso_api:
+                from app.services.generador_aviso_cobranza import generador_aviso_cobranza
+                pdf_bytes = generador_aviso_cobranza.generar(
+                    datos_aviso=detalle_aviso_api,
+                    datos_socio=detalle_aviso_api,
+                    historial_consumo=detalle_aviso_api.get("HISTORIAL") or detalle_aviso_api.get("historial"),
+                    conceptos=detalle_aviso_api.get("DETALLE") or detalle_aviso_api.get("detalle")
+                )
+            else:
+                datos_aviso, datos_socio_completo, historial = await self._preparar_contexto_aviso(
+                    cod_socio=doc.cod_socio,
+                    periodo=doc.periodo,
+                    anio=doc.anio or 0,
+                    mes=doc.mes or 0,
+                    monto_bs=float(doc.monto_bs),
+                    nro_aviso=nro_aviso,
+                    fecha_emision=doc.fecha_emision,
+                    fecha_vencimiento=doc.fecha_vencimiento,
+                    datos_socio=datos_socio,
+                )
+                pdf_bytes = self.pdf.generar_pdf_aviso_cobranza(
+                    datos_deuda=datos_aviso,
+                    datos_socio=datos_socio_completo,
+                    fecha_emision=doc.fecha_emision,
+                    fecha_vencimiento=doc.fecha_vencimiento,
+                    historial_consumo=historial,
+                )
         elif doc.tipo_documento == "AVISO_CORTE":
             facturas_pendientes = [{
                 "NMES": doc.mes,

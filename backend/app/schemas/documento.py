@@ -22,6 +22,7 @@ class DocumentoResponse(BaseModel):
     )
     nro_factura: Optional[str] = Field(None, description="Número fiscal de la factura oficial")
     nro_facip: Optional[str] = Field(None, description="Número de aviso de cobranza interno FACIP")
+    nro_aviso: Optional[str] = Field(None, description="Número oficial del aviso de cobranza")
     cod_autorizacion: Optional[str] = Field(None, description="Código de autorización digital SIAT")
     periodo: str = Field(..., description="Periodo de facturación en formato MM/YYYY")
     anio: int = Field(..., description="Año de emisión")

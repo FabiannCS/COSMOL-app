@@ -101,6 +101,22 @@ class GeneradorAvisoCobranzaPdf:
 
         return f"SON: {texto_entero} {centavos:02d}/100 BOLIVIANOS."
 
+    def _formatear_fecha(self, fecha_raw: Any) -> str:
+        """Formatea fechas ISO o con timestamp a DD/MM/YYYY."""
+        if not fecha_raw:
+            return ""
+        from datetime import date as dt_date, datetime as dt_datetime
+        if isinstance(fecha_raw, (dt_date, dt_datetime)):
+            return fecha_raw.strftime("%d/%m/%Y")
+        f_str = str(fecha_raw).strip()
+        if len(f_str) >= 10 and "-" in f_str[:10]:
+            try:
+                parts = f_str[:10].split("-")
+                return f"{parts[2]}/{parts[1]}/{parts[0]}"
+            except Exception:
+                return f_str[:10]
+        return f_str
+
     def _formatear_periodo(self, periodo_raw: str, anio: Optional[int] = None, mes: Optional[int] = None) -> str:
         meses_abreviados = {
             1: "ENE", 2: "FEB", 3: "MAR", 4: "ABR", 5: "MAY", 6: "JUN",
@@ -125,7 +141,7 @@ class GeneradorAvisoCobranzaPdf:
     def generar(
         self,
         datos_aviso: Dict[str, Any],
-        datos_socio: Dict[str, Any],
+        datos_socio: Optional[Dict[str, Any]] = None,
         historial_consumo: Optional[List[Dict[str, Any]]] = None,
         conceptos: Optional[List[Dict[str, Any]]] = None
     ) -> bytes:
@@ -173,7 +189,10 @@ class GeneradorAvisoCobranzaPdf:
 
         # 3. Encabezado Central del Aviso
         nro_aviso = str(
-            datos_aviso.get("nro_factura")
+            datos_aviso.get("NRO_AVISO")
+            or datos_aviso.get("NROAVISO")
+            or datos_aviso.get("nro_aviso")
+            or datos_aviso.get("nro_factura")
             or datos_aviso.get("nro_facip")
             or datos_aviso.get("NROFACTURA")
             or datos_aviso.get("NROFACIP")
@@ -222,29 +241,20 @@ class GeneradorAvisoCobranzaPdf:
         _dash(416)
 
         # Fila 1: Encabezados y Metadatos del Aviso
+        mes_val = datos_aviso.get("mes") or datos_aviso.get("MES")
+        anio_val = datos_aviso.get("anio") or datos_aviso.get("ANIO")
+        periodo_val = datos_aviso.get("periodo") or (f"{str(mes_val).zfill(2)}/{anio_val}" if mes_val and anio_val else "")
         periodo_fmt = self._formatear_periodo(
-            datos_aviso.get("periodo", ""),
-            datos_aviso.get("anio"),
-            datos_aviso.get("mes")
+            periodo_val,
+            int(anio_val) if anio_val else None,
+            int(mes_val) if mes_val else None
         )
-        fecha_emision = str(datos_aviso.get("fecha_emision") or "").strip()
-        if len(fecha_emision) >= 10 and "-" in fecha_emision:
-            try:
-                parts = fecha_emision[:10].split("-")
-                fecha_emision = f"{parts[2]}/{parts[1]}/{parts[0]}"
-            except Exception:
-                pass
+        fecha_emision = self._formatear_fecha(datos_aviso.get("FECHA_EMISION") or datos_aviso.get("fecha_emision"))
+        fecha_vencimiento = self._formatear_fecha(datos_aviso.get("FECHA_VENCIMIENTO") or datos_aviso.get("fecha_vencimiento"))
 
-        fecha_vencimiento = str(datos_aviso.get("fecha_vencimiento") or "").strip()
-        if len(fecha_vencimiento) >= 10 and "-" in fecha_vencimiento:
-            try:
-                parts = fecha_vencimiento[:10].split("-")
-                fecha_vencimiento = f"{parts[2]}/{parts[1]}/{parts[0]}"
-            except Exception:
-                pass
-
-        cod_socio = str(datos_socio.get("CODIGO") or datos_aviso.get("cod_socio") or "").strip()
-        ubicacion = str(datos_socio.get("UBICACION") or datos_socio.get("RUTA") or datos_socio.get("ZONA") or "").strip()
+        datos_socio_efectivo = datos_socio or datos_aviso
+        cod_socio = str(datos_socio_efectivo.get("CODIGO") or datos_socio_efectivo.get("cod_socio") or datos_aviso.get("CODIGO") or datos_aviso.get("cod_socio") or "").strip()
+        ubicacion = str(datos_socio_efectivo.get("UBICACION") or datos_socio_efectivo.get("ubicacion") or datos_aviso.get("UBICACION") or datos_socio_efectivo.get("RUTA") or datos_socio_efectivo.get("ZONA") or "").strip()
 
         _d(216, 26 + 16, "PERIODO")
         _d(216, 52 + 16, periodo_fmt)
@@ -260,12 +270,12 @@ class GeneradorAvisoCobranzaPdf:
         _d(1594, 52 + 16, nro_aviso)
 
         # Fila 2: Datos del Socio / Contrato
-        nombre = str(datos_socio.get("NOMBRE") or datos_socio.get("RAZONSOCIAL") or "").strip()
-        ci = str(datos_socio.get("NROCIONIT") or datos_socio.get("CI") or "").strip()
-        direccion = str(datos_socio.get("DIRECCION") or "").strip()
-        categoria = str(datos_socio.get("CATEGORIA") or "DOMICILIARIA").strip()
-        distrito = str(datos_socio.get("DISTRITO") or "").strip()
-        envio = str(datos_socio.get("ENVIO") or "").strip()
+        nombre = str(datos_socio_efectivo.get("NOMBRE") or datos_socio_efectivo.get("nombre") or datos_aviso.get("NOMBRE") or datos_socio_efectivo.get("RAZONSOCIAL") or "").strip()
+        ci = str(datos_socio_efectivo.get("NUMEROCI") or datos_socio_efectivo.get("NROCIONIT") or datos_socio_efectivo.get("CI") or datos_aviso.get("NUMEROCI") or "").strip()
+        direccion = str(datos_socio_efectivo.get("DIRECCION") or datos_socio_efectivo.get("direccion") or datos_aviso.get("DIRECCION") or "").strip()
+        categoria = str(datos_socio_efectivo.get("CATEGORIA") or datos_aviso.get("CATEGORIA") or "DOMICILIARIA").strip()
+        distrito = str(datos_socio_efectivo.get("DISTRITO") or datos_aviso.get("DISTRITO") or "").strip()
+        envio = str(datos_socio_efectivo.get("ENVIO") or datos_aviso.get("ENVIO") or "").strip()
 
         _d(122, 118 + 16, "NOMBRE")
         _d(122, 146 + 16, nombre)
@@ -282,14 +292,26 @@ class GeneradorAvisoCobranzaPdf:
         _d(1640, 146 + 16, envio)
 
         # Fila 3: Medición y Consumo
-        f_ant = str(datos_aviso.get("fecha_lectura_anterior") or "").strip()
-        f_act = str(datos_aviso.get("fecha_lectura_actual") or "").strip()
-        dias_consumo = str(datos_aviso.get("dias_consumo") or "").strip()
-        lect_ant = str(datos_aviso.get("lectura_anterior") or "").strip()
-        lect_act = str(datos_aviso.get("lectura_actual") or "").strip()
-        consumo_m3 = str(datos_aviso.get("consumo_m3") or "").strip()
-        obs = str(datos_aviso.get("obs") or "").strip()
-        fecha_corte = str(datos_aviso.get("fecha_corte") or "").strip()
+        f_ant = self._formatear_fecha(datos_aviso.get("FECHA_ANTERIOR") or datos_aviso.get("fecha_lectura_anterior"))
+        f_act = self._formatear_fecha(datos_aviso.get("FECHA_ACTUAL") or datos_aviso.get("fecha_lectura_actual"))
+        
+        dias_consumo = str(datos_aviso.get("DIAS_CONSUMO") or datos_aviso.get("dias_consumo") or "").strip()
+        if not dias_consumo and datos_aviso.get("FECHA_ANTERIOR") and datos_aviso.get("FECHA_ACTUAL"):
+            try:
+                from datetime import datetime
+                d1 = datetime.fromisoformat(str(datos_aviso["FECHA_ANTERIOR"])[:10])
+                d2 = datetime.fromisoformat(str(datos_aviso["FECHA_ACTUAL"])[:10])
+                dias_consumo = str(abs((d2 - d1).days))
+            except Exception:
+                dias_consumo = "30"
+        if not dias_consumo:
+            dias_consumo = "30"
+
+        lect_ant = str(datos_aviso.get("LECTURA_ANTEROR") or datos_aviso.get("LECTURA_ANTERIOR") or datos_aviso.get("lectura_anterior") or "").strip()
+        lect_act = str(datos_aviso.get("LECTURA_ACTUAL") or datos_aviso.get("lectura_actual") or "").strip()
+        consumo_m3 = str(datos_aviso.get("CONSUMO") or datos_aviso.get("consumo_m3") or "").strip()
+        obs = str(datos_aviso.get("OBSERVACION") or datos_aviso.get("obs") or "NORMAL").strip()
+        fecha_corte = self._formatear_fecha(datos_aviso.get("FECHA_CORTE") or datos_aviso.get("fecha_corte"))
 
         _d(169, 252 + 16, "FECHA CONSUMO")
         _d(595, 252 + 16, "LECTURA")
@@ -324,35 +346,51 @@ class GeneradorAvisoCobranzaPdf:
         _d(1550, 383 + 16, "IMPORTE Bs.")
 
         # Contenido de Tabla Izquierda (Historial de los últimos 12 meses reales)
-        # Se garantiza orden descendente: meses más recientes / impagas arriba
-        hist = historial_consumo or []
+        hist = historial_consumo or datos_aviso.get("HISTORIAL") or datos_aviso.get("historial") or []
         hist_ordenado = sorted(
             hist,
-            key=lambda x: (int(x.get("anio") or 0), int(x.get("mes") or 0)),
+            key=lambda x: (int(x.get("anio") or x.get("ANIO") or 0), int(x.get("mes") or x.get("MES") or 0)),
             reverse=True
         )
         for i, row in enumerate(hist_ordenado[:12]):
             top_r = 430.0 + i * 27.4
-            p_fmt = self._formatear_periodo(row.get("periodo", ""), row.get("anio"), row.get("mes"))
+            r_mes = row.get("mes") or row.get("MES")
+            r_anio = row.get("anio") or row.get("ANIO")
+            r_periodo = row.get("periodo") or (f"{str(r_mes).zfill(2)}/{r_anio}" if r_mes and r_anio else "")
+            p_fmt = self._formatear_periodo(r_periodo, int(r_anio) if r_anio else None, int(r_mes) if r_mes else None)
             _d(144, top_r + 16, p_fmt)
 
-            if "consumo_m3" in row and row["consumo_m3"] is not None:
-                val_m3 = row["consumo_m3"]
-                _d_right(250 + 80, top_r + 16, f"{val_m3:.0f}" if isinstance(val_m3, (int, float)) else str(val_m3))
-
-            if "monto_bs" in row and row["monto_bs"] is not None:
+            val_m3 = row.get("consumo_m3") if "consumo_m3" in row else row.get("CONSUMO")
+            if val_m3 is not None and str(val_m3).strip() != "":
                 try:
-                    val_bs = float(row["monto_bs"])
+                    num_m3 = float(val_m3)
+                    _d_right(250 + 80, top_r + 16, f"{num_m3:.0f}")
+                except (ValueError, TypeError):
+                    _d_right(250 + 80, top_r + 16, str(val_m3))
+
+            val_monto = row.get("monto_bs") if "monto_bs" in row else row.get("MONTO")
+            if val_monto is not None and str(val_monto).strip() != "":
+                try:
+                    val_bs = float(val_monto)
                     _d_right(494 + 120, top_r + 16, f"{val_bs:.2f}")
                 except (ValueError, TypeError):
-                    _d_right(494 + 120, top_r + 16, str(row["monto_bs"]))
+                    _d_right(494 + 120, top_r + 16, str(val_monto))
 
-            _d(647, top_r + 16, str(row.get("fecha_pago") or ""))
-            _d(860, top_r + 16, str(row.get("estado") or ""))
+            raw_est = row.get("estado") if "estado" in row and row["estado"] is not None else row.get("ESTADO")
+            if str(raw_est).strip() == "0":
+                est_display = "IMPAGA"
+            elif str(raw_est).strip() in ["1", "PAGADA", "PAGADO"]:
+                est_display = "PAGADA"
+            else:
+                est_display = str(raw_est or "")
+
+            f_pago = self._formatear_fecha(row.get("fecha_pago") or row.get("FECHA") or row.get("fecha"))
+            _d(647, top_r + 16, f_pago if est_display == "PAGADA" else "")
+            _d(860, top_r + 16, est_display)
 
         # Contenido de Tabla Derecha (Conceptos Facturados)
-        concs = conceptos or []
-        monto_total = float(datos_aviso.get("monto_total") or datos_aviso.get("monto_bs") or datos_aviso.get("MONTOTOTAL") or 0.0)
+        concs = conceptos or datos_aviso.get("DETALLE") or datos_aviso.get("detalle") or []
+        monto_total = float(datos_aviso.get("IMPORTE") or datos_aviso.get("monto_total") or datos_aviso.get("monto_bs") or datos_aviso.get("MONTOTOTAL") or 0.0)
 
         # Si no hay desglose específico de conceptos en la API, estructurar Agua Potable y Alcantarillado con base al total real
         if not concs and monto_total > 0:
@@ -365,10 +403,17 @@ class GeneradorAvisoCobranzaPdf:
 
         for j, c_row in enumerate(concs):
             top_c = 440.0 + j * 27.4
-            _d_right(1025 + 60, top_c + 16, str(c_row.get("cod", "")))
-            _d(1166, top_c + 16, str(c_row.get("concepto", "")))
-            if "monto_bs" in c_row and c_row["monto_bs"] is not None:
-                _d_right(1567 + 120, top_c + 16, f"{float(c_row['monto_bs']):.2f}")
+            cod_val = c_row.get("COD_DET") if "COD_DET" in c_row else c_row.get("cod", "")
+            concepto_val = c_row.get("CONCEPTO_DET") if "CONCEPTO_DET" in c_row else c_row.get("concepto", "")
+            monto_val = c_row.get("IMPORTE_DET") if "IMPORTE_DET" in c_row else c_row.get("monto_bs")
+
+            _d_right(1025 + 60, top_c + 16, str(cod_val or ""))
+            _d(1166, top_c + 16, str(concepto_val or ""))
+            if monto_val is not None and str(monto_val).strip() != "":
+                try:
+                    _d_right(1567 + 120, top_c + 16, f"{float(monto_val):.2f}")
+                except (ValueError, TypeError):
+                    _d_right(1567 + 120, top_c + 16, str(monto_val))
 
         # Total a Cancelar y Monto en Letras
         _d(1065, 775 + 16, "TOTAL A CANCELAR")
