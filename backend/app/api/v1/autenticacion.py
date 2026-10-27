@@ -2,6 +2,7 @@
 Rutas y Endpoints REST para Autenticación, Onboarding Dual OTP y Multicuenta.
 """
 from typing import Any, Dict, List
+from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, status
 from redis.asyncio import Redis
 from sqlalchemy import select
@@ -15,6 +16,8 @@ from app.schemas.suministro import (
     VincularSuministroRequest,
 )
 from app.schemas.usuario import (
+    CambiarPinAutenticadoRequest,
+    CambiarPinAutenticadoResponse,
     CrearPinPasswordRequest,
     LoginRequest,
     MigrarTelefonoConfirmarRequest,
@@ -435,5 +438,28 @@ async def recuperar_cambiar_pin(
         nuevo_pin=datos.nuevo_pin
     )
     return RecuperarCambiarPinResponse(**res)
+
+
+@router.post(
+    "/cambiar-pin",
+    response_model=CambiarPinAutenticadoResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Cambio voluntario de PIN personal",
+    description="Permite al socio con sesión activa actualizar su PIN o contraseña validando su PIN actual."
+)
+async def cambiar_pin_autenticado(
+    datos: CambiarPinAutenticadoRequest,
+    token_payload: Dict[str, Any] = Depends(get_token_payload),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> CambiarPinAutenticadoResponse:
+    user_id_str = str(token_payload.get("sub", ""))
+    servicio = ServicioAutenticacion(redis, db=db)
+    res = await servicio.cambiar_pin_autenticado(
+        usuario_id=UUID(user_id_str),
+        pin_actual=datos.pin_actual,
+        nuevo_pin=datos.nuevo_pin
+    )
+    return CambiarPinAutenticadoResponse(**res)
 
 

@@ -4,6 +4,7 @@ Pruebas unitarias para los esquemas Pydantic v2 de Autenticación y Suministros 
 import pytest
 from pydantic import ValidationError
 from app.schemas.usuario import (
+    CambiarPinAutenticadoRequest,
     VerificarSocioRequest,
     SolicitarOtpRequest,
     VerificarOtpRequest,
@@ -127,4 +128,32 @@ def test_crear_pin_tolera_campos_extras_y_contextuales():
     assert req.nuevo_pin == "1234"
     assert req.cod_socio == "104523"
     assert req.ci == "8392019"
+
+
+def test_cambiar_pin_autenticado_exitoso():
+    req = CambiarPinAutenticadoRequest(
+        pin_actual="1234",
+        nuevo_pin="5678",
+        confirmar_pin="5678"
+    )
+    assert req.pin_actual == "1234"
+    assert req.nuevo_pin == "5678"
+
+
+def test_cambiar_pin_autenticado_falla_si_confirmacion_difiere():
+    with pytest.raises(ValidationError):
+        CambiarPinAutenticadoRequest(
+            pin_actual="1234",
+            nuevo_pin="5678",
+            confirmar_pin="9999"
+        )
+
+
+def test_cambiar_pin_autenticado_falla_si_nuevo_pin_es_identico_al_actual():
+    with pytest.raises(ValidationError):
+        CambiarPinAutenticadoRequest(
+            pin_actual="1234",
+            nuevo_pin="1234",
+            confirmar_pin="1234"
+        )
 
