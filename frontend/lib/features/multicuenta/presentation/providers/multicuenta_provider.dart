@@ -115,19 +115,47 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
         activeSuministro: active,
         isLoading: false,
       );
+
+      // Persistir suministros para disponibilidad offline
+      await storageService.saveCachedSuministros(
+        lista.map((s) => s.toJson()).toList(),
+      );
     } on AppException catch (e) {
       if (!mounted) return;
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: e.message,
-      );
+      _aplicarFallbackOfflineSuministros(e.message);
     } catch (e) {
       if (!mounted) return;
-      state = state.copyWith(
-        isLoading: false,
-        errorMessage: 'Error al cargar Socios.',
-      );
+      _aplicarFallbackOfflineSuministros('Error al cargar suministros.');
     }
+  }
+
+  Future<void> _aplicarFallbackOfflineSuministros(String defaultError) async {
+    final cached = storageService.getCachedSuministros();
+    if (cached != null && cached.isNotEmpty) {
+      final listaCached =
+          cached.map((item) => SuministroModel.fromJson(item)).toList();
+      final activeCod = await storageService.getActiveCodSocio();
+
+      final active = (activeCod != null && activeCod.isNotEmpty)
+          ? listaCached.firstWhere(
+              (s) => s.codSocio == activeCod,
+              orElse: () => listaCached.first,
+            )
+          : listaCached.first;
+
+      state = state.copyWith(
+        suministros: listaCached,
+        activeSuministro: active,
+        isLoading: false,
+        errorMessage: null,
+      );
+      return;
+    }
+
+    state = state.copyWith(
+      isLoading: false,
+      errorMessage: defaultError,
+    );
   }
 
   Future<void> seleccionarSuministro(SuministroModel suministro) async {
