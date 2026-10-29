@@ -15,6 +15,13 @@ import '../../features/multicuenta/presentation/screens/bind_supply_screen.dart'
 import '../../features/documentos/data/models/documento_model.dart';
 import '../../features/documentos/presentation/screens/pdf_viewer_screen.dart';
 import '../../features/perfil/presentation/screens/cambiar_pin_screen.dart';
+import '../../features/perfil/presentation/screens/perfil_screen.dart';
+import '../../features/reconexion/presentation/screens/reconexion_status_screen.dart';
+import '../../features/reconexion/presentation/screens/solicitar_reconexion_screen.dart';
+import '../../features/reconexion/presentation/screens/reconexion_ticket_screen.dart';
+import '../../features/multicuenta/presentation/providers/multicuenta_provider.dart';
+import '../config/theme/app_colors.dart';
+import '../widgets/cosmol_app_bar.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -119,6 +126,46 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             );
           }
           return PdfViewerScreen(documento: documento);
+        },
+      ),
+      GoRoute(
+        path: '/reconexion',
+        name: 'reconexion',
+        builder: (context, state) => const ReconexionStatusScreen(),
+        routes: [
+          GoRoute(
+            path: 'solicitar',
+            name: 'solicitar-reconexion',
+            builder: (context, state) => const SolicitarReconexionScreen(),
+          ),
+          GoRoute(
+            path: 'ticket/:id',
+            name: 'ticket-reconexion',
+            builder: (context, state) {
+              final idStr = state.pathParameters['id'] ?? '0';
+              final id = int.tryParse(idStr) ?? 0;
+              final extra = state.extra as Map<String, dynamic>?;
+              return ReconexionTicketScreen(
+                idReconexion: id,
+                estado: extra?['estado'] as String?,
+                codSocio: extra?['cod_socio'] as String?,
+              );
+            },
+          ),
+        ],
+      ),
+      GoRoute(
+        path: '/perfil',
+        name: 'perfil',
+        builder: (context, state) {
+          final activeSuministro = ref.watch(multicuentaProvider).activeSuministro;
+          return Scaffold(
+            backgroundColor: AppColors.lightBackground,
+            appBar: const CosmolAppBar(
+              title: 'Mi Perfil',
+            ),
+            body: PerfilScreen(activeSuministro: activeSuministro),
+          );
         },
       ),
       GoRoute(
