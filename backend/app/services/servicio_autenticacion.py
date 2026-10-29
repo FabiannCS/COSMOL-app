@@ -1084,4 +1084,97 @@ class ServicioAutenticacion:
             "cod_socio": cod_socio
         }
 
+    async def cambiar_pin_autenticado(
+        self,
+        usuario_id: uuid.UUID,
+        pin_actual: str,
+        nuevo_pin: str
+    ) -> Dict[str, Any]:
+        """
+        Cambio voluntario de PIN por un usuario con sesión activa.
+        Verifica el PIN actual contra el hash de la base de datos (o memoria de prueba)
+        y registra el nuevo PIN con hash bcrypt.
+        """
+        usuario_db: Optional[Usuario] = None
+        password_hash: Optional[str] = None
+        cod_socio_principal: str = ""
+
+        if self.db:
+            stmt = select(Usuario).options(selectinload(Usuario.suministros)).where(Usuario.id == usuario_id)
+            res = await self.db.execute(stmt)
+            usuario_db = res.scalars().first()
+            if usuario_db:
+                password_hash = usuario_db.password_hash
+                for sumin in usuario_db.suministros:
+                    if sumin.es_suministro_principal:
+                        cod_socio_principal = sumin.cod_socio
+                        break
+                if not cod_socio_principal and usuario_db.suministros:
+                    cod_socio_principal = usuario_db.suministros[0].cod_socio
+
+        # Fallback a memoria si no hay DB
+        if not usuario_db:
+            for c_socio, u_mem in USUARIOS_REGISTRADOS_DB.items():
+                if str(u_mem.get("user_id")) == str(usuario_id):
+                    password_hash = u_mem.get("password_hash")
+                    cod_socio_principal = c_socio
+                    break
+
+        if not password_hash:
+            raise NotFoundException(
+                message="Usuario no encontrado en el sistema.",
+                error_code="USER_NOT_FOUND"
+            )
+
+        # 1. Verificar si la cuenta se encuentra bloqueada por intentos previos
+        bloqueo_key = f"bloqueo:{cod_socio_principal or usuario_id}"
+        ttl_restante = await self.redis.ttl(bloqueo_key)
+        if ttl_restante > 0:
+            minutos = (ttl_restante // 60) + 1
+            raise ForbiddenException(
+                message=f"Operación denegada. La cuenta se encuentra bloqueada temporalmente ({minutos} min restantes).",
+                error_code="ACCOUNT_LOCKED",
+                details={"bloqueado_segundos_restantes": ttl_restante}
+            )
+
+        # 2. Validar que el PIN actual sea correcto
+        if not verify_password(pin_actual, password_hash):
+            fallos_key = f"intentos_fallidos:{cod_socio_principal or usuario_id}"
+            intentos = await self.redis.incr(fallos_key)
+            if intentos >= 3:
+                bloqueo_segundos = 300  # 5 minutos
+                await self.redis.set(bloqueo_key, "1", ex=bloqueo_segundos)
+                raise ForbiddenException(
+                    message="Ha superado el límite de intentos con PIN erróneo. Cuenta bloqueada temporalmente por 5 minutos.",
+                    error_code="ACCOUNT_LOCKED",
+                    details={"bloqueado_segundos_restantes": bloqueo_segundos}
+                )
+            intentos_restantes = 3 - intentos
+            raise BadRequestException(
+                message=f"El PIN actual ingresado es incorrecto. Le quedan {intentos_restantes} intento(s).",
+                error_code="INVALID_CURRENT_PIN"
+            )
+
+        # 3. Limpiar contadores de fallo al acertar el PIN actual
+        if cod_socio_principal:
+            await self.redis.delete(f"intentos_fallidos:{cod_socio_principal}")
+        await self.redis.delete(f"intentos_fallidos:{usuario_id}")
+
+        # 4. Generar nuevo hash bcrypt y guardar
+        nuevo_hash = get_password_hash(nuevo_pin)
+
+        if usuario_db and self.db:
+            usuario_db.password_hash = nuevo_hash
+            await self.db.commit()
+
+        if cod_socio_principal in USUARIOS_REGISTRADOS_DB:
+            USUARIOS_REGISTRADOS_DB[cod_socio_principal]["password_hash"] = nuevo_hash
+
+        logger.info(f"[CAMBIO DE PIN EXITOSO] Socio {cod_socio_principal} (ID {usuario_id}) actualizó su PIN.")
+
+        return {
+            "exito": True,
+            "mensaje": "¡Su PIN de seguridad ha sido actualizado exitosamente!"
+        }
+
 

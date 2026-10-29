@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
 import '../../../../core/widgets/cosmol_button.dart';
@@ -168,12 +169,7 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
                   ),
                   trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
                   onTap: () {
-                    _mostrarInfoModal(
-                      context,
-                      titulo: 'Cambiar PIN / Contraseña',
-                      contenido:
-                          'Para actualizar su clave de acceso personal de forma segura, el sistema enviará un código de verificación único (OTP) de 6 dígitos al número de celular registrado en su perfil.\n\nPodrá elegir recibir el código por WhatsApp o SMS.',
-                    );
+                    context.push('/cambiar-pin');
                   },
                 ),
               ],
@@ -209,7 +205,7 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
                 ListTile(
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                   title: Text('Versión de la App', style: AppTextStyles.body1),
-                  trailing: Text('1.0.4', style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary)),
+                  trailing: Text('1.0.5', style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary)),
                 ),
               ],
             ),

@@ -3,38 +3,18 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../../core/network/api_client.dart';
-import '../../../../core/network/app_config.dart';
 import '../models/documento_model.dart';
-import '../models/historial_factura_item_model.dart';
-
-final legacyDioProvider = Provider<Dio>((ref) {
-  return Dio(
-    BaseOptions(
-      baseUrl: AppConfig.cosmolLegacyUrl,
-      connectTimeout: AppConfig.connectTimeout,
-      receiveTimeout: AppConfig.receiveTimeout,
-      headers: {
-        'Accept': 'application/json',
-      },
-    ),
-  );
-});
 
 final documentosRemoteDataSourceProvider =
     Provider<DocumentosRemoteDataSource>((ref) {
   final dio = ref.watch(apiClientProvider);
-  final legacyDio = ref.watch(legacyDioProvider);
-  return DocumentosRemoteDataSource(dio, legacyDio: legacyDio);
+  return DocumentosRemoteDataSource(dio);
 });
 
 class DocumentosRemoteDataSource {
   final Dio _dio;
-  final Dio _legacyDio;
 
-  DocumentosRemoteDataSource(
-    this._dio, {
-    Dio? legacyDio,
-  }) : _legacyDio = legacyDio ?? _dio;
+  DocumentosRemoteDataSource(this._dio);
 
   /// Consulta la colección organizada de documentos para un código de socio.
   /// Conecta con el endpoint oficial: `GET /api/v1/documentos/{cod_socio}`
@@ -101,38 +81,6 @@ class DocumentosRemoteDataSource {
     } catch (e) {
       if (e is AppException) rethrow;
       throw ServerException(message: 'Error al descargar PDF: ${e.toString()}');
-    }
-  }
-
-  /// Consulta el historial cronológico de los últimos 12 meses de facturación del socio.
-  /// Conecta con el endpoint oficial: `GET /socios/{cod_socio}/historial-facturas`
-  Future<List<HistorialFacturaItemModel>> obtenerHistorial12Meses({
-    required String codSocio,
-  }) async {
-    try {
-      final cleanCodSocio = codSocio.trim();
-      final response = await _legacyDio.get('/socios/$cleanCodSocio/historial-facturas');
-
-      if (response.data is Map<String, dynamic>) {
-        final map = response.data as Map<String, dynamic>;
-        if (map['estado'] == 'exito' && map['datos'] is List) {
-          final list = map['datos'] as List;
-          return list
-              .whereType<Map<String, dynamic>>()
-              .map((item) => HistorialFacturaItemModel.fromJson(item))
-              .toList();
-        }
-        return [];
-      }
-
-      throw const ServerException(
-        message: 'Respuesta inválida del servidor al consultar historial de facturas.',
-      );
-    } on DioException catch (e) {
-      throw _handleDioError(e);
-    } catch (e) {
-      if (e is AppException) rethrow;
-      throw ServerException(message: 'Error al obtener historial de facturas: ${e.toString()}');
     }
   }
 

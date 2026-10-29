@@ -21,6 +21,7 @@ AsyncSessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
+async_session_factory = AsyncSessionLocal
 
 # Base declarativa para modelos ORM
 Base = declarative_base()

@@ -222,6 +222,27 @@ class AuthRemoteDataSource {
     }
   }
 
+  /// 12. Cambio voluntario de PIN (Usuario Autenticado)
+  Future<Map<String, dynamic>> cambiarPinAutenticado({
+    required String pinActual,
+    required String nuevoPin,
+    required String confirmarPin,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/autenticacion/cambiar-pin',
+        data: {
+          'pin_actual': pinActual,
+          'nuevo_pin': nuevoPin,
+          'confirmar_pin': confirmarPin,
+        },
+      );
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
   AppException _handleDioError(DioException e) {
     if (e.error is AppException) {
       return e.error as AppException;

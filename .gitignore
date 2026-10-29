@@ -79,6 +79,8 @@ htmlcov/
 **/coverage/
 .widget_preview/
 migrate_working_dir/
+pubspec.lock
+**/pubspec.lock
 
 # Symbols & Obfuscation
 app.*.symbols

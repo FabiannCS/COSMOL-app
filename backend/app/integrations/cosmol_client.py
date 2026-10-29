@@ -211,6 +211,63 @@ class CosmolLegacyClient(BaseApiClient):
             logger.error(f"Error inesperado al consultar factura '{nro}': {exc}")
             return None
 
+    async def obtener_detalle_aviso(self, nro_aviso: str) -> Optional[Dict[str, Any]]:
+        """
+        Recupera el desglose oficial completo de un Aviso de Cobranza de COSMOL R.L.
+        Endpoint oficial: GET /avisos/{nro_aviso}
+        Retorna diccionario con campos catastrales, lecturas, conceptos de liquidación ('DETALLE')
+        e histórico de facturas ('HISTORIAL'), o None si no existe o la API falla.
+        """
+        nro = str(nro_aviso).strip()
+        if not nro:
+            return None
+
+        endpoint = f"/avisos/{nro}"
+        try:
+            response = await self.request("GET", endpoint)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("estado") == "exito" and data.get("datos"):
+                    datos = data["datos"]
+                    clean_datos = self._limpiar_campos_dict(datos)
+                    detalle = datos.get("DETALLE") or datos.get("detalle") or []
+                    if isinstance(detalle, list):
+                        clean_datos["DETALLE"] = [
+                            self._limpiar_campos_dict(item)
+                            for item in detalle
+                            if isinstance(item, dict)
+                        ]
+                        clean_datos["detalle"] = clean_datos["DETALLE"]
+
+                    historial = datos.get("HISTORIAL") or datos.get("historial") or []
+                    if isinstance(historial, list):
+                        clean_datos["HISTORIAL"] = [
+                            self._limpiar_campos_dict(item)
+                            for item in historial
+                            if isinstance(item, dict)
+                        ]
+                        clean_datos["historial"] = clean_datos["HISTORIAL"]
+
+                    return clean_datos
+                return None
+            elif response.status_code == 404:
+                logger.info(f"Aviso '{nro}' no encontrado en el sistema comercial (HTTP 404)")
+                return None
+            else:
+                logger.warning(
+                    f"Error al consultar detalle de aviso '{nro}' (HTTP {response.status_code}): {response.text}"
+                )
+                return None
+        except httpx.TimeoutException as exc:
+            logger.warning(f"Timeout al consultar aviso '{nro}' en COSMOL ({settings.COSMOL_LEGACY_URL}): {exc}")
+            return None
+        except httpx.RequestError as exc:
+            logger.warning(f"Error de red al consultar aviso '{nro}' con COSMOL: {exc}")
+            return None
+        except Exception as exc:
+            logger.error(f"Error inesperado al consultar aviso '{nro}': {exc}")
+            return None
+
     def _normalizar_consumo_legado(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """
         Normaliza un registro de consumo devuelto por la API oficial de COSMOL
@@ -308,16 +365,34 @@ class CosmolLegacyClient(BaseApiClient):
         if fecha_lectura is not None:
             fecha_lectura = str(fecha_lectura).strip()
 
+        nro_factura = str(clean.get("NROFACTURA") or clean.get("nro_factura") or "").strip() or None
+        nro_aviso = str(clean.get("NROAVISO") or clean.get("nro_aviso") or clean.get("NRO_AVISO") or "").strip() or None
+        cod_socio = str(clean.get("CODIGO") or clean.get("cod_socio") or "").strip() or None
+        nombre = str(clean.get("NOMBRE") or clean.get("nombre") or "").strip() or None
+
         return {
             "periodo": periodo,
             "mes": mes,
             "anio": anio,
+            "nro_factura": nro_factura,
+            "NROFACTURA": nro_factura,
+            "nro_aviso": nro_aviso,
+            "NROAVISO": nro_aviso,
+            "NRO_AVISO": nro_aviso,
+            "cod_socio": cod_socio,
+            "CODIGO": cod_socio,
+            "nombre": nombre,
+            "NOMBRE": nombre,
             "lectura_anterior": lectura_anterior,
             "lectura_actual": lectura_actual,
             "consumo_m3": consumo_m3,
             "monto_bs": monto_bs,
             "estado_lectura": estado_lectura,
             "fecha_lectura": fecha_lectura,
+            "fecha_pago": fecha_lectura,
+            "fecha": fecha_lectura,
+            "FECHA": fecha_lectura,
+            "estado": clean.get("ESTADO"),
         }
 
     async def obtener_historial_consumo(

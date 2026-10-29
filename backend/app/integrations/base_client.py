@@ -52,6 +52,37 @@ class BaseApiClient:
         if self._client and not self._client.is_closed:
             await self._client.aclose()
 
+    @staticmethod
+    def _normalizar_url(base_url: str, endpoint: str) -> str:
+        """
+        Normaliza la URL combinando base_url y endpoint:
+        - Asegura protocolo (http:// si no se especificó).
+        - Elimina barras duplicadas accidentales (//).
+        - Evita duplicación de prefijos de ruta si base_url y endpoint comparten segmento (ej: /api-consultas).
+        """
+        import re
+        b = base_url.strip().rstrip("/")
+        e = endpoint.strip().lstrip("/")
+
+        if e.startswith("http://") or e.startswith("https://"):
+            full = e
+        else:
+            if not b.startswith("http://") and not b.startswith("https://"):
+                b = f"http://{b}"
+            proto, sep, path = b.partition("://")
+            base_segments = [s for s in path.split("/") if s]
+            if base_segments:
+                last = base_segments[-1]
+                if e.startswith(f"{last}/"):
+                    e = e[len(last) + 1:].lstrip("/")
+            full = f"{b}/{e}"
+
+        proto, sep, path = full.partition("://")
+        if sep:
+            clean_path = re.sub(r"/+", "/", path)
+            return f"{proto}://{clean_path}"
+        return re.sub(r"/+", "/", full)
+
     async def request(
         self,
         method: str,
@@ -66,7 +97,7 @@ class BaseApiClient:
         Ejecuta una petición HTTP asíncrona segura.
         """
         client = await self.get_client()
-        url = endpoint if endpoint.startswith("http") else f"{self.base_url}/{endpoint.lstrip('/')}"
+        url = self._normalizar_url(self.base_url, endpoint)
         payload = json if json is not None else json_data
         
         try:

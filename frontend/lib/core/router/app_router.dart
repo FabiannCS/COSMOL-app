@@ -14,6 +14,7 @@ import '../../features/multicuenta/presentation/screens/supplies_list_screen.dar
 import '../../features/multicuenta/presentation/screens/bind_supply_screen.dart';
 import '../../features/documentos/data/models/documento_model.dart';
 import '../../features/documentos/presentation/screens/pdf_viewer_screen.dart';
+import '../../features/perfil/presentation/screens/cambiar_pin_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -119,6 +120,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           }
           return PdfViewerScreen(documento: documento);
         },
+      ),
+      GoRoute(
+        path: '/cambiar-pin',
+        name: 'cambiar-pin',
+        builder: (context, state) => const CambiarPinScreen(),
       ),
     ],
   );

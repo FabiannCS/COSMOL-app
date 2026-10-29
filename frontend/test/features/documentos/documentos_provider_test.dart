@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cosmol_app/features/documentos/data/models/documento_model.dart';
-import 'package:cosmol_app/features/documentos/data/models/historial_factura_item_model.dart';
 import 'package:cosmol_app/features/documentos/domain/repositories/documentos_repository.dart';
 import 'package:cosmol_app/features/documentos/presentation/providers/documentos_provider.dart';
 
@@ -70,18 +69,6 @@ class MockDocumentosRepository implements DocumentosRepository {
       throw Exception('Error de descarga');
     }
     return mockPdfBytes ?? Uint8List.fromList([37, 80, 68, 70, 45, 49, 46, 52]); // %PDF-1.4
-  }
-
-  List<HistorialFacturaItemModel>? mockHistorial;
-
-  @override
-  Future<List<HistorialFacturaItemModel>> obtenerHistorial12Meses({
-    required String codSocio,
-  }) async {
-    if (shouldThrow) {
-      throw Exception('Error al obtener historial');
-    }
-    return mockHistorial ?? [];
   }
 }
 
@@ -167,38 +154,58 @@ void main() {
     });
 
     test('cambiarFiltroFacturas filtra correctamente entre todas, pagadas y pendientes', () async {
-      mockRepository.mockHistorial = [
-        const HistorialFacturaItemModel(
-          codigo: '23807',
-          nombre: 'JUAN PEREZ',
-          mes: 8,
-          anio: 2026,
-          monto: 85.50,
-          estado: '1',
-          consumoM3: 20,
-          fechaPago: '2026-08-25',
-        ),
-        const HistorialFacturaItemModel(
-          codigo: '23807',
-          nombre: 'JUAN PEREZ',
-          mes: 7,
-          anio: 2026,
-          monto: 70.00,
-          estado: '1',
-          consumoM3: 18,
-          fechaPago: '2026-07-28',
-        ),
-        const HistorialFacturaItemModel(
-          codigo: '23807',
-          nombre: 'JUAN PEREZ',
-          mes: 9,
-          anio: 2026,
-          monto: 90.00,
-          estado: '0',
-          consumoM3: 22,
-          fechaPago: null,
-        ),
-      ];
+      mockRepository.mockResponse = ListaDocumentosModel(
+        codSocio: '23807',
+        rolAcceso: 'TITULAR',
+        totalDocumentos: 3,
+        facturas: [
+          DocumentoModel(
+            id: 'doc-factura-1',
+            codSocio: '23807',
+            tipoDocumento: 'FACTURA',
+            nroFactura: '84920',
+            periodo: '08/2026',
+            anio: 2026,
+            mes: 8,
+            montoBs: 85.50,
+            fechaEmision: DateTime(2026, 8, 1),
+            fechaVencimiento: DateTime(2026, 8, 25),
+            estadoPago: 'PAGADO',
+            fechaPago: '2026-08-25',
+          ),
+          DocumentoModel(
+            id: 'doc-factura-2',
+            codSocio: '23807',
+            tipoDocumento: 'FACTURA',
+            nroFactura: '84921',
+            periodo: '07/2026',
+            anio: 2026,
+            mes: 7,
+            montoBs: 70.00,
+            fechaEmision: DateTime(2026, 7, 1),
+            fechaVencimiento: DateTime(2026, 7, 25),
+            estadoPago: 'PAGADO',
+            fechaPago: '2026-07-28',
+          ),
+          DocumentoModel(
+            id: 'doc-factura-3',
+            codSocio: '23807',
+            tipoDocumento: 'FACTURA',
+            nroFactura: '84922',
+            periodo: '09/2026',
+            anio: 2026,
+            mes: 9,
+            montoBs: 90.00,
+            fechaEmision: DateTime(2026, 9, 1),
+            fechaVencimiento: DateTime(2026, 9, 25),
+            estadoPago: 'PENDIENTE',
+            fechaPago: null,
+          ),
+        ],
+        avisosCobranza: const [],
+        avisosCorte: const [],
+        documentos: const [],
+      );
 
       await notifier.cargarDocumentos(codSocio: '23807');
 
