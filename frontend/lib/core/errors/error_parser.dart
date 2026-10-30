@@ -86,10 +86,20 @@ class ErrorParser {
   ) {
     switch (code) {
       case 'ACCOUNT_LOCKED':
-        final int segundos = (details?['bloqueado_segundos_restantes'] as num?)?.toInt() ?? 60;
+        final int segundos = (details?['bloqueado_segundos_restantes'] as num?)?.toInt() ?? 120;
         return AccountLockedException(
           message: message,
           segundosRestantes: segundos,
+          details: details,
+        );
+
+      case 'INVALID_CREDENTIALS':
+        final int fallidos = (details?['intentos_fallidos'] as num?)?.toInt() ?? 1;
+        final int restantes = (details?['intentos_restantes'] as num?)?.toInt() ?? (3 - fallidos).clamp(0, 3);
+        return InvalidCredentialsException(
+          message: message,
+          intentosFallidos: fallidos,
+          intentosRestantes: restantes,
           details: details,
         );
 

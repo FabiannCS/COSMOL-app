@@ -53,17 +53,16 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Configuración de CORS conforme al estándar W3C (previene errores con allow_credentials=True)
-if settings.BACKEND_CORS_ORIGINS:
-    usar_regex = "*" in settings.BACKEND_CORS_ORIGINS
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[] if usar_regex else settings.BACKEND_CORS_ORIGINS,
-        allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.cosmol\.com\.bo)(:\d+)?$" if usar_regex else None,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# Configuración de CORS conforme al estándar W3C (soporta puertos dinámicos de Flutter Web con allow_credentials=True)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[str(o) for o in settings.BACKEND_CORS_ORIGINS if o != "*"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.cosmol\.com\.bo)(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
+)
 
 # Registro de manejadores estándar de excepciones
 register_exception_handlers(app)

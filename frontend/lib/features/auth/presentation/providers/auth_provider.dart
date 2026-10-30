@@ -25,6 +25,8 @@ class AuthState {
   final String? errorMessage;
   final bool isLoading;
   final int bloqueadoSegundosRestantes;
+  final int intentosFallidos;
+  final int intentosRestantes;
   final List<SuministroModel> suministros;
 
   const AuthState({
@@ -33,6 +35,8 @@ class AuthState {
     this.errorMessage,
     this.isLoading = false,
     this.bloqueadoSegundosRestantes = 0,
+    this.intentosFallidos = 0,
+    this.intentosRestantes = 3,
     this.suministros = const [],
   });
 
@@ -42,6 +46,8 @@ class AuthState {
     String? errorMessage,
     bool? isLoading,
     int? bloqueadoSegundosRestantes,
+    int? intentosFallidos,
+    int? intentosRestantes,
     List<SuministroModel>? suministros,
   }) {
     return AuthState(
@@ -51,6 +57,8 @@ class AuthState {
       isLoading: isLoading ?? this.isLoading,
       bloqueadoSegundosRestantes:
           bloqueadoSegundosRestantes ?? this.bloqueadoSegundosRestantes,
+      intentosFallidos: intentosFallidos ?? this.intentosFallidos,
+      intentosRestantes: intentosRestantes ?? this.intentosRestantes,
       suministros: suministros ?? this.suministros,
     );
   }
@@ -225,6 +233,8 @@ class AuthNotifier extends StateNotifier<AuthState> {
         status: AuthStatus.authenticated,
         activeCodSocio: cleanCodSocio,
         suministros: response.suministros,
+        intentosFallidos: 0,
+        intentosRestantes: 3,
         isLoading: false,
         errorMessage: null,
       );
@@ -233,7 +243,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
       if (!mounted) return false;
       state = state.copyWith(
         status: AuthStatus.locked,
-        bloqueadoSegundosRestantes: e.segundosRestantes,
+        bloqueadoSegundosRestantes: e.segundosRestantes > 0 ? e.segundosRestantes : 60,
+        intentosFallidos: 3,
+        intentosRestantes: 0,
+        errorMessage: e.message,
+        isLoading: false,
+      );
+      return false;
+    } on InvalidCredentialsException catch (e) {
+      if (!mounted) return false;
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        intentosFallidos: e.intentosFallidos,
+        intentosRestantes: e.intentosRestantes,
         errorMessage: e.message,
         isLoading: false,
       );
@@ -268,7 +290,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   void handleAccountLocked(int segundos) {
     state = state.copyWith(
       status: AuthStatus.locked,
-      bloqueadoSegundosRestantes: segundos,
+      bloqueadoSegundosRestantes: segundos > 0 ? segundos : 60,
       errorMessage: 'Cuenta bloqueada temporalmente por intentos fallidos.',
     );
   }
@@ -283,6 +305,24 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   void clearError() {
     state = state.copyWith(errorMessage: null);
+  }
+
+  void unlockAccount() {
+    state = state.copyWith(
+      status: AuthStatus.unauthenticated,
+      bloqueadoSegundosRestantes: 0,
+      intentosFallidos: 0,
+      intentosRestantes: 3,
+      errorMessage: null,
+    );
+  }
+
+  void resetIntentos() {
+    state = state.copyWith(
+      intentosFallidos: 0,
+      intentosRestantes: 3,
+      errorMessage: null,
+    );
   }
 
   Future<void> logout() async {

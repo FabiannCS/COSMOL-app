@@ -421,7 +421,11 @@ class ServicioAutenticacion:
             raise ForbiddenException(
                 message=f"Su cuenta se encuentra bloqueada por exceso de intentos fallidos. Intente nuevamente en {minutos} minuto(s).",
                 error_code="ACCOUNT_LOCKED",
-                details={"bloqueado_segundos_restantes": tiempo_restante}
+                details={
+                    "bloqueado_segundos_restantes": tiempo_restante,
+                    "intentos_fallidos": 3,
+                    "intentos_restantes": 0,
+                }
             )
 
         # 2. Buscar usuario registrado en PostgreSQL o memoria
@@ -526,11 +530,13 @@ class ServicioAutenticacion:
 
         if not es_valido:
             intentos = await self.redis.incr(fallos_key)
+            if intentos == 1:
+                await self.redis.expire(fallos_key, 3600)  # 1 hora de inactividad para reiniciar contador
             logger.warning(f"Contraseña incorrecta para socio '{cod_socio}'. Fallo #{intentos}")
 
             if intentos >= 3:
-                escalas = {3: 60, 4: 300, 5: 900}
-                bloqueo_segundos = escalas.get(intentos, 3600)
+                escalas = {3: 60, 4: 120, 5: 400, 6: 800}
+                bloqueo_segundos = escalas.get(intentos, 1800)  # Máximo 30 minutos (1800s)
 
                 await self.redis.set(bloqueo_key, "1", ex=bloqueo_segundos)
                 minutos = bloqueo_segundos // 60
@@ -538,13 +544,22 @@ class ServicioAutenticacion:
                 raise ForbiddenException(
                     message=f"Ha alcanzado 3 intentos fallidos consecutivos. Su cuenta ha sido bloqueada temporalmente por {minutos} minuto(s).",
                     error_code="ACCOUNT_LOCKED",
-                    details={"bloqueado_segundos_restantes": bloqueo_segundos}
+                    details={
+                        "bloqueado_segundos_restantes": bloqueo_segundos,
+                        "intentos_fallidos": intentos,
+                        "intentos_restantes": 0,
+                    }
                 )
 
             intentos_restantes = 3 - intentos
             raise UnauthorizedException(
                 message=f"PIN o contraseña incorrecta. Le quedan {intentos_restantes} intento(s) antes del bloqueo.",
-                error_code="INVALID_CREDENTIALS"
+                error_code="INVALID_CREDENTIALS",
+                details={
+                    "intentos_fallidos": intentos,
+                    "intentos_restantes": intentos_restantes,
+                    "max_intentos": 3,
+                }
             )
 
         # 4. Login exitoso: limpiar contadores de fallos y bloqueos

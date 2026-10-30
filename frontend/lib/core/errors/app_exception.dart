@@ -32,6 +32,20 @@ class UnauthorizedException extends AppException {
   });
 }
 
+/// Credenciales Inválidas (401 - INVALID_CREDENTIALS)
+class InvalidCredentialsException extends AppException {
+  final int intentosFallidos;
+  final int intentosRestantes;
+
+  const InvalidCredentialsException({
+    required super.message,
+    this.intentosFallidos = 1,
+    this.intentosRestantes = 2,
+    super.code = 'INVALID_CREDENTIALS',
+    super.details,
+  });
+}
+
 /// Cuenta Bloqueada por intentos fallidos (403 - ACCOUNT_LOCKED)
 class AccountLockedException extends AppException {
   final int segundosRestantes;
