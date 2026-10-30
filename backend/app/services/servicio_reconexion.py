@@ -20,7 +20,7 @@ class ServicioReconexion:
     Servicio orquestador del Módulo de Reconexión de Servicios de COSMOL R.L.
     Implementa las 5 reglas de negocio técnicas y comerciales:
     1. Verificación de no duplicidad de trámites activos (estado PENDIENTE).
-    2. Límite de morosidad (máximo 2 facturas pendientes de pago).
+    2. Límite de morosidad (máximo 1 factura pendiente de pago).
     3. Resolución y formateo de la ubicación técnica catastral ZONA.RUTA.NROC.NROI.
     4. Ensamblado de parámetros de campo (GPS, foto MinIO, tipo y glosa).
     5. Despacho asíncrono y resiliente de auditoría a COSMOL-Reportes (id_tipo: 5).
@@ -68,7 +68,7 @@ class ServicioReconexion:
                 nombres=nombres_titular
             )
 
-        # 3. Regla 2: Límite de Morosidad (Máximo 2 meses de deuda)
+        # 3. Regla 2: Límite de Morosidad (Máximo 1 factura pendiente permitida)
         deudas = await cosmol_client.obtener_deudas_socio(codigo)
         facturas_pendientes = len(deudas)
         total_deuda_bs = sum(
@@ -76,14 +76,14 @@ class ServicioReconexion:
             for f in deudas
         )
 
-        if facturas_pendientes > 2:
+        if facturas_pendientes > 1:
             return ElegibilidadReconexionResponse(
                 codigo_socio=codigo,
                 es_elegible=False,
                 motivo_bloqueo="ALTA_MOROSIDAD",
                 mensaje_usuario=(
                     f"No es posible solicitar la reconexión porque registra {facturas_pendientes} facturas "
-                    f"pendientes (Deuda total: Bs {total_deuda_bs:.2f}). La normativa permite un máximo de 2 facturas en mora. "
+                    f"pendientes (Deuda total: Bs {total_deuda_bs:.2f}). La normativa permite un máximo de 1 factura en mora. "
                     f"Por favor regularice su pago para habilitar este trámite."
                 ),
                 facturas_pendientes=facturas_pendientes,
@@ -193,15 +193,20 @@ class ServicioReconexion:
             )
 
         # 2. Regla 4: Construir payload oficial para API Central (SAI)
+        # Sanitizar longitudes de campos para la BD de COSMOL (límite VARCHAR(255))
+        foto_limpia = (datos.foto_url or "").strip().split("?")[0][:250]
+        glosa_limpia = datos.glosa.strip()[:250]
+        coordenadas_gps_limpias = datos.coordenadas_gps.strip()[:60]
+
         payload_central: Dict[str, Any] = {
             "usuario_registro": 2,  # Identificador para registros automatizados / app
-            "coordenadas_gps": datos.coordenadas_gps.strip(),
+            "coordenadas_gps": coordenadas_gps_limpias,
             "id_tipo_reconexion": int(datos.id_tipo_reconexion),
             "ubicacion": elegibilidad.ubicacion_catastral,
             "zona": elegibilidad.zona,
             "ruta": elegibilidad.ruta,
-            "glosa": datos.glosa.strip(),
-            "foto": (datos.foto_url or "").strip(),
+            "glosa": glosa_limpia,
+            "foto": foto_limpia,
         }
 
         # 3. Envío al sistema central de COSMOL

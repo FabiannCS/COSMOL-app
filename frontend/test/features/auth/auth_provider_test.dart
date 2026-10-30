@@ -62,6 +62,21 @@ class FakeStorageService implements StorageService {
 
   @override
   bool getBool(String key, {bool defaultValue = false}) => defaultValue;
+
+  @override
+  Future<void> saveCachedDeuda(String codSocio, Map<String, dynamic> data) async {}
+
+  @override
+  Map<String, dynamic>? getCachedDeuda(String codSocio) => null;
+
+  @override
+  DateTime? getDeudaSyncTime(String codSocio) => null;
+
+  @override
+  Future<void> saveCachedSuministros(List<Map<String, dynamic>> data) async {}
+
+  @override
+  List<Map<String, dynamic>>? getCachedSuministros() => null;
 }
 
 class FakeDeviceService implements DeviceService {

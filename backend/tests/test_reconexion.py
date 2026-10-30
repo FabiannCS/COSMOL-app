@@ -51,7 +51,7 @@ async def test_elegibilidad_bloqueada_por_tramite_pendiente(mock_socio_datos):
 
 @pytest.mark.asyncio
 async def test_elegibilidad_bloqueada_por_alta_morosidad(mock_socio_datos):
-    """Regla 2: Más de 2 facturas pendientes bloquea la solicitud."""
+    """Regla 2: Más de 1 factura pendiente bloquea la solicitud (2 o más facturas)."""
     servicio = ServicioReconexion()
 
     with patch("app.services.servicio_reconexion.cosmol_client.obtener_datos_socio", new_callable=AsyncMock) as mock_datos, \
@@ -62,21 +62,20 @@ async def test_elegibilidad_bloqueada_por_alta_morosidad(mock_socio_datos):
         mock_rec.return_value = []
         mock_deudas.return_value = [
             {"NROFACTURA": "101", "MONTOTOTAL": 50.0},
-            {"NROFACTURA": "102", "MONTOTOTAL": 50.0},
-            {"NROFACTURA": "103", "MONTOTOTAL": 60.0},  # 3 facturas > 2
+            {"NROFACTURA": "102", "MONTOTOTAL": 60.0},  # 2 facturas > 1
         ]
 
         resp = await servicio.verificar_elegibilidad("267657")
         assert resp.es_elegible is False
         assert resp.motivo_bloqueo == "ALTA_MOROSIDAD"
-        assert resp.facturas_pendientes == 3
-        assert resp.total_deuda_bs == 160.0
-        assert "registra 3 facturas pendientes" in resp.mensaje_usuario
+        assert resp.facturas_pendientes == 2
+        assert resp.total_deuda_bs == 110.0
+        assert "registra 2 facturas pendientes" in resp.mensaje_usuario
 
 
 @pytest.mark.asyncio
-async def test_elegibilidad_exitosa_y_ubicacion_catastral(mock_socio_datos):
-    """Regla 3: Si mora <= 2 y no hay PENDIENTE, es elegible y compone ZONA.RUTA.NROC.NROI."""
+async def test_elegibilidad_exitosa_con_una_factura_pendiente(mock_socio_datos):
+    """Regla 2 y 3: Con 1 factura pendiente (o 0), es elegible y compone ZONA.RUTA.NROC.NROI."""
     servicio = ServicioReconexion()
 
     with patch("app.services.servicio_reconexion.cosmol_client.obtener_datos_socio", new_callable=AsyncMock) as mock_datos, \
@@ -88,15 +87,14 @@ async def test_elegibilidad_exitosa_y_ubicacion_catastral(mock_socio_datos):
             {"id_reconexion": 900, "estado": "FINALIZADO"}
         ]
         mock_deudas.return_value = [
-            {"NROFACTURA": "101", "MONTOTOTAL": 45.50},
-            {"NROFACTURA": "102", "MONTOTOTAL": 55.00},  # 2 facturas <= 2
+            {"NROFACTURA": "101", "MONTOTOTAL": 45.50},  # 1 factura <= 1 (Elegible)
         ]
 
         resp = await servicio.verificar_elegibilidad("267657")
         assert resp.es_elegible is True
         assert resp.motivo_bloqueo is None
-        assert resp.facturas_pendientes == 2
-        assert resp.total_deuda_bs == 100.50
+        assert resp.facturas_pendientes == 1
+        assert resp.total_deuda_bs == 45.50
         assert resp.ubicacion_catastral == "1.4.120.0"
         assert resp.zona == 1
         assert resp.ruta == 4
@@ -113,7 +111,7 @@ async def test_solicitar_reconexion_exitosa(mock_socio_datos):
         id_tipo_reconexion=TipoReconexionEnum.CORTE_NORMAL,
         coordenadas_gps="-17.345678, -63.254123",
         glosa="Casa frente a la plaza, rejas blancas",
-        foto_url="https://servidor.cosmol.com/uploads/reconexiones/foto.jpg"
+        foto_url="https://servidor.cosmol.com/uploads/reconexiones/foto.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=test"
     )
 
     with patch("app.services.servicio_reconexion.cosmol_client.obtener_datos_socio", new_callable=AsyncMock) as mock_datos, \
