@@ -268,6 +268,32 @@ class CosmolMinioClient:
                 error_code="STORAGE_PRESIGNED_URL_ERROR"
             )
 
+    def subir_foto_evidencia_reconexion(
+        self,
+        cod_socio: str,
+        data_bytes: bytes,
+        extension: str = "jpg",
+        content_type: str = "image/jpeg"
+    ) -> str:
+        """
+        Sube la fotografía de evidencia para el trámite de reconexión.
+        Nomenclatura pactada: reconexiones/reconexion_{codigo_socio}_{timestamp}_{id_aleatorio}.jpg
+        Retorna la clave del objeto almacenado en MinIO.
+        """
+        import time
+        import uuid
+
+        ts = int(time.time())
+        rand_id = uuid.uuid4().hex[:8]
+        ext_limpia = extension.lstrip(".").lower() or "jpg"
+        object_name = f"reconexiones/reconexion_{str(cod_socio).strip()}_{ts}_{rand_id}.{ext_limpia}"
+
+        return self.subir_archivo_bytes(
+            object_name=object_name,
+            data_bytes=data_bytes,
+            content_type=content_type
+            )
+
 
 # Instancia singleton para uso en toda la aplicación
 minio_client = CosmolMinioClient()

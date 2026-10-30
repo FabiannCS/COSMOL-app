@@ -21,6 +21,7 @@ class ReportesApiClient(BaseApiClient):
         1: "Autenticación / Acceso",
         2: "Consulta de Deuda",
         3: "Historial de Consumo",
+        5: "Solicitud de Reconexión",
         9: "Descarga de Factura PDF",
         10: "Pago: Multipago",
         11: "Pago: Pago al Paso",
