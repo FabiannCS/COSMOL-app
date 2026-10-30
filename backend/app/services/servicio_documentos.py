@@ -152,11 +152,12 @@ class ServicioDocumentos:
 
                         monto_bs = round(float(fac.get("MONTOTOTAL") or fac.get("monto_bs") or 0.0), 2)
                         nro_factura = str(fac.get("NROFACTURA") or "").strip() or None
-                        nro_facip = str(fac.get("NROFACIP") or "").strip() or None
+                        nro_aviso_fac = str(fac.get("NROAVISO") or fac.get("NRO_AVISO") or fac.get("nro_aviso") or "").strip() or None
+                        nro_facip = nro_aviso_fac or str(fac.get("NROFACIP") or "").strip() or None
                         cod_autorizacion = str(fac.get("CODAUTORIZACION") or "").strip() or None
                         fecha_emi = self.storage._determinar_fecha_emision(anio, mes, fac)
                         fecha_venc = self.storage._determinar_fecha_vencimiento(anio, mes, fac)
-                        identificador = nro_factura or nro_facip or py_uuid.uuid4().hex[:8]
+                        identificador = nro_aviso_fac or nro_factura or nro_facip or py_uuid.uuid4().hex[:8]
 
                         # 1. Asegurar Aviso de Cobranza para este periodo
                         if ("AVISO_COBRANZA", periodo) not in mapa_existentes:
@@ -191,7 +192,7 @@ class ServicioDocumentos:
                             if doc_exist.estado_pago != "PENDIENTE":
                                 doc_exist.estado_pago = "PENDIENTE"
                                 hubo_cambios = True
-                            if nro_facip and not doc_exist.nro_facip:
+                            if nro_facip and doc_exist.nro_facip != nro_facip:
                                 doc_exist.nro_facip = nro_facip
                                 hubo_cambios = True
 
@@ -272,6 +273,7 @@ class ServicioDocumentos:
                             h_anio = int(h_item.get("anio") or date.today().year)
                             h_periodo = f"{h_mes:02d}/{h_anio}"
                             h_nro_factura = h_item.get("nro_factura") or h_item.get("NROFACTURA")
+                            h_nro_aviso = h_item.get("nro_aviso") or h_item.get("NROAVISO") or h_item.get("NRO_AVISO")
                             h_monto = float(h_item.get("monto_bs") or 0.0)
                             h_fecha = h_item.get("fecha_pago") or h_item.get("fecha") or h_item.get("FECHA")
                             if h_fecha:
@@ -282,6 +284,13 @@ class ServicioDocumentos:
                                 doc_exist_f = mapa_existentes[("FACTURA", h_periodo)]
                                 if not doc_exist_f.nro_factura and h_nro_factura:
                                     doc_exist_f.nro_factura = str(h_nro_factura)
+                                    hubo_cambios = True
+
+                            # Enriquecer nro_aviso en el Aviso de Cobranza si ya existía
+                            if ("AVISO_COBRANZA", h_periodo) in mapa_existentes and h_nro_aviso:
+                                doc_exist_av = mapa_existentes[("AVISO_COBRANZA", h_periodo)]
+                                if doc_exist_av.nro_facip != str(h_nro_aviso):
+                                    doc_exist_av.nro_facip = str(h_nro_aviso)
                                     hubo_cambios = True
 
                             # Si no está en deudas pendientes y tiene nro_factura, es una factura PAGADA
@@ -342,18 +351,19 @@ class ServicioDocumentos:
 
                                 # Asegurar Aviso de Cobranza histórico para este periodo
                                 if ("AVISO_COBRANZA", h_periodo) not in mapa_existentes:
+                                    aviso_ident = str(h_nro_aviso or h_nro_factura)
                                     s3_key_aviso_h = self.storage.construir_s3_key(
                                         cod_socio=cod_socio,
                                         tipo_documento="AVISO_COBRANZA",
                                         periodo=h_periodo,
-                                        identificador=str(h_nro_factura),
+                                        identificador=aviso_ident,
                                         anio=h_anio
                                     )
                                     doc_aviso_h = Documento(
                                         cod_socio=cod_socio,
                                         tipo_documento="AVISO_COBRANZA",
                                         nro_factura=str(h_nro_factura),
-                                        nro_facip=str(h_nro_factura),
+                                        nro_facip=str(h_nro_aviso or h_nro_factura),
                                         periodo=h_periodo,
                                         anio=h_anio,
                                         mes=h_mes,
@@ -439,6 +449,7 @@ class ServicioDocumentos:
                 tipo_documento=doc.tipo_documento,
                 nro_factura=doc.nro_factura,
                 nro_facip=doc.nro_facip,
+                nro_aviso=doc.nro_facip,
                 cod_autorizacion=doc.cod_autorizacion,
                 periodo=doc.periodo,
                 anio=doc.anio,

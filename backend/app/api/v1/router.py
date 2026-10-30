@@ -66,4 +66,13 @@ api_router.include_router(
     tags=["Pasarelas de Pago y Recaudación"]
 )
 
+from app.api.v1.reconexion import router as reconexion_router
+
+# 7. Módulo de Reconexión de Servicios
+api_router.include_router(
+    reconexion_router,
+    prefix="/reconexion",
+    tags=["Módulo de Reconexión de Servicios"]
+)
+
 

@@ -3,7 +3,7 @@ Esquemas Pydantic v2 para la identidad, onboarding dual OTP y autenticación de 
 """
 import re
 from typing import Any, List, Literal, Optional
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from app.schemas.suministro import SuministroResponse
 
 
@@ -344,4 +344,28 @@ class RecuperarCambiarPinRequest(BaseModel):
 class RecuperarCambiarPinResponse(BaseModel):
     mensaje: str
     cod_socio: str
+
+
+class CambiarPinAutenticadoRequest(BaseModel):
+    pin_actual: str = Field(..., min_length=4, max_length=30, description="PIN o contraseña actual.")
+    nuevo_pin: str = Field(..., min_length=4, max_length=30, description="Nuevo PIN o contraseña.")
+    confirmar_pin: str = Field(..., min_length=4, max_length=30, description="Confirmación del nuevo PIN.")
+
+    @field_validator("pin_actual", "nuevo_pin", "confirmar_pin")
+    @classmethod
+    def limpiar_espacios(cls, v: str) -> str:
+        return v.strip()
+
+    @model_validator(mode="after")
+    def validar_cambio_pin(self) -> "CambiarPinAutenticadoRequest":
+        if self.nuevo_pin != self.confirmar_pin:
+            raise ValueError("El nuevo PIN y su confirmación no coinciden.")
+        if self.pin_actual == self.nuevo_pin:
+            raise ValueError("El nuevo PIN no puede ser idéntico al PIN actual.")
+        return self
+
+
+class CambiarPinAutenticadoResponse(BaseModel):
+    exito: bool = True
+    mensaje: str = "¡Su PIN de seguridad ha sido actualizado exitosamente!"
 

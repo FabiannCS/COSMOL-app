@@ -211,6 +211,63 @@ class CosmolLegacyClient(BaseApiClient):
             logger.error(f"Error inesperado al consultar factura '{nro}': {exc}")
             return None
 
+    async def obtener_detalle_aviso(self, nro_aviso: str) -> Optional[Dict[str, Any]]:
+        """
+        Recupera el desglose oficial completo de un Aviso de Cobranza de COSMOL R.L.
+        Endpoint oficial: GET /avisos/{nro_aviso}
+        Retorna diccionario con campos catastrales, lecturas, conceptos de liquidación ('DETALLE')
+        e histórico de facturas ('HISTORIAL'), o None si no existe o la API falla.
+        """
+        nro = str(nro_aviso).strip()
+        if not nro:
+            return None
+
+        endpoint = f"/avisos/{nro}"
+        try:
+            response = await self.request("GET", endpoint)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("estado") == "exito" and data.get("datos"):
+                    datos = data["datos"]
+                    clean_datos = self._limpiar_campos_dict(datos)
+                    detalle = datos.get("DETALLE") or datos.get("detalle") or []
+                    if isinstance(detalle, list):
+                        clean_datos["DETALLE"] = [
+                            self._limpiar_campos_dict(item)
+                            for item in detalle
+                            if isinstance(item, dict)
+                        ]
+                        clean_datos["detalle"] = clean_datos["DETALLE"]
+
+                    historial = datos.get("HISTORIAL") or datos.get("historial") or []
+                    if isinstance(historial, list):
+                        clean_datos["HISTORIAL"] = [
+                            self._limpiar_campos_dict(item)
+                            for item in historial
+                            if isinstance(item, dict)
+                        ]
+                        clean_datos["historial"] = clean_datos["HISTORIAL"]
+
+                    return clean_datos
+                return None
+            elif response.status_code == 404:
+                logger.info(f"Aviso '{nro}' no encontrado en el sistema comercial (HTTP 404)")
+                return None
+            else:
+                logger.warning(
+                    f"Error al consultar detalle de aviso '{nro}' (HTTP {response.status_code}): {response.text}"
+                )
+                return None
+        except httpx.TimeoutException as exc:
+            logger.warning(f"Timeout al consultar aviso '{nro}' en COSMOL ({settings.COSMOL_LEGACY_URL}): {exc}")
+            return None
+        except httpx.RequestError as exc:
+            logger.warning(f"Error de red al consultar aviso '{nro}' con COSMOL: {exc}")
+            return None
+        except Exception as exc:
+            logger.error(f"Error inesperado al consultar aviso '{nro}': {exc}")
+            return None
+
     def _normalizar_consumo_legado(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """
         Normaliza un registro de consumo devuelto por la API oficial de COSMOL
@@ -309,6 +366,7 @@ class CosmolLegacyClient(BaseApiClient):
             fecha_lectura = str(fecha_lectura).strip()
 
         nro_factura = str(clean.get("NROFACTURA") or clean.get("nro_factura") or "").strip() or None
+        nro_aviso = str(clean.get("NROAVISO") or clean.get("nro_aviso") or clean.get("NRO_AVISO") or "").strip() or None
         cod_socio = str(clean.get("CODIGO") or clean.get("cod_socio") or "").strip() or None
         nombre = str(clean.get("NOMBRE") or clean.get("nombre") or "").strip() or None
 
@@ -318,6 +376,9 @@ class CosmolLegacyClient(BaseApiClient):
             "anio": anio,
             "nro_factura": nro_factura,
             "NROFACTURA": nro_factura,
+            "nro_aviso": nro_aviso,
+            "NROAVISO": nro_aviso,
+            "NRO_AVISO": nro_aviso,
             "cod_socio": cod_socio,
             "CODIGO": cod_socio,
             "nombre": nombre,
@@ -398,6 +459,96 @@ class CosmolLegacyClient(BaseApiClient):
             raise ServiceUnavailableException(
                 message="No se pudo conectar con el sistema de medición de COSMOL.",
                 error_code="COSMOL_CONSUMO_NETWORK_ERROR"
+            )
+
+    async def obtener_reconexiones_socio(self, cod_socio: str) -> List[Dict[str, Any]]:
+        """
+        Consulta el historial de órdenes de reconexión del socio en el sistema central de COSMOL.
+        Endpoint oficial: GET /socios/{cod_socio}/reconexiones
+        Retorna lista de órdenes con campos limpios (id_reconexion, fecha, tipo, estado, glosa).
+        """
+        codigo = str(cod_socio).strip()
+        endpoint = f"/socios/{codigo}/reconexiones"
+
+        try:
+            response = await self.request("GET", endpoint)
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("estado") == "exito":
+                    datos = data.get("datos", [])
+                    if isinstance(datos, list):
+                        return [
+                            self._limpiar_campos_dict(item)
+                            for item in datos
+                            if isinstance(item, dict)
+                        ]
+                    elif isinstance(datos, dict):
+                        return [self._limpiar_campos_dict(datos)]
+                return []
+            elif response.status_code == 404:
+                logger.info(f"Socio '{codigo}' sin historial de reconexiones (HTTP 404)")
+                return []
+            else:
+                logger.error(
+                    f"Error al consultar reconexiones de socio '{codigo}' (HTTP {response.status_code}): {response.text}"
+                )
+                return []
+        except httpx.TimeoutException as exc:
+            logger.error(f"Timeout al consultar reconexiones de socio '{codigo}' ({settings.COSMOL_LEGACY_URL}): {exc}")
+            raise ServiceUnavailableException(
+                message="El sistema central de COSMOL no respondió a tiempo al consultar reconexiones.",
+                error_code="COSMOL_RECONEXIONES_TIMEOUT"
+            )
+        except httpx.RequestError as exc:
+            logger.error(f"Error de red al consultar reconexiones con COSMOL: {exc}")
+            raise ServiceUnavailableException(
+                message="No se pudo conectar con el sistema central de COSMOL.",
+                error_code="COSMOL_RECONEXIONES_NETWORK_ERROR"
+            )
+
+    async def registrar_solicitud_reconexion(self, cod_socio: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Registra una orden de reconexión técnica en el sistema central de COSMOL.
+        Endpoint oficial: POST /socios/{cod_socio}/reconexion
+        Retorna diccionario con los datos del trámite emitido (ej. id_reconexion, estado).
+        """
+        codigo = str(cod_socio).strip()
+        endpoint = f"/socios/{codigo}/reconexion"
+
+        try:
+            response = await self.request("POST", endpoint, json=payload)
+            if response.status_code in (200, 201):
+                data = response.json()
+                if data.get("estado") == "exito":
+                    return data.get("datos", {})
+                mensaje = data.get("mensaje", "Respuesta inesperada al registrar reconexión.")
+                logger.warning(f"Rechazo de registro de reconexión para socio '{codigo}': {mensaje}")
+                from app.core.exceptions import BadRequestException
+                raise BadRequestException(message=mensaje, error_code="RECONEXION_RECHAZADA_POR_SISTEMA_CENTRAL")
+            elif response.status_code == 400:
+                data = response.json() if response.headers.get("content-type", "").startswith("application/json") else {}
+                mensaje = data.get("mensaje", "La solicitud fue rechazada por las políticas comerciales de COSMOL.")
+                from app.core.exceptions import BadRequestException
+                raise BadRequestException(message=mensaje, error_code="RECONEXION_POLITICA_RECHAZADA")
+            else:
+                logger.error(
+                    f"Fallo al registrar reconexión de socio '{codigo}' (HTTP {response.status_code}): {response.text}"
+                )
+                raise ServiceUnavailableException(
+                    message="El sistema central no pudo procesar la solicitud de reconexión.",
+                    error_code="COSMOL_RECONEXION_ERROR"
+                )
+        except httpx.TimeoutException as exc:
+            logger.error(f"Timeout al registrar reconexión con COSMOL: {exc}")
+            raise ServiceUnavailableException(
+                message="El sistema central de COSMOL no respondió a tiempo al procesar la reconexión.",
+                error_code="COSMOL_RECONEXION_TIMEOUT"
+            )
+        except httpx.RequestError as exc:
+            logger.error(f"Error de conexión al registrar reconexión con COSMOL: {exc}")
+            raise ServiceUnavailableException(
+                message="No se pudo contactar al sistema central de COSMOL para registrar la reconexión.",
+                error_code="COSMOL_RECONEXION_NETWORK_ERROR"
             )
 
 
