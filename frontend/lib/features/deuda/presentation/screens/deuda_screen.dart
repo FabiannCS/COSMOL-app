@@ -260,7 +260,6 @@ class _DeudaScreenState extends ConsumerState<DeudaScreen> {
                 const SizedBox(height: 16),
               ],
             ],
-
             // Canales de Atención
             const PaymentChannelsCard(),
             const SizedBox(height: 14),
