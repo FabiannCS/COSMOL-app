@@ -9,14 +9,14 @@ logger = logging.getLogger(__name__)
 # Intento 4: 5 minutos (300s)
 # Intento 5: 15 minutos (900s)
 # Intento 6: 30 minutos (1800s)
-# Intento 7+: 1 hora (3600s)
+# Intento 7+: 30 minutos (1800s)
 ESCALA_BLOQUEO = {
-    3: 60,
-    4: 300,
-    5: 900,
-    6: 1800,
+    3: 60,   # 1 minuto (60s)
+    4: 120,  # 2 minutos (120s)
+    5: 400,  # 6.6 minutos (400s)
+    6: 800,  # 13.3 minutos (800s)
 }
-TIEMPO_BLOQUEO_MAXIMO = 3600  # 1 hora
+TIEMPO_BLOQUEO_MAXIMO = 1800  # 30 minutos máximo
 
 
 def calcular_segundos_bloqueo(intentos: int) -> Optional[int]:
@@ -54,10 +54,10 @@ async def registrar_intento_fallido(
     """
     clave_intentos = f"intentos_fallidos:{identificador}"
 
-    # Incrementar contador en Redis con TTL de 2 horas para expirar memoria de fallos inactivos
+    # Incrementar contador en Redis con TTL de 1 hora para expirar memoria de fallos inactivos
     intentos = await redis.incr(clave_intentos)
     if intentos == 1:
-        await redis.expire(clave_intentos, 7200)
+        await redis.expire(clave_intentos, 3600)  # 1 hora de inactividad
 
     segundos_penalizacion = calcular_segundos_bloqueo(intentos)
 

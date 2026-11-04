@@ -117,6 +117,20 @@ class BalanceCardWidget extends ConsumerWidget {
   }
 
   void _showPaymentModal(BuildContext context, WidgetRef ref) {
+    final deudaState = ref.read(deudaProvider);
+    if (deudaState.isOffline) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'El pago en línea requiere conexión a internet activa.',
+          ),
+          backgroundColor: AppColors.warningOrange,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+
     final codSocio = deuda?.codSocio ?? '';
     final saldo = deuda?.saldoPendienteBs.toStringAsFixed(2) ?? '0.00';
 
@@ -349,6 +363,14 @@ class BalanceCardWidget extends ConsumerWidget {
                                                     decoration: BoxDecoration(
                                                       color: const Color(0xFFE8F5E9),
                                                       borderRadius: BorderRadius.circular(6),
+                                                    ),
+                                                    child: const Text(
+                                                      'QR',
+                                                      style: TextStyle(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: Color(0xFF2E7D32),
+                                                      ),
                                                     ),
                                                   ),
                                                 ],

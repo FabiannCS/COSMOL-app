@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/services/storage_service.dart';
 import '../../../../core/errors/app_exception.dart';
 import '../../../multicuenta/presentation/providers/multicuenta_provider.dart';
 import '../../data/models/resumen_deuda_model.dart';
@@ -10,12 +11,16 @@ class DeudaState {
   final ResumenDeudaModel? resumenDeuda;
   final String? errorMessage;
   final String? currentCodSocio;
+  final bool isOffline;
+  final DateTime? lastSyncTime;
 
   const DeudaState({
     this.isLoading = false,
     this.resumenDeuda,
     this.errorMessage,
     this.currentCodSocio,
+    this.isOffline = false,
+    this.lastSyncTime,
   });
 
   DeudaState copyWith({
@@ -23,12 +28,16 @@ class DeudaState {
     ResumenDeudaModel? resumenDeuda,
     String? errorMessage,
     String? currentCodSocio,
+    bool? isOffline,
+    DateTime? lastSyncTime,
   }) {
     return DeudaState(
       isLoading: isLoading ?? this.isLoading,
       resumenDeuda: resumenDeuda ?? this.resumenDeuda,
       errorMessage: errorMessage,
       currentCodSocio: currentCodSocio ?? this.currentCodSocio,
+      isOffline: isOffline ?? this.isOffline,
+      lastSyncTime: lastSyncTime ?? this.lastSyncTime,
     );
   }
 
@@ -45,11 +54,12 @@ class DeudaState {
 
 final deudaProvider = StateNotifierProvider<DeudaNotifier, DeudaState>((ref) {
   final repository = ref.watch(deudaRepositoryProvider);
+  final storageService = ref.watch(storageServiceProvider);
   final activeCodSocio = ref.watch(
     multicuentaProvider.select((s) => s.activeSuministro?.codSocio),
   );
 
-  final notifier = DeudaNotifier(repository);
+  final notifier = DeudaNotifier(repository, storageService);
 
   // Cargar automáticamente la deuda cuando haya un suministro activo
   if (activeCodSocio != null && activeCodSocio.isNotEmpty) {
@@ -61,8 +71,10 @@ final deudaProvider = StateNotifierProvider<DeudaNotifier, DeudaState>((ref) {
 
 class DeudaNotifier extends StateNotifier<DeudaState> {
   final DeudaRepository _repository;
+  final StorageService? _storageService;
 
-  DeudaNotifier(this._repository) : super(const DeudaState());
+  DeudaNotifier(this._repository, [this._storageService])
+      : super(const DeudaState());
 
   Future<void> cargarDeuda(
     String codSocio, {
@@ -89,23 +101,32 @@ class DeudaNotifier extends StateNotifier<DeudaState> {
         forzarRefresco: forzarRefresco,
       );
 
+      final isOfflineData = resumen.origenDatos == 'OFFLINE_CACHE';
+      final syncTime = isOfflineData
+          ? (_storageService?.getDeudaSyncTime(cleanCod) ?? DateTime.now())
+          : DateTime.now();
+
       if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
         resumenDeuda: resumen,
         errorMessage: null,
         currentCodSocio: cleanCod,
+        isOffline: isOfflineData,
+        lastSyncTime: syncTime,
       );
     } on AppException catch (e) {
       if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
+        isOffline: true,
         errorMessage: e.message,
       );
     } catch (e) {
       if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
+        isOffline: true,
         errorMessage:
             'No se pudo consultar el saldo de deuda. Verifique su conexión.',
       );

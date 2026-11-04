@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -112,4 +113,60 @@ class StorageService {
   bool getBool(String key, {bool defaultValue = false}) {
     return _prefs?.getBool(key) ?? defaultValue;
   }
+
+  // --- Caché Local para Resiliencia Offline ---
+  static const String _prefixDeuda = 'cached_deuda_';
+  static const String _prefixSyncTime = 'cached_sync_time_deuda_';
+  static const String _keySuministros = 'cached_suministros_list';
+
+  Future<void> saveCachedDeuda(String codSocio, Map<String, dynamic> data) async {
+    _prefs ??= await SharedPreferences.getInstance();
+    final jsonStr = jsonEncode(data);
+    await _prefs?.setString('$_prefixDeuda$codSocio', jsonStr);
+    await _prefs?.setString(
+      '$_prefixSyncTime$codSocio',
+      DateTime.now().toIso8601String(),
+    );
+  }
+
+  Map<String, dynamic>? getCachedDeuda(String codSocio) {
+    final raw = _prefs?.getString('$_prefixDeuda$codSocio');
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return decoded;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  DateTime? getDeudaSyncTime(String codSocio) {
+    final raw = _prefs?.getString('$_prefixSyncTime$codSocio');
+    if (raw == null || raw.isEmpty) return null;
+    return DateTime.tryParse(raw);
+  }
+
+  Future<void> saveCachedSuministros(List<Map<String, dynamic>> data) async {
+    _prefs ??= await SharedPreferences.getInstance();
+    final jsonStr = jsonEncode(data);
+    await _prefs?.setString(_keySuministros, jsonStr);
+  }
+
+  List<Map<String, dynamic>>? getCachedSuministros() {
+    final raw = _prefs?.getString(_keySuministros);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is List) {
+        return decoded.whereType<Map<String, dynamic>>().toList();
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
 }
+

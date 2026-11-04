@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/errors/app_exception.dart';
+import '../../../../core/errors/error_parser.dart';
 import '../../../../core/network/api_client.dart';
 import '../models/verify_socio_response_model.dart';
 import '../models/otp_models.dart';
@@ -247,48 +248,6 @@ class AuthRemoteDataSource {
     if (e.error is AppException) {
       return e.error as AppException;
     }
-
-    if (e.type == DioExceptionType.connectionTimeout ||
-        e.type == DioExceptionType.receiveTimeout ||
-        e.type == DioExceptionType.sendTimeout ||
-        e.type == DioExceptionType.connectionError) {
-      return const NetworkException();
-    }
-
-    final response = e.response;
-    if (response != null && response.data != null) {
-      final data = response.data;
-      if (data is Map<String, dynamic>) {
-        if (data['error'] is Map<String, dynamic>) {
-          final errMap = data['error'] as Map<String, dynamic>;
-          final message = errMap['message']?.toString() ?? 'Error en la solicitud';
-          final code = errMap['code']?.toString();
-          final details = errMap['details'] as Map<String, dynamic>?;
-
-          if (code == 'ACCOUNT_LOCKED') {
-            final int seg = (details?['bloqueado_segundos_restantes'] as num?)?.toInt() ?? 60;
-            return AccountLockedException(
-              message: message,
-              segundosRestantes: seg,
-              details: details,
-            );
-          }
-
-          return ValidationException(
-            message: message,
-            code: code,
-            details: details,
-          );
-        } else if (data['detail'] != null) {
-          return ValidationException(
-            message: data['detail'].toString(),
-          );
-        }
-      }
-    }
-
-    return ServerException(
-      message: 'Error de comunicación con el servidor (${response?.statusCode ?? 500})',
-    );
+    return ErrorParser.parse(e);
   }
 }

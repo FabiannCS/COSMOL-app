@@ -66,6 +66,14 @@ class _DeudaScreenState extends ConsumerState<DeudaScreen> {
     return '$mes ${now.year}';
   }
 
+  String _formatearFechaHora(DateTime dt) {
+    final dia = dt.day.toString().padLeft(2, '0');
+    final mes = dt.month.toString().padLeft(2, '0');
+    final hora = dt.hour.toString().padLeft(2, '0');
+    final min = dt.minute.toString().padLeft(2, '0');
+    return '$dia/$mes a las $hora:$min';
+  }
+
   @override
   Widget build(BuildContext context) {
     final codSocio = widget.activeSuministro?.codSocio?.toString().trim() ?? '';
@@ -86,6 +94,43 @@ class _DeudaScreenState extends ConsumerState<DeudaScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Banner Informativo de Modo Offline / Resiliencia
+            if (deudaState.isOffline && deudaState.resumenDeuda != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.warningBackground,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppColors.warningOrange.withValues(alpha: 0.35),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.cloud_off_rounded,
+                      color: AppColors.warningOrange,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        deudaState.lastSyncTime != null
+                            ? 'Modo sin conexión. Mostrando última actualización del ${_formatearFechaHora(deudaState.lastSyncTime!)}.'
+                            : 'Modo sin conexión. Mostrando última actualización guardada.',
+                        style: AppTextStyles.caption.copyWith(
+                          color: const Color(0xFFB45309),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
             // Status Banner Flat
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),

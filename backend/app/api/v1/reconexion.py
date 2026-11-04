@@ -127,8 +127,9 @@ async def subir_fotografia_evidencia(
     return {
         "estado": "exito",
         "object_name": object_name,
-        "foto_url": url_presigned,
+        "foto_url": url_proxy,
         "url_proxy": url_proxy,
+        "url_presigned": url_presigned,
     }
 
 

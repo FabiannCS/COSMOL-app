@@ -52,7 +52,7 @@ class SolicitudReconexionCreate(BaseModel):
     glosa: str = Field(
         ...,
         min_length=5,
-        max_length=500,
+        max_length=250,
         description="Descripción con referencias visibles del domicilio (color de puerta, árbol, etc.)"
     )
     foto_url: Optional[str] = Field(

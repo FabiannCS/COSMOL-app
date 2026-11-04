@@ -179,11 +179,11 @@ applicationId = "bo.cosmol.app.cosmol_app"
 ### 4.5 Versionado en `pubspec.yaml`
 En [frontend/pubspec.yaml](file:///d:/COSMOL-app/frontend/pubspec.yaml#L19):
 ```yaml
-version: 1.0.5+5
+version: 1.0.6+6
 ```
 * **Formato:** `[NombreDeVersion]+[NumeroDeCompilacion]`
-* `versionName` (1.0.5): Lo que ve el usuario final.
-* `versionCode` (5): Entero secuencial interno. **Cada nueva subida a Google Play debe incrementar obligatoriamente este número** (ej: `1.0.6+6`).
+* `versionName` (1.0.6): Lo que ve el usuario final.
+* `versionCode` (6): Entero secuencial interno. **Cada nueva subida a Google Play debe incrementar obligatoriamente este número** (ej: `1.0.7+7`).
 
 ### 4.6 Ofuscación y Símbolos de Depuración
 Para compilar un binario ofuscado con símbolos para Google Play:

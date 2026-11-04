@@ -175,7 +175,7 @@ class _SolicitarReconexionScreenState
                   TextFormField(
                     controller: _glosaController,
                     maxLines: 3,
-                    maxLength: 300,
+                    maxLength: 250,
                     style: AppTextStyles.body1,
                     decoration: InputDecoration(
                       hintStyle: AppTextStyles.body2.copyWith(color: AppColors.textMuted),

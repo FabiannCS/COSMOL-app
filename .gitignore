@@ -82,6 +82,13 @@ migrate_working_dir/
 pubspec.lock
 **/pubspec.lock
 
+# Flutter Desktop & Platform Generated Plugin Registrants
+**/linux/flutter/generated_plugin*
+**/linux/flutter/generated_plugins.cmake
+**/windows/flutter/generated_plugin*
+**/windows/flutter/generated_plugins.cmake
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+
 # Symbols & Obfuscation
 app.*.symbols
 app.*.map.json
