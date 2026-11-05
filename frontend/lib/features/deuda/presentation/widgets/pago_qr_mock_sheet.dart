@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import '../../../../core/config/theme/app_colors.dart';
-import '../../../../core/config/theme/app_text_styles.dart';
 import '../../data/models/pago_model.dart';
 import '../providers/deuda_provider.dart';
 import '../providers/pagos_provider.dart';
@@ -108,8 +107,8 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
       setState(() {
         _comprobante = response;
       });
-      // Refrescar deuda localmente
-      ref.read(deudaProvider.notifier).cargarDeuda(widget.codSocio, forzarRefresco: true);
+      // Refrescar deuda visualmente en memoria a Bs 0.00 tras el pago demo
+      ref.read(deudaProvider.notifier).marcarDeudaComoPagadaSimulada();
     }
   }
 

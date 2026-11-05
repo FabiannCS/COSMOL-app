@@ -139,4 +139,18 @@ class DeudaNotifier extends StateNotifier<DeudaState> {
       await cargarDeuda(codSocio, forzarRefresco: true);
     }
   }
+
+  /// Actualiza en memoria el estado visual de la deuda a Bs 0.00 tras una simulación de pago exitosa (Demo).
+  void marcarDeudaComoPagadaSimulada() {
+    if (state.resumenDeuda == null) return;
+    state = state.copyWith(
+      resumenDeuda: state.resumenDeuda!.copyWith(
+        saldoPendienteBs: 0.0,
+        cantidadFacturasPendientes: 0,
+        estaVencido: false,
+        alertaCorte: false,
+        facturasPendientes: const [],
+      ),
+    );
+  }
 }

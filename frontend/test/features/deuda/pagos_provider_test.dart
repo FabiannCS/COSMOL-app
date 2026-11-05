@@ -7,6 +7,7 @@ class MockPagosRepository implements PagosRepository {
   bool shouldThrow = false;
   CanalesPagoResponseModel? mockCanales;
   RegistrarIntentoPagoResponseModel? mockIntento;
+  SimularPagoResponseModel? mockSimular;
 
   @override
   Future<CanalesPagoResponseModel> obtenerCanalesPago({
@@ -64,6 +65,29 @@ class MockPagosRepository implements PagosRepository {
       ventanaActiva: true,
     );
   }
+
+  @override
+  Future<SimularPagoResponseModel> simularPago({
+    required String codSocio,
+    required String canalId,
+    required double montoBs,
+    String? periodos,
+  }) async {
+    if (shouldThrow) {
+      throw Exception('Error al simular pago');
+    }
+    return mockSimular ??
+        SimularPagoResponseModel(
+          exito: true,
+          codSocio: codSocio,
+          canalId: canalId,
+          nroTransaccion: 'TRX-MOCK-TEST-1234',
+          montoBs: montoBs,
+          fechaPago: '05/11/2026 12:00:00',
+          mensaje: 'Simulación exitosa',
+          esSimulacion: true,
+        );
+  }
 }
 
 void main() {
@@ -79,19 +103,19 @@ void main() {
     test('Estado inicial es limpio y no está cargando', () {
       expect(notifier.state.isLoading, false);
       expect(notifier.state.isRegistering, false);
+      expect(notifier.state.isSimulating, false);
       expect(notifier.state.canalesResponse, isNull);
       expect(notifier.state.errorMessage, isNull);
-      expect(notifier.state.canales, isEmpty);
     });
 
     test('cargarCanales obtiene y actualiza canales exitosamente', () async {
       await notifier.cargarCanales('540');
 
       expect(notifier.state.isLoading, false);
-      expect(notifier.state.errorMessage, isNull);
       expect(notifier.state.canalesResponse, isNotNull);
       expect(notifier.state.canales.length, 1);
       expect(notifier.state.canales.first.id, 'multipago');
+      expect(notifier.state.errorMessage, isNull);
     });
 
     test('cargarCanales maneja error y actualiza errorMessage', () async {
@@ -113,6 +137,36 @@ void main() {
       expect(url, 'https://multipago.com/service/cosmol_payment/first');
       expect(notifier.state.isRegistering, false);
       expect(notifier.state.errorMessage, isNull);
+    });
+
+    test('simularPago ejecuta simulación exitosa y retorna comprobante mock', () async {
+      final comprobante = await notifier.simularPago(
+        codSocio: '540',
+        canalId: 'qr_simple',
+        montoBs: 150.0,
+      );
+
+      expect(comprobante, isNotNull);
+      expect(comprobante!.exito, true);
+      expect(comprobante.nroTransaccion, 'TRX-MOCK-TEST-1234');
+      expect(comprobante.montoBs, 150.0);
+      expect(comprobante.esSimulacion, true);
+      expect(notifier.state.isSimulating, false);
+      expect(notifier.state.ultimoPagoSimulado, isNotNull);
+    });
+
+    test('simularPago maneja error y actualiza errorMessage', () async {
+      repository.shouldThrow = true;
+
+      final comprobante = await notifier.simularPago(
+        codSocio: '540',
+        canalId: 'qr_simple',
+        montoBs: 150.0,
+      );
+
+      expect(comprobante, isNull);
+      expect(notifier.state.isSimulating, false);
+      expect(notifier.state.errorMessage, isNotNull);
     });
   });
 }

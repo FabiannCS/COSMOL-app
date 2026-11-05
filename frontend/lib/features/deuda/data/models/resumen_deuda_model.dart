@@ -132,6 +132,38 @@ class ResumenDeudaModel {
     this.origenDatos = 'SISTEMA_LEGADO',
   });
 
+  ResumenDeudaModel copyWith({
+    String? codSocio,
+    DetalleSuministroModel? suministro,
+    String? moneda,
+    double? saldoPendienteBs,
+    int? cantidadFacturasPendientes,
+    String? fechaProximoVencimiento,
+    bool? estaVencido,
+    bool? alertaCorte,
+    String? mensajeAlerta,
+    List<FacturaPendienteModel>? facturasPendientes,
+    String? fechaConsulta,
+    String? origenDatos,
+  }) {
+    return ResumenDeudaModel(
+      codSocio: codSocio ?? this.codSocio,
+      suministro: suministro ?? this.suministro,
+      moneda: moneda ?? this.moneda,
+      saldoPendienteBs: saldoPendienteBs ?? this.saldoPendienteBs,
+      cantidadFacturasPendientes:
+          cantidadFacturasPendientes ?? this.cantidadFacturasPendientes,
+      fechaProximoVencimiento:
+          fechaProximoVencimiento ?? this.fechaProximoVencimiento,
+      estaVencido: estaVencido ?? this.estaVencido,
+      alertaCorte: alertaCorte ?? this.alertaCorte,
+      mensajeAlerta: mensajeAlerta ?? this.mensajeAlerta,
+      facturasPendientes: facturasPendientes ?? this.facturasPendientes,
+      fechaConsulta: fechaConsulta ?? this.fechaConsulta,
+      origenDatos: origenDatos ?? this.origenDatos,
+    );
+  }
+
   bool get hasDebt => saldoPendienteBs > 0.0 || cantidadFacturasPendientes > 0;
 
   factory ResumenDeudaModel.fromJson(Map<String, dynamic> json) {

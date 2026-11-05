@@ -94,3 +94,28 @@ def test_simular_pago_canal_multipago(client, mock_user_id):
         assert data["monto_bs"] == 85.00
         assert data["es_simulacion"] is True
 
+
+def test_simular_pago_cuenta_cualquiera_sin_vincular_exitosa(client, mock_user_id):
+    """
+    Verifica que la simulación mock funcione con cualquier cuenta/suministro,
+    incluso si no está registrado/vinculado al usuario (modo universal demo).
+    """
+    with patch("app.services.servicio_pagos.ServicioPagos._validar_pertenencia_suministro", side_effect=Exception("Suministro no vinculado")), \
+         patch("app.api.v1.pagos.despachar_auditoria_reportes", new_callable=AsyncMock) as mock_auditoria:
+
+        payload = {
+            "canal_id": "qr_simple",
+            "monto_bs": 210.00,
+            "periodos": "10/2026"
+        }
+
+        response = client.post("/api/v1/pagos/simular-pago/99999", json=payload)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["exito"] is True
+        assert data["cod_socio"] == "99999"
+        assert data["es_simulacion"] is True
+        assert data["monto_bs"] == 210.00
+
+
