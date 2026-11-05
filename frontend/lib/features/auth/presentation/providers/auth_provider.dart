@@ -28,6 +28,12 @@ class AuthState {
   final int intentosFallidos;
   final int intentosRestantes;
   final List<SuministroModel> suministros;
+  final bool requiereTransferencia;
+  final String? sessionTransferId;
+  final String? dispositivoAnteriorModelo;
+  final String? telefonoEnmascarado;
+  final String? debugCodigoOtp;
+  final bool isTransferring;
 
   const AuthState({
     this.status = AuthStatus.initial,
@@ -38,6 +44,12 @@ class AuthState {
     this.intentosFallidos = 0,
     this.intentosRestantes = 3,
     this.suministros = const [],
+    this.requiereTransferencia = false,
+    this.sessionTransferId,
+    this.dispositivoAnteriorModelo,
+    this.telefonoEnmascarado,
+    this.debugCodigoOtp,
+    this.isTransferring = false,
   });
 
   AuthState copyWith({
@@ -49,6 +61,13 @@ class AuthState {
     int? intentosFallidos,
     int? intentosRestantes,
     List<SuministroModel>? suministros,
+    bool? requiereTransferencia,
+    String? sessionTransferId,
+    String? dispositivoAnteriorModelo,
+    String? telefonoEnmascarado,
+    String? debugCodigoOtp,
+    bool? isTransferring,
+    bool clearTransferState = false,
   }) {
     return AuthState(
       status: status ?? this.status,
@@ -60,6 +79,21 @@ class AuthState {
       intentosFallidos: intentosFallidos ?? this.intentosFallidos,
       intentosRestantes: intentosRestantes ?? this.intentosRestantes,
       suministros: suministros ?? this.suministros,
+      requiereTransferencia: clearTransferState
+          ? false
+          : (requiereTransferencia ?? this.requiereTransferencia),
+      sessionTransferId:
+          clearTransferState ? null : (sessionTransferId ?? this.sessionTransferId),
+      dispositivoAnteriorModelo: clearTransferState
+          ? null
+          : (dispositivoAnteriorModelo ?? this.dispositivoAnteriorModelo),
+      telefonoEnmascarado: clearTransferState
+          ? null
+          : (telefonoEnmascarado ?? this.telefonoEnmascarado),
+      debugCodigoOtp:
+          clearTransferState ? null : (debugCodigoOtp ?? this.debugCodigoOtp),
+      isTransferring:
+          clearTransferState ? false : (isTransferring ?? this.isTransferring),
     );
   }
 }
@@ -221,6 +255,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
         modeloDispositivo: deviceInfo.deviceModel,
       );
 
+      // Si se detectó una sesión previa en otro hardware, activar flujo de transferencia segura
+      if (response.requiereTransferencia) {
+        if (!mounted) return false;
+        state = state.copyWith(
+          requiereTransferencia: true,
+          sessionTransferId: response.sessionTransferId,
+          dispositivoAnteriorModelo: response.dispositivoAnteriorModelo,
+          telefonoEnmascarado: response.telefonoEnmascarado,
+          isLoading: false,
+          errorMessage: null,
+        );
+        return false;
+      }
+
       // Guardar tokens y suministro activo
       await storageService.saveTokens(
         accessToken: response.accessToken,
@@ -233,6 +281,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         status: AuthStatus.authenticated,
         activeCodSocio: cleanCodSocio,
         suministros: response.suministros,
+        clearTransferState: true,
         intentosFallidos: 0,
         intentosRestantes: 3,
         isLoading: false,
@@ -285,6 +334,92 @@ class AuthNotifier extends StateNotifier<AuthState> {
       );
       return false;
     }
+  }
+
+  /// Solicita el código OTP para transferir la sesión a este equipo.
+  Future<bool> solicitarOtpTransferencia({String canal = 'WHATSAPP'}) async {
+    final transferId = state.sessionTransferId;
+    if (transferId == null || transferId.isEmpty) return false;
+
+    state = state.copyWith(isLoading: true, errorMessage: null);
+    try {
+      final res = await authRepository.solicitarOtpTransferencia(
+        sessionTransferId: transferId,
+        canal: canal,
+      );
+      if (!mounted) return false;
+      state = state.copyWith(
+        isLoading: false,
+        debugCodigoOtp: res.debugCodigoOtp,
+      );
+      return true;
+    } on AppException catch (e) {
+      if (!mounted) return false;
+      state = state.copyWith(isLoading: false, errorMessage: e.message);
+      return false;
+    } catch (_) {
+      if (!mounted) return false;
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: 'Error al solicitar el código de transferencia.',
+      );
+      return false;
+    }
+  }
+
+  /// Confirma el código OTP, transfiriendo formalmente la sesión a este hardware.
+  Future<bool> confirmarTransferenciaDispositivo({
+    required String codSocio,
+    required String codigoOtp,
+  }) async {
+    final transferId = state.sessionTransferId;
+    if (transferId == null || transferId.isEmpty) return false;
+
+    state = state.copyWith(isTransferring: true, errorMessage: null);
+    try {
+      final response = await authRepository.confirmarTransferenciaDispositivo(
+        sessionTransferId: transferId,
+        codigoOtp: codigoOtp.trim(),
+      );
+
+      await storageService.saveTokens(
+        accessToken: response.accessToken,
+        refreshToken: response.refreshToken,
+      );
+      await storageService.saveActiveCodSocio(codSocio.trim());
+
+      if (!mounted) return true;
+      state = state.copyWith(
+        status: AuthStatus.authenticated,
+        activeCodSocio: codSocio.trim(),
+        suministros: response.suministros,
+        clearTransferState: true,
+        intentosFallidos: 0,
+        intentosRestantes: 3,
+        isLoading: false,
+        errorMessage: null,
+      );
+      return true;
+    } on AppException catch (e) {
+      if (!mounted) return false;
+      state = state.copyWith(isTransferring: false, errorMessage: e.message);
+      return false;
+    } catch (_) {
+      if (!mounted) return false;
+      state = state.copyWith(
+        isTransferring: false,
+        errorMessage: 'Error al confirmar la transferencia de sesión.',
+      );
+      return false;
+    }
+  }
+
+  /// Cancela el proceso de transferencia. El dispositivo anterior no se modifica en lo absoluto.
+  void cancelarTransferencia() {
+    state = state.copyWith(
+      clearTransferState: true,
+      errorMessage: null,
+    );
   }
 
   void handleAccountLocked(int segundos) {

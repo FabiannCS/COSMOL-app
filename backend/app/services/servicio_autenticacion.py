@@ -33,7 +33,10 @@ from app.integrations.cosmol_client import cosmol_client, CosmolLegacyClient
 from app.integrations.sms_client import sms_client
 from app.integrations.whatsapp_client import whatsapp_client
 from app.schemas.suministro import SuministroResponse
-from app.schemas.usuario import TokenResponse
+from app.schemas.usuario import (
+    TokenResponse,
+    TransferenciaSolicitarOtpResponse,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -566,7 +569,59 @@ class ServicioAutenticacion:
         await self.redis.delete(fallos_key)
         await self.redis.delete(bloqueo_key)
 
-        # 5. Persistir o actualizar Dispositivo si hay conexión DB
+        # 5. Control de sesión única por hardware: verificar si ya existe sesión activa en otro dispositivo
+        sesion_dispositivo_key = f"sesion_activa:{user_id}"
+        device_activo_raw = await self.redis.get(sesion_dispositivo_key)
+        device_activo = device_activo_raw.decode("utf-8") if isinstance(device_activo_raw, bytes) else device_activo_raw
+
+        if device_activo and device_activo != device_id:
+            # ¡Sesión activa detectada en otro hardware!
+            # REGLA DE ORO: NO sobreescribir la sesión activa todavía ni emitir tokens de acceso.
+            # El dispositivo anterior permanece 100% activo sin afectación si el usuario cancela o abandona.
+            modelo_anterior = "Otro dispositivo móvil"
+            if self.db and usuario_db:
+                stmt_prev = select(Dispositivo.modelo_dispositivo).where(
+                    Dispositivo.usuario_id == usuario_db.id,
+                    Dispositivo.device_id == device_activo
+                )
+                res_prev = await self.db.execute(stmt_prev)
+                mod_prev = res_prev.scalar_one_or_none()
+                if mod_prev:
+                    modelo_anterior = mod_prev
+
+            tel_socio = usuario_db.telefono if usuario_db else USUARIOS_REGISTRADOS_DB.get(cod_socio, {}).get("telefono", "")
+            tel_enmascarado = enmascarar_telefono(tel_socio)
+            session_transfer_id = f"trf_{uuid.uuid4().hex[:16]}"
+
+            datos_transferencia = {
+                "user_id": user_id,
+                "cod_socio": cod_socio,
+                "nombre_socio": nombre_socio,
+                "nuevo_device_id": device_id,
+                "nuevo_modelo": modelo_dispositivo,
+                "telefono": tel_socio,
+                "device_anterior": device_activo,
+                "modelo_anterior": modelo_anterior
+            }
+            await self.redis.set(
+                f"transferencia_dispositivo:{session_transfer_id}",
+                json.dumps(datos_transferencia),
+                ex=600  # 10 minutos de vigencia para la solicitud
+            )
+
+            logger.info(
+                f"Intento de login para socio '{cod_socio}' desde nuevo dispositivo '{device_id}' ({modelo_dispositivo}). "
+                f"Sesión activa previa detectada en '{device_activo}' ({modelo_anterior}). Requiere confirmación OTP."
+            )
+            return TokenResponse(
+                requiere_transferencia=True,
+                session_transfer_id=session_transfer_id,
+                dispositivo_anterior_modelo=modelo_anterior,
+                telefono_enmascarado=tel_enmascarado,
+                mensaje=f"Ya existe una sesión activa en {modelo_anterior}. Para continuar en este equipo, autorice la transferencia mediante código OTP."
+            )
+
+        # 6. Persistir o actualizar Dispositivo si hay conexión DB
         if self.db and usuario_db:
             stmt_disp = select(Dispositivo).where(
                 Dispositivo.usuario_id == usuario_db.id,
@@ -588,11 +643,10 @@ class ServicioAutenticacion:
                 self.db.add(disp_nuevo)
             await self.db.commit()
 
-        # 6. Sesión única por hardware (device_id) en Redis
-        sesion_dispositivo_key = f"sesion_activa:{user_id}"
+        # 7. Sesión única por hardware (device_id) en Redis
         await self.redis.set(sesion_dispositivo_key, device_id)
 
-        # 7. Emitir JWT Access Token y Refresh Token
+        # 8. Emitir JWT Access Token y Refresh Token
         extra_claims = {
             "cod_socio": cod_socio,
             "device_id": device_id,
@@ -607,7 +661,8 @@ class ServicioAutenticacion:
             access_token=access_token,
             refresh_token=refresh_token,
             token_type="bearer",
-            suministros=suministros_lista
+            suministros=suministros_lista,
+            requiere_transferencia=False
         )
 
     # --------------------------------------------------------------------------
@@ -711,6 +766,184 @@ class ServicioAutenticacion:
         await self.redis.delete(sesion_key)
         logger.info(f"Sesión cerrada en servidor para usuario {user_id} (dispositivo: {device_id})")
         return {"mensaje": "Sesión cerrada exitosamente en el servidor.", "status": "ok"}
+
+    # --------------------------------------------------------------------------
+    # TRANSFERENCIA DE SESIÓN A NUEVO DISPOSITIVO (SINGLE-DEVICE ESTILO WHATSAPP)
+    # --------------------------------------------------------------------------
+    async def solicitar_otp_transferencia(
+        self,
+        session_transfer_id: str,
+        canal: str = "WHATSAPP"
+    ) -> TransferenciaSolicitarOtpResponse:
+        """
+        Despacha un código OTP de 6 dígitos al celular del socio para autorizar el traspaso
+        de la sesión al nuevo dispositivo móvil.
+        Expone el código OTP en pantalla (debug_codigo_otp) para la demostración interactiva.
+        """
+        key_trf = f"transferencia_dispositivo:{session_transfer_id}"
+        datos_raw = await self.redis.get(key_trf)
+        if not datos_raw:
+            raise BadRequestException(
+                message="La solicitud de transferencia de sesión ha expirado o es inválida. Intente iniciar sesión nuevamente.",
+                error_code="TRANSFER_SESSION_EXPIRED"
+            )
+
+        datos = json.loads(datos_raw if isinstance(datos_raw, str) else datos_raw.decode("utf-8"))
+        telefono = datos.get("telefono", "")
+        cod_socio = datos.get("cod_socio", "")
+
+        # Generar código OTP criptográficamente seguro de 6 dígitos
+        codigo_otp = f"{secrets.randbelow(900000) + 100000}"
+
+        # Guardar OTP asociado a esta transferencia en Redis
+        datos["codigo_otp"] = codigo_otp
+        datos["fallos_otp"] = 0
+        await self.redis.set(key_trf, json.dumps(datos), ex=600)
+
+        # Despacho por canal oficial (con fallback seguro en demostración)
+        canal_upper = canal.upper()
+        try:
+            if canal_upper == "WHATSAPP":
+                await whatsapp_client.enviar_otp(telefono, codigo_otp)
+            elif canal_upper == "SMS":
+                await sms_client.enviar_sms_otp(telefono, codigo_otp)
+        except Exception as e:
+            logger.warning(f"Despacho externo falló ({canal_upper}), usando modo demostración/servidor: {e}")
+
+        logger.info(f"[OTP TRANSFERENCIA DISPOSITIVO] Socio: {cod_socio} | Cel: {telefono} | Código: {codigo_otp}")
+
+        return TransferenciaSolicitarOtpResponse(
+            session_transfer_id=session_transfer_id,
+            mensaje=f"Código de seguridad enviado vía {canal_upper}.",
+            telefono_enmascarado=enmascarar_telefono(telefono),
+            ttl_segundos=300,
+            debug_codigo_otp=codigo_otp
+        )
+
+    async def confirmar_transferencia_dispositivo(
+        self,
+        session_transfer_id: str,
+        codigo_otp: str
+    ) -> TokenResponse:
+        """
+        Valida el código OTP ingresado en el nuevo dispositivo.
+        Al coincidir:
+        1. Revoca formalmente la sesión anterior sobreescribiendo sesion_activa:{user_id}.
+        2. Registra el nuevo hardware en PostgreSQL.
+        3. Emite los tokens JWT completos.
+        Si se ingresa código incorrecto o se cancela, la sesión del equipo anterior NUNCA es afectada.
+        """
+        key_trf = f"transferencia_dispositivo:{session_transfer_id}"
+        datos_raw = await self.redis.get(key_trf)
+        if not datos_raw:
+            raise BadRequestException(
+                message="La sesión de transferencia ha expirado o no es válida. Inicie sesión nuevamente.",
+                error_code="TRANSFER_SESSION_EXPIRED"
+            )
+
+        datos = json.loads(datos_raw if isinstance(datos_raw, str) else datos_raw.decode("utf-8"))
+        codigo_esperado = datos.get("codigo_otp")
+        if not codigo_esperado:
+            raise BadRequestException(
+                message="Primero debe solicitar el código de seguridad OTP.",
+                error_code="OTP_NOT_REQUESTED"
+            )
+
+        if codigo_otp.strip() != str(codigo_esperado).strip():
+            fallos = datos.get("fallos_otp", 0) + 1
+            if fallos >= 3:
+                # Superó los intentos: quemar la sesión de transferencia por seguridad
+                await self.redis.delete(key_trf)
+                raise ForbiddenException(
+                    message="Demasiados intentos erróneos de código OTP. La transferencia ha sido cancelada por seguridad. Su sesión en el equipo anterior sigue activa.",
+                    error_code="OTP_MAX_ATTEMPTS"
+                )
+            datos["fallos_otp"] = fallos
+            await self.redis.set(key_trf, json.dumps(datos), ex=600)
+            intentos_restantes = 3 - fallos
+            raise BadRequestException(
+                message=f"Código OTP incorrecto. Le quedan {intentos_restantes} intento(s).",
+                error_code="OTP_INVALID"
+            )
+
+        # ¡CÓDIGO CORRECTO! CONSUMAR EL TRASPASO
+        user_id = datos["user_id"]
+        cod_socio = datos["cod_socio"]
+        nombre_socio = datos.get("nombre_socio", "Socio COSMOL")
+        nuevo_device_id = datos["nuevo_device_id"]
+        nuevo_modelo = datos.get("nuevo_modelo")
+
+        # 1. Consumir y borrar la clave temporal de transferencia
+        await self.redis.delete(key_trf)
+
+        # 2. Registrar o actualizar Dispositivo en PostgreSQL
+        suministros_lista: List[SuministroResponse] = []
+        if self.db:
+            u_uuid = uuid.UUID(user_id)
+            stmt_disp = select(Dispositivo).where(
+                Dispositivo.usuario_id == u_uuid,
+                Dispositivo.device_id == nuevo_device_id
+            )
+            res_disp = await self.db.execute(stmt_disp)
+            disp_existente = res_disp.scalars().first()
+            if disp_existente:
+                if nuevo_modelo:
+                    disp_existente.modelo_dispositivo = nuevo_modelo
+                disp_existente.ultimo_acceso = datetime.now(timezone.utc)
+            else:
+                disp_nuevo = Dispositivo(
+                    usuario_id=u_uuid,
+                    device_id=nuevo_device_id,
+                    modelo_dispositivo=nuevo_modelo,
+                    ultimo_acceso=datetime.now(timezone.utc)
+                )
+                self.db.add(disp_nuevo)
+
+            # Cargar suministros del usuario
+            stmt_u = select(Usuario).options(selectinload(Usuario.suministros)).where(Usuario.id == u_uuid)
+            res_u = await self.db.execute(stmt_u)
+            usuario_db = res_u.scalars().first()
+            if usuario_db:
+                nombres = await asyncio.gather(
+                    *[self._obtener_nombre_socio(s.cod_socio) for s in usuario_db.suministros],
+                    return_exceptions=True
+                )
+                suministros_lista = [
+                    SuministroResponse(
+                        id=s.id,
+                        cod_socio=s.cod_socio,
+                        alias=s.alias,
+                        nombre=nom if isinstance(nom, str) else None,
+                        rol=s.rol,
+                        es_suministro_principal=s.es_suministro_principal
+                    )
+                    for s, nom in zip(usuario_db.suministros, nombres)
+                ]
+            await self.db.commit()
+
+        # 3. REGLA CRÍTICA: Asignar el nuevo device_id como único activo en Redis
+        # (A partir de este momento, cualquier petición del equipo anterior recibirá SESSION_REVOKED_NEW_DEVICE)
+        sesion_dispositivo_key = f"sesion_activa:{user_id}"
+        await self.redis.set(sesion_dispositivo_key, nuevo_device_id)
+
+        # 4. Emitir Access Token y Refresh Token definitivos para el nuevo equipo
+        extra_claims = {
+            "cod_socio": cod_socio,
+            "device_id": nuevo_device_id,
+            "nombre": nombre_socio
+        }
+        access_token = create_access_token(subject=user_id, extra_claims=extra_claims)
+        refresh_token = create_refresh_token(subject=user_id)
+
+        logger.info(f"Sesión transferida exitosamente para socio '{cod_socio}' hacia nuevo hardware '{nuevo_device_id}' ({nuevo_modelo})")
+        return TokenResponse(
+            access_token=access_token,
+            refresh_token=refresh_token,
+            token_type="bearer",
+            suministros=suministros_lista,
+            requiere_transferencia=False
+        )
+
 
     # --------------------------------------------------------------------------
     # MIGRACIÓN SEGURA DE NÚMERO CELULAR (CAMBIO DE CHIP / TELÉFONO NUEVO)

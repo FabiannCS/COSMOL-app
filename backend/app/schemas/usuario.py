@@ -167,14 +167,35 @@ class LoginRequest(BaseModel):
 
 class TokenResponse(BaseModel):
     """
-    Respuesta exitosa de autenticación con tokens JWT y la lista de suministros asociados.
+    Respuesta de autenticación con tokens JWT y lista de suministros asociados,
+    o advertencia de sesión activa en otro hardware que requiere transferencia OTP.
     """
-    access_token: str = Field(..., description="JWT de acceso de corta duración (15 minutos).")
-    refresh_token: str = Field(..., description="JWT de renovación de larga duración (7 días).")
+    access_token: Optional[str] = Field(default=None, description="JWT de acceso de corta duración (15 minutos).")
+    refresh_token: Optional[str] = Field(default=None, description="JWT de renovación de larga duración (7 días).")
     token_type: str = Field(default="bearer", description="Tipo de autorización HTTP.")
     suministros: List[SuministroResponse] = Field(
         default_factory=list,
         description="Suministros vinculados a este socio para el selector del Dashboard."
+    )
+    requiere_transferencia: bool = Field(
+        default=False,
+        description="True si se detectó una sesión activa en otro hardware que requiere confirmación OTP."
+    )
+    session_transfer_id: Optional[str] = Field(
+        default=None,
+        description="ID temporal en Redis para completar la transferencia tras verificar OTP."
+    )
+    dispositivo_anterior_modelo: Optional[str] = Field(
+        default=None,
+        description="Modelo descriptivo del dispositivo donde actualmente reside la sesión activa."
+    )
+    telefono_enmascarado: Optional[str] = Field(
+        default=None,
+        description="Número de teléfono celular enmascarado del socio."
+    )
+    mensaje: Optional[str] = Field(
+        default=None,
+        description="Mensaje explicativo para la interfaz de usuario."
     )
 
 
@@ -265,6 +286,44 @@ class MigrarTelefonoConfirmarResponse(BaseModel):
     cod_socio: str = Field(...)
     nombre: str = Field(...)
     suministros: List[SuministroResponse] = Field(default_factory=list)
+
+
+# ------------------------------------------------------------------------------
+# TRANSFERENCIA DE SESIÓN A NUEVO DISPOSITIVO (ESTILO WHATSAPP SINGLE-DEVICE)
+# ------------------------------------------------------------------------------
+
+class TransferenciaSolicitarOtpRequest(BaseModel):
+    session_transfer_id: str = Field(..., description="ID de sesión obtenido en el intento de login.")
+    canal: Literal["WHATSAPP", "SMS"] = Field(default="WHATSAPP", description="Canal para despachar el OTP.")
+
+    @field_validator("canal", mode="before")
+    @classmethod
+    def normalizar_canal(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            return v.strip().upper()
+        return v
+
+
+class TransferenciaSolicitarOtpResponse(BaseModel):
+    session_transfer_id: str = Field(..., description="ID de sesión de transferencia.")
+    mensaje: str = Field(..., description="Mensaje explicativo.")
+    telefono_enmascarado: str = Field(..., description="Número celular enmascarado.")
+    ttl_segundos: int = Field(default=300, description="Vigencia del código OTP en segundos.")
+    debug_codigo_otp: Optional[str] = Field(default=None, description="Código OTP expuesto en pantalla para demostración.")
+
+
+class TransferenciaConfirmarRequest(BaseModel):
+    session_transfer_id: str = Field(..., description="ID de sesión de transferencia.")
+    codigo_otp: str = Field(..., min_length=6, max_length=6, description="Código OTP de 6 dígitos ingresado por el socio.")
+
+    @field_validator("codigo_otp")
+    @classmethod
+    def validar_codigo(cls, v: str) -> str:
+        v = v.strip()
+        if not v.isdigit() or len(v) != 6:
+            raise ValueError("El código OTP debe ser numérico de 6 dígitos.")
+        return v
+
 
 
 # ------------------------------------------------------------------------------

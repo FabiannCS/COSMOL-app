@@ -117,6 +117,44 @@ class AuthRemoteDataSource {
     }
   }
 
+  /// Transferencia de Dispositivo Paso 1: Solicitar OTP
+  Future<TransferenciaSolicitarOtpResponseModel> solicitarOtpTransferencia({
+    required String sessionTransferId,
+    String canal = 'WHATSAPP',
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/autenticacion/transferir-dispositivo/solicitar-otp',
+        data: {
+          'session_transfer_id': sessionTransferId,
+          'canal': canal,
+        },
+      );
+      return TransferenciaSolicitarOtpResponseModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
+  /// Transferencia de Dispositivo Paso 2: Confirmar OTP y transferir sesión
+  Future<LoginResponseModel> confirmarTransferenciaDispositivo({
+    required String sessionTransferId,
+    required String codigoOtp,
+  }) async {
+    try {
+      final response = await _dio.post(
+        '/autenticacion/transferir-dispositivo/confirmar',
+        data: {
+          'session_transfer_id': sessionTransferId,
+          'codigo_otp': codigoOtp,
+        },
+      );
+      return LoginResponseModel.fromJson(response.data);
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
   /// 6. Recuperación Paso 1: Validar Titular (cod_socio + CI)
   Future<ValidarTitularResponseModel> validarTitularRecuperacion({
     required String codSocio,

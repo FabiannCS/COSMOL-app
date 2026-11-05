@@ -121,6 +121,12 @@ class FakeRecuperarPasswordAuthRepository implements AuthRepository {
   Future<MigrarTelefonoConfirmarResponseModel> confirmarMigracionTelefono({
     required MigrarTelefonoConfirmarRequestModel request,
   }) => throw UnimplementedError();
+
+  @override
+  Future<TransferenciaSolicitarOtpResponseModel> solicitarOtpTransferencia({required String sessionTransferId, String canal = 'WHATSAPP'}) => throw UnimplementedError();
+
+  @override
+  Future<LoginResponseModel> confirmarTransferenciaDispositivo({required String sessionTransferId, required String codigoOtp}) => throw UnimplementedError();
 }
 
 void main() {

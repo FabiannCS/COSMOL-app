@@ -152,6 +152,12 @@ class FakeMigracionAuthRepository implements AuthRepository {
 
   @override
   Future<CambiarPinRecuperacionResponseModel> cambiarPinRecuperacion({required String tokenRecuperacion, required String nuevoPin}) => throw UnimplementedError();
+
+  @override
+  Future<TransferenciaSolicitarOtpResponseModel> solicitarOtpTransferencia({required String sessionTransferId, String canal = 'WHATSAPP'}) => throw UnimplementedError();
+
+  @override
+  Future<LoginResponseModel> confirmarTransferenciaDispositivo({required String sessionTransferId, required String codigoOtp}) => throw UnimplementedError();
 }
 
 void main() {

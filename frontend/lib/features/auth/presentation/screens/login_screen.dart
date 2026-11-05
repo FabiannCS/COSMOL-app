@@ -10,6 +10,7 @@ import '../../../../core/widgets/cosmol_button.dart';
 import '../../../../core/widgets/cosmol_card.dart';
 import '../../../../core/widgets/cosmol_text_field.dart';
 import '../providers/auth_provider.dart';
+import '../widgets/transferencia_dispositivo_modal.dart';
 
 /// Pantalla de Inicio de Sesión de Socios COSMOL R.L.
 class LoginScreen extends ConsumerStatefulWidget {
@@ -97,8 +98,18 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           password: _passwordController.text.trim(),
         );
 
-    if (mounted && success) {
-      context.go('/dashboard');
+    if (mounted) {
+      if (success) {
+        context.go('/dashboard');
+      } else {
+        final authState = ref.read(authProvider);
+        if (authState.requiereTransferencia) {
+          TransferenciaDispositivoModal.show(
+            context,
+            codSocio: _socioCodeController.text.trim(),
+          );
+        }
+      }
     }
   }
 

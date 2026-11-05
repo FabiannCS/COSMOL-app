@@ -33,6 +33,16 @@ abstract class AuthRepository {
     String modeloDispositivo = 'Mobile Device',
   });
 
+  Future<TransferenciaSolicitarOtpResponseModel> solicitarOtpTransferencia({
+    required String sessionTransferId,
+    String canal = 'WHATSAPP',
+  });
+
+  Future<LoginResponseModel> confirmarTransferenciaDispositivo({
+    required String sessionTransferId,
+    required String codigoOtp,
+  });
+
   Future<ValidarTitularResponseModel> validarTitularRecuperacion({
     required String codSocio,
     required String ci,

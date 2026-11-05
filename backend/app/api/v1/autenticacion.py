@@ -36,6 +36,9 @@ from app.schemas.usuario import (
     RenovarTokenRequest,
     SolicitarOtpRequest,
     TokenResponse,
+    TransferenciaConfirmarRequest,
+    TransferenciaSolicitarOtpRequest,
+    TransferenciaSolicitarOtpResponse,
     VerificarOtpRequest,
     VerificarSocioRequest,
 )
@@ -239,6 +242,62 @@ async def logout(
     device_id = token_payload.get("device_id")
     servicio = ServicioAutenticacion(redis)
     return await servicio.cerrar_sesion(user_id=user_id, device_id=device_id)
+
+
+@router.post(
+    "/transferir-dispositivo/solicitar-otp",
+    response_model=TransferenciaSolicitarOtpResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Transferencia de Dispositivo: Solicitar OTP",
+    description="Envía un código OTP de 6 dígitos al celular del socio para autorizar el traspaso de sesión a este nuevo dispositivo. En demostración, expone el código en pantalla."
+)
+async def solicitar_otp_transferencia(
+    datos: TransferenciaSolicitarOtpRequest,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> TransferenciaSolicitarOtpResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    return await servicio.solicitar_otp_transferencia(
+        session_transfer_id=datos.session_transfer_id,
+        canal=datos.canal
+    )
+
+
+@router.post(
+    "/transferir-dispositivo/confirmar",
+    response_model=TokenResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Transferencia de Dispositivo: Confirmar OTP y transferir sesión",
+    description="Valida el código OTP de 6 dígitos. Al tener éxito, revoca la sesión del equipo anterior, asocia el nuevo dispositivo y emite los tokens JWT completos."
+)
+async def confirmar_transferencia_dispositivo(
+    datos: TransferenciaConfirmarRequest,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis)
+) -> TokenResponse:
+    servicio = ServicioAutenticacion(redis, db=db)
+    respuesta = await servicio.confirmar_transferencia_dispositivo(
+        session_transfer_id=datos.session_transfer_id,
+        codigo_otp=datos.codigo_otp
+    )
+
+    # Despachar evento a COSMOL-Reportes
+    try:
+        cod_socio_int = int(str(respuesta.suministros[0].cod_socio if respuesta.suministros else 0).strip())
+    except (ValueError, TypeError):
+        cod_socio_int = 0
+
+    background_tasks.add_task(
+        despachar_auditoria_reportes,
+        codigo_socio=cod_socio_int,
+        nombres="TRANSFERENCIA DISPOSITIVO",
+        telefono=None,
+        id_tipo=1,
+        tipo_consulta="Autenticación / Traspaso Dispositivo",
+    )
+    return respuesta
+
 
 
 @router.post(

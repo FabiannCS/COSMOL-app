@@ -26,7 +26,7 @@ class _VarianteQrBanco {
   final QrEyeShape eyeShape;
   final QrDataModuleShape moduleShape;
   final String formatoGlosa;
-  final String red;
+  final String red = 'Simple QR Bolivia (ASOBAN / BCB)';
 
   const _VarianteQrBanco({
     required this.bancoNombre,
@@ -36,7 +36,6 @@ class _VarianteQrBanco {
     required this.eyeShape,
     required this.moduleShape,
     required this.formatoGlosa,
-    this.red = 'Simple QR Bolivia (ASOBAN / BCB)',
   });
 }
 
@@ -678,10 +677,10 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
           decoration: BoxDecoration(
-            color: _varianteActual.colorPrimario.withOpacity(0.08),
+            color: _varianteActual.colorPrimario.withValues(alpha: 0.08),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: _varianteActual.colorPrimario.withOpacity(0.25),
+              color: _varianteActual.colorPrimario.withValues(alpha: 0.25),
             ),
           ),
           child: Row(

@@ -44,12 +44,22 @@ class LoginResponseModel {
   final String refreshToken;
   final String tokenType;
   final List<SuministroModel> suministros;
+  final bool requiereTransferencia;
+  final String? sessionTransferId;
+  final String? dispositivoAnteriorModelo;
+  final String? telefonoEnmascarado;
+  final String? mensaje;
 
   const LoginResponseModel({
     required this.accessToken,
     required this.refreshToken,
     required this.tokenType,
     required this.suministros,
+    this.requiereTransferencia = false,
+    this.sessionTransferId,
+    this.dispositivoAnteriorModelo,
+    this.telefonoEnmascarado,
+    this.mensaje,
   });
 
   factory LoginResponseModel.fromJson(Map<String, dynamic> json) {
@@ -61,6 +71,37 @@ class LoginResponseModel {
       suministros: rawSuministros
           .map((item) => SuministroModel.fromJson(item as Map<String, dynamic>))
           .toList(),
+      requiereTransferencia: json['requiere_transferencia'] as bool? ?? false,
+      sessionTransferId: json['session_transfer_id']?.toString(),
+      dispositivoAnteriorModelo: json['dispositivo_anterior_modelo']?.toString(),
+      telefonoEnmascarado: json['telefono_enmascarado']?.toString(),
+      mensaje: json['mensaje']?.toString(),
+    );
+  }
+}
+
+class TransferenciaSolicitarOtpResponseModel {
+  final String sessionTransferId;
+  final String mensaje;
+  final String telefonoEnmascarado;
+  final int ttlSegundos;
+  final String? debugCodigoOtp;
+
+  const TransferenciaSolicitarOtpResponseModel({
+    required this.sessionTransferId,
+    required this.mensaje,
+    required this.telefonoEnmascarado,
+    this.ttlSegundos = 300,
+    this.debugCodigoOtp,
+  });
+
+  factory TransferenciaSolicitarOtpResponseModel.fromJson(Map<String, dynamic> json) {
+    return TransferenciaSolicitarOtpResponseModel(
+      sessionTransferId: json['session_transfer_id']?.toString() ?? '',
+      mensaje: json['mensaje']?.toString() ?? '',
+      telefonoEnmascarado: json['telefono_enmascarado']?.toString() ?? '',
+      ttlSegundos: (json['ttl_segundos'] as num?)?.toInt() ?? 300,
+      debugCodigoOtp: json['debug_codigo_otp']?.toString(),
     );
   }
 }

@@ -70,6 +70,28 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<TransferenciaSolicitarOtpResponseModel> solicitarOtpTransferencia({
+    required String sessionTransferId,
+    String canal = 'WHATSAPP',
+  }) {
+    return _remoteDataSource.solicitarOtpTransferencia(
+      sessionTransferId: sessionTransferId,
+      canal: canal,
+    );
+  }
+
+  @override
+  Future<LoginResponseModel> confirmarTransferenciaDispositivo({
+    required String sessionTransferId,
+    required String codigoOtp,
+  }) {
+    return _remoteDataSource.confirmarTransferenciaDispositivo(
+      sessionTransferId: sessionTransferId,
+      codigoOtp: codigoOtp,
+    );
+  }
+
+  @override
   Future<ValidarTitularResponseModel> validarTitularRecuperacion({
     required String codSocio,
     required String ci,

@@ -93,6 +93,7 @@ class FakeAuthRepository implements AuthRepository {
   bool shouldLock = false;
   bool shouldRequireOnboarding = false;
   bool shouldThrowGeneric = false;
+  bool requireTransfer = false;
 
   @override
   Future<LoginResponseModel> login({
@@ -114,6 +115,19 @@ class FakeAuthRepository implements AuthRepository {
     }
     if (shouldThrowGeneric) {
       throw const ValidationException(message: 'Credenciales incorrectas');
+    }
+    if (requireTransfer) {
+      return const LoginResponseModel(
+        accessToken: '',
+        refreshToken: '',
+        tokenType: 'bearer',
+        suministros: [],
+        requiereTransferencia: true,
+        sessionTransferId: 'trf-12345',
+        dispositivoAnteriorModelo: 'Samsung Galaxy S23',
+        telefonoEnmascarado: '+591 7***9384',
+        mensaje: 'Sesión activa detectada en otro equipo.',
+      );
     }
 
     return LoginResponseModel(
@@ -180,6 +194,32 @@ class FakeAuthRepository implements AuthRepository {
   @override
   Future<MigrarTelefonoConfirmarResponseModel> confirmarMigracionTelefono({required MigrarTelefonoConfirmarRequestModel request}) async {
     throw UnimplementedError();
+  }
+
+  @override
+  Future<TransferenciaSolicitarOtpResponseModel> solicitarOtpTransferencia({
+    required String sessionTransferId,
+    String canal = 'WHATSAPP',
+  }) async {
+    return const TransferenciaSolicitarOtpResponseModel(
+      sessionTransferId: 'test-transfer-id',
+      mensaje: 'Código enviado',
+      telefonoEnmascarado: '+591 7***9384',
+      debugCodigoOtp: '123456',
+    );
+  }
+
+  @override
+  Future<LoginResponseModel> confirmarTransferenciaDispositivo({
+    required String sessionTransferId,
+    required String codigoOtp,
+  }) async {
+    return const LoginResponseModel(
+      accessToken: 'fake-jwt-access-token-transferred',
+      refreshToken: 'fake-jwt-refresh-token-transferred',
+      tokenType: 'bearer',
+      suministros: [],
+    );
   }
 }
 
@@ -253,6 +293,60 @@ void main() {
       expect(authNotifier.state.status, AuthStatus.unauthenticated);
       expect(fakeStorage.accessToken, isNull);
       expect(fakeStorage.activeCodSocio, isNull);
+    });
+
+    test('Login detecta requiereTransferencia y activa estado de transferencia', () async {
+      fakeRepo.requireTransfer = true;
+
+      final result = await authNotifier.login(codSocio: '104523', password: 'secretpassword');
+
+      expect(result, false);
+      expect(authNotifier.state.status, AuthStatus.unauthenticated);
+      expect(authNotifier.state.requiereTransferencia, true);
+      expect(authNotifier.state.sessionTransferId, 'trf-12345');
+      expect(authNotifier.state.dispositivoAnteriorModelo, 'Samsung Galaxy S23');
+      expect(authNotifier.state.telefonoEnmascarado, '+591 7***9384');
+      // Los tokens no deben guardarse todavía
+      expect(fakeStorage.accessToken, isNull);
+    });
+
+    test('solicitarOtpTransferencia solicita y actualiza debugCodigoOtp para demo', () async {
+      fakeRepo.requireTransfer = true;
+      await authNotifier.login(codSocio: '104523', password: 'secretpassword');
+
+      final ok = await authNotifier.solicitarOtpTransferencia(canal: 'WHATSAPP');
+
+      expect(ok, true);
+      expect(authNotifier.state.debugCodigoOtp, '123456');
+    });
+
+    test('confirmarTransferenciaDispositivo culmina autenticación y guarda tokens', () async {
+      fakeRepo.requireTransfer = true;
+      await authNotifier.login(codSocio: '104523', password: 'secretpassword');
+
+      final ok = await authNotifier.confirmarTransferenciaDispositivo(
+        codSocio: '104523',
+        codigoOtp: '123456',
+      );
+
+      expect(ok, true);
+      expect(authNotifier.state.status, AuthStatus.authenticated);
+      expect(authNotifier.state.requiereTransferencia, false);
+      expect(authNotifier.state.sessionTransferId, isNull);
+      expect(fakeStorage.accessToken, 'fake-jwt-access-token-transferred');
+      expect(fakeStorage.activeCodSocio, '104523');
+    });
+
+    test('cancelarTransferencia limpia el estado sin alterar credenciales', () async {
+      fakeRepo.requireTransfer = true;
+      await authNotifier.login(codSocio: '104523', password: 'secretpassword');
+      expect(authNotifier.state.requiereTransferencia, true);
+
+      authNotifier.cancelarTransferencia();
+
+      expect(authNotifier.state.requiereTransferencia, false);
+      expect(authNotifier.state.sessionTransferId, isNull);
+      expect(fakeStorage.accessToken, isNull);
     });
   });
 }
