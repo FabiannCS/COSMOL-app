@@ -140,17 +140,51 @@ class DeudaNotifier extends StateNotifier<DeudaState> {
     }
   }
 
-  /// Actualiza en memoria el estado visual de la deuda a Bs 0.00 tras una simulación de pago exitosa (Demo).
-  void marcarDeudaComoPagadaSimulada() {
+  /// Actualiza en memoria el estado visual de la deuda tras una simulación de pago (Demo).
+  /// Si se cancelan todas las facturas o el monto cancelado cubre el total, resetea a Bs 0.00.
+  /// En cancelaciones parciales, descuenta el saldo y remueve las facturas abonadas.
+  void marcarDeudaComoPagadaSimulada({
+    List<String>? facturasPagadasNroFacip,
+    double? montoPagado,
+  }) {
     if (state.resumenDeuda == null) return;
-    state = state.copyWith(
-      resumenDeuda: state.resumenDeuda!.copyWith(
-        saldoPendienteBs: 0.0,
-        cantidadFacturasPendientes: 0,
-        estaVencido: false,
-        alertaCorte: false,
-        facturasPendientes: const [],
-      ),
-    );
+    final resumen = state.resumenDeuda!;
+
+    final debeSaldarTodo = facturasPagadasNroFacip == null ||
+        facturasPagadasNroFacip.isEmpty ||
+        montoPagado == null ||
+        montoPagado >= resumen.saldoPendienteBs;
+
+    if (debeSaldarTodo) {
+      state = state.copyWith(
+        resumenDeuda: resumen.copyWith(
+          saldoPendienteBs: 0.0,
+          cantidadFacturasPendientes: 0,
+          estaVencido: false,
+          alertaCorte: false,
+          facturasPendientes: const [],
+        ),
+      );
+    } else {
+      final restantes = resumen.facturasPendientes
+          .where((f) =>
+              !facturasPagadasNroFacip.contains(f.nroFacip) &&
+              !facturasPagadasNroFacip.contains(f.nroFactura))
+          .toList();
+      final nuevoSaldo =
+          (resumen.saldoPendienteBs - montoPagado).clamp(0.0, double.infinity);
+      final sigueVencido = restantes.any((f) => f.estaVencida);
+      final sigueAlertaCorte = restantes.length >= 2;
+
+      state = state.copyWith(
+        resumenDeuda: resumen.copyWith(
+          saldoPendienteBs: nuevoSaldo,
+          cantidadFacturasPendientes: restantes.length,
+          estaVencido: sigueVencido,
+          alertaCorte: sigueAlertaCorte,
+          facturasPendientes: restantes,
+        ),
+      );
+    }
   }
 }

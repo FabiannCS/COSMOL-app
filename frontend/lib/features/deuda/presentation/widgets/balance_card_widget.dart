@@ -36,6 +36,7 @@ class BalanceCardWidget extends ConsumerWidget {
     final montoTotal = deuda?.saldoPendienteBs ?? 0.0;
     final titular = deuda?.suministro?.nombreTitular ?? 'Socio COSMOL';
     final cantFacturas = deuda?.cantidadFacturasPendientes ?? 1;
+    final facturas = deuda?.facturasPendientes ?? const [];
 
     PagoQrMockSheet.show(
       context,
@@ -43,6 +44,7 @@ class BalanceCardWidget extends ConsumerWidget {
       nombreTitular: titular,
       montoBs: montoTotal,
       cantFacturas: cantFacturas,
+      facturas: facturas,
     );
   }
 

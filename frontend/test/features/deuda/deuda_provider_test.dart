@@ -105,5 +105,34 @@ void main() {
       expect(notifier.state.resumenDeuda!.codSocio, '540');
       expect(notifier.state.isLoading, false);
     });
+
+    test('marcarDeudaComoPagadaSimulada salda totalidad a Bs 0.00', () async {
+      await notifier.cargarDeuda('23807');
+      expect(notifier.state.saldoTotal, 164.50);
+
+      notifier.marcarDeudaComoPagadaSimulada();
+
+      expect(notifier.state.saldoTotal, 0.0);
+      expect(notifier.state.cantidadFacturas, 0);
+      expect(notifier.state.hasDebt, false);
+      expect(notifier.state.facturas, isEmpty);
+    });
+
+    test('marcarDeudaComoPagadaSimulada con pago parcial descuenta facturas seleccionadas', () async {
+      await notifier.cargarDeuda('23807');
+      expect(notifier.state.saldoTotal, 164.50);
+      expect(notifier.state.cantidadFacturas, 2);
+
+      // Pagamos solo la factura '1160026' de 78.00 Bs
+      notifier.marcarDeudaComoPagadaSimulada(
+        facturasPagadasNroFacip: ['1160026'],
+        montoPagado: 78.00,
+      );
+
+      expect(notifier.state.saldoTotal, 86.50);
+      expect(notifier.state.cantidadFacturas, 1);
+      expect(notifier.state.facturas.first.nroFacip, '1160027');
+      expect(notifier.state.facturas.first.estaVencida, false);
+    });
   });
 }
