@@ -190,3 +190,55 @@ class EstadoVerificacionPagoModel {
     };
   }
 }
+
+/// Modelo de comprobante para la simulación interactiva de pago mock.
+class SimularPagoResponseModel {
+  final bool exito;
+  final String codSocio;
+  final String canalId;
+  final String nroTransaccion;
+  final double montoBs;
+  final String fechaPago;
+  final String mensaje;
+  final bool esSimulacion;
+
+  const SimularPagoResponseModel({
+    required this.exito,
+    required this.codSocio,
+    required this.canalId,
+    required this.nroTransaccion,
+    required this.montoBs,
+    required this.fechaPago,
+    required this.mensaje,
+    this.esSimulacion = true,
+  });
+
+  factory SimularPagoResponseModel.fromJson(Map<String, dynamic> json) {
+    return SimularPagoResponseModel(
+      exito: json['exito'] == true,
+      codSocio: json['cod_socio']?.toString() ?? '',
+      canalId: json['canal_id']?.toString() ?? '',
+      nroTransaccion: json['nro_transaccion']?.toString() ?? '',
+      montoBs: (json['monto_bs'] is num)
+          ? (json['monto_bs'] as num).toDouble()
+          : double.tryParse(json['monto_bs']?.toString() ?? '0.0') ?? 0.0,
+      fechaPago: json['fecha_pago']?.toString() ?? '',
+      mensaje: json['mensaje']?.toString() ?? '',
+      esSimulacion: json['es_simulacion'] == true,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'exito': exito,
+      'cod_socio': codSocio,
+      'canal_id': canalId,
+      'nro_transaccion': nroTransaccion,
+      'monto_bs': montoBs,
+      'fecha_pago': fechaPago,
+      'mensaje': mensaje,
+      'es_simulacion': esSimulacion,
+    };
+  }
+}
+

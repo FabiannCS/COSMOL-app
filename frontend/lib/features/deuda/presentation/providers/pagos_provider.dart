@@ -7,26 +7,34 @@ import '../../domain/repositories/pagos_repository.dart';
 class PagosState {
   final bool isLoading;
   final bool isRegistering;
+  final bool isSimulating;
   final CanalesPagoResponseModel? canalesResponse;
+  final SimularPagoResponseModel? ultimoPagoSimulado;
   final String? errorMessage;
 
   const PagosState({
     this.isLoading = false,
     this.isRegistering = false,
+    this.isSimulating = false,
     this.canalesResponse,
+    this.ultimoPagoSimulado,
     this.errorMessage,
   });
 
   PagosState copyWith({
     bool? isLoading,
     bool? isRegistering,
+    bool? isSimulating,
     CanalesPagoResponseModel? canalesResponse,
+    SimularPagoResponseModel? ultimoPagoSimulado,
     String? errorMessage,
   }) {
     return PagosState(
       isLoading: isLoading ?? this.isLoading,
       isRegistering: isRegistering ?? this.isRegistering,
+      isSimulating: isSimulating ?? this.isSimulating,
       canalesResponse: canalesResponse ?? this.canalesResponse,
+      ultimoPagoSimulado: ultimoPagoSimulado ?? this.ultimoPagoSimulado,
       errorMessage: errorMessage,
     );
   }
@@ -89,6 +97,40 @@ class PagosNotifier extends StateNotifier<PagosState> {
       state = state.copyWith(
         isRegistering: false,
         errorMessage: 'Error al registrar el intento de pago.',
+      );
+      return null;
+    }
+  }
+
+  /// Simula el pago mock (solo vista) y despacha telemetría a COSMOL-Reportes.
+  Future<SimularPagoResponseModel?> simularPago({
+    required String codSocio,
+    required String canalId,
+    required double montoBs,
+    String? periodos,
+  }) async {
+    state = state.copyWith(isSimulating: true, errorMessage: null);
+
+    try {
+      final response = await _repository.simularPago(
+        codSocio: codSocio.trim(),
+        canalId: canalId.trim(),
+        montoBs: montoBs,
+        periodos: periodos,
+      );
+      state = state.copyWith(
+        isSimulating: false,
+        ultimoPagoSimulado: response,
+        errorMessage: null,
+      );
+      return response;
+    } on AppException catch (e) {
+      state = state.copyWith(isSimulating: false, errorMessage: e.message);
+      return null;
+    } catch (e) {
+      state = state.copyWith(
+        isSimulating: false,
+        errorMessage: 'Error al procesar la simulación de pago.',
       );
       return null;
     }

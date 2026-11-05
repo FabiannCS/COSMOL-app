@@ -87,6 +87,39 @@ class PagosRemoteDataSource {
     }
   }
 
+  /// Simula el pago mock (solo vista) y despacha la telemetría a COSMOL-Reportes.
+  /// Llama al endpoint `POST /api/v1/pagos/simular-pago/{cod_socio}`
+  Future<SimularPagoResponseModel> simularPago({
+    required String codSocio,
+    required String canalId,
+    required double montoBs,
+    String? periodos,
+  }) async {
+    try {
+      final cleanCodSocio = codSocio.trim();
+      final response = await _dio.post(
+        '/pagos/simular-pago/$cleanCodSocio',
+        data: {
+          'canal_id': canalId.trim(),
+          'monto_bs': montoBs,
+          if (periodos != null) 'periodos': periodos,
+        },
+      );
+
+      if (response.data is Map<String, dynamic>) {
+        return SimularPagoResponseModel.fromJson(
+          response.data as Map<String, dynamic>,
+        );
+      }
+
+      throw const ServerException(
+        message: 'Respuesta inválida al simular el pago.',
+      );
+    } on DioException catch (e) {
+      throw _handleDioError(e);
+    }
+  }
+
   AppException _handleDioError(DioException e) {
     if (e.error is AppException) {
       return e.error as AppException;

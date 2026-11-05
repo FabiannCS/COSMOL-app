@@ -37,4 +37,19 @@ class PagosRepositoryImpl implements PagosRepository {
   }) {
     return _remoteDataSource.verificarEstadoPago(codSocio: codSocio);
   }
+
+  @override
+  Future<SimularPagoResponseModel> simularPago({
+    required String codSocio,
+    required String canalId,
+    required double montoBs,
+    String? periodos,
+  }) {
+    return _remoteDataSource.simularPago(
+      codSocio: codSocio,
+      canalId: canalId,
+      montoBs: montoBs,
+      periodos: periodos,
+    );
+  }
 }

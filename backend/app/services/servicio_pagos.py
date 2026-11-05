@@ -101,6 +101,15 @@ class ServicioPagos:
 
         canales = [
             CanalPagoItem(
+                id="qr_simple",
+                nombre="Pago Rápido con Código QR (Demo)",
+                descripcion="Genera un código QR Simple interoperable para pagar desde cualquier app bancaria de Bolivia",
+                url_redireccion="mock://pago-qr",
+                icono="qr_code",
+                soporta_qr=True,
+                activo=True
+            ),
+            CanalPagoItem(
                 id="multipago",
                 nombre="Multipago Bolivia",
                 descripcion="Pago seguro con Simple QR interoperable, Tarjeta de Débito/Crédito y Banca por Internet",

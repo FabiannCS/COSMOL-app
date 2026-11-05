@@ -75,3 +75,27 @@ class EstadoVerificacionPagoResponse(BaseModel):
     cant_facturas_pendientes: int = Field(..., description="Cantidad actual de facturas pendientes")
     mensaje: str = Field(..., description="Estado descriptivo para el socio")
     ventana_activa: bool = Field(..., description="Indica si la ventana de verificación sigue activa en Redis")
+
+
+class SimularPagoRequest(BaseModel):
+    """
+    Petición para simular el flujo de pago demostrativo (solo vista / demo).
+    """
+    canal_id: str = Field(default="qr_simple", description="Canal de pago utilizado ('qr_simple', 'multipago', etc.)")
+    monto_bs: float = Field(..., description="Monto en Bolivianos a pagar")
+    periodos: Optional[str] = Field(default=None, description="Periodos o meses facturados (ej. '08/2026, 09/2026')")
+
+
+class SimularPagoResponse(BaseModel):
+    """
+    Respuesta del comprobante de pago simulado (sin impacto financiero ni contable).
+    """
+    exito: bool = Field(default=True, description="Resultado de la simulación")
+    cod_socio: str = Field(..., description="Código de socio")
+    canal_id: str = Field(..., description="Canal simulado")
+    nro_transaccion: str = Field(..., description="Número de transacción ficticio para la demostración")
+    monto_bs: float = Field(..., description="Monto simulado en Bolivianos")
+    fecha_pago: str = Field(..., description="Fecha y hora de la transacción simulada")
+    mensaje: str = Field(..., description="Mensaje explicativo para la UI")
+    es_simulacion: bool = Field(default=True, description="Indica explícitamente que es una simulación")
+

@@ -7,6 +7,7 @@ import '../../data/models/pago_model.dart';
 import '../../data/models/resumen_deuda_model.dart';
 import '../providers/deuda_provider.dart';
 import '../providers/pagos_provider.dart';
+import 'pago_qr_mock_sheet.dart';
 
 /// Tarjeta principal de balance conectada a datos en tiempo real del backend (COSMOL R.L.).
 class BalanceCardWidget extends ConsumerWidget {
@@ -67,6 +68,23 @@ class BalanceCardWidget extends ConsumerWidget {
       assetPath = 'assets/images/multipago.png';
     } else if (canalId.contains('paso') || canalNombre.contains('paso')) {
       assetPath = 'assets/images/pagoalpaso.png';
+    }
+
+    if (canalId.contains('qr')) {
+      return Container(
+        width: 52,
+        height: 52,
+        decoration: BoxDecoration(
+          color: const Color(0xFFE0F2FE),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFBAE6FD)),
+        ),
+        child: const Icon(
+          Icons.qr_code_2_rounded,
+          color: Color(0xFF0369A1),
+          size: 30,
+        ),
+      );
     }
 
     if (assetPath != null) {
@@ -290,6 +308,29 @@ class BalanceCardWidget extends ConsumerWidget {
                                 onTap: pagosState.isRegistering
                                     ? null
                                     : () async {
+                                        // Si es el canal QR Mock, abrir directamente la vista interactiva interna
+                                        if (canal.id == 'qr_simple' || canal.urlRedireccion.startsWith('mock://')) {
+                                          if (context.mounted) {
+                                            Navigator.of(ctx).pop();
+                                            final montoTotal = deuda?.saldoPendienteBs ??
+                                                pagosState.canalesResponse?.totalDeudaBs ??
+                                                0.0;
+                                            final titular = deuda?.suministro?.nombreTitular ??
+                                                pagosState.canalesResponse?.nombreTitular ??
+                                                'Socio COSMOL';
+                                            final cantFacturas = deuda?.cantidadFacturasPendientes ?? 1;
+
+                                            PagoQrMockSheet.show(
+                                              context,
+                                              codSocio: codSocio,
+                                              nombreTitular: titular,
+                                              montoBs: montoTotal,
+                                              cantFacturas: cantFacturas,
+                                            );
+                                          }
+                                          return;
+                                        }
+
                                         // 1. Registrar intento en Backend para activar ventana de verificación en Redis
                                         final url = await refConsumer
                                             .read(pagosProvider.notifier)

@@ -13,4 +13,11 @@ abstract class PagosRepository {
   Future<EstadoVerificacionPagoModel> verificarEstadoPago({
     required String codSocio,
   });
+
+  Future<SimularPagoResponseModel> simularPago({
+    required String codSocio,
+    required String canalId,
+    required double montoBs,
+    String? periodos,
+  });
 }

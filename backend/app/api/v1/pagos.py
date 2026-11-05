@@ -3,6 +3,8 @@ Endpoints de la API REST para Pasarelas de Pago Externas y Verificación Intelig
 COSMOL R.L. - App de Socios (Fase 5).
 """
 import logging
+import random
+from datetime import datetime, timezone, timedelta
 from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, status
 from redis.asyncio import Redis
@@ -16,6 +18,8 @@ from app.schemas.pago import (
     RegistrarIntentoPagoRequest,
     RegistrarIntentoPagoResponse,
     EstadoVerificacionPagoResponse,
+    SimularPagoRequest,
+    SimularPagoResponse,
 )
 from app.services.servicio_pagos import ServicioPagos
 from app.tasks.auditoria_reportes import despachar_auditoria_reportes
@@ -150,3 +154,94 @@ async def verificar_estado_pago(
         usuario_id=UUID(current_user_id),
         cod_socio=cod_socio
     )
+
+
+@router.post(
+    "/simular-pago/{cod_socio}",
+    response_model=SimularPagoResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Simular flujo de pago (Solo Vista Mock) y despachar auditoría a Reportes",
+    description="Permite al socio completar el flujo de pago demostrativo en la app sin debitar dinero real ni alterar la deuda comercial de Informix, enviando telemetría oficial a COSMOL-Reportes.",
+)
+async def simular_pago(
+    cod_socio: str,
+    payload: SimularPagoRequest,
+    background_tasks: BackgroundTasks,
+    current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+    redis: Redis = Depends(get_redis),
+) -> SimularPagoResponse:
+    """
+    Simulación de pago interactiva para demostración y auditoría.
+    1. Valida que el socio tenga permisos sobre el suministro.
+    2. Genera un número de transacción demostrativo (TRX-MOCK-...).
+    3. Despacha evento oficial a COSMOL-Reportes (id_tipo: 12) en segundo plano.
+    4. Retorna comprobante simulado (cero modificación contable).
+    """
+    servicio = ServicioPagos(db=db, redis=redis)
+    user_uuid = UUID(current_user_id)
+    await servicio._validar_pertenencia_suministro(user_uuid, cod_socio)
+
+    # Normalización del código de socio
+    try:
+        cod_socio_int = int(str(cod_socio).strip())
+    except (ValueError, TypeError):
+        cod_socio_int = 0
+
+    # Determinar tipo de evento según canal
+    canal_norm = (payload.canal_id or "").strip().lower()
+    if "pago_al_paso" in canal_norm:
+        id_tipo_pago = 11
+        tipo_nombre = "Pago: Pago al Paso (Demo)"
+    elif "multipago" in canal_norm:
+        id_tipo_pago = 10
+        tipo_nombre = "Pago: Multipago (Demo)"
+    else:
+        id_tipo_pago = 12
+        tipo_nombre = "Pago: Código QR (Demo)"
+
+    # Obtener datos de socio para enriquecer telemetría
+    nombre_socio = f"SOCIO {cod_socio_int}"
+    telefono_socio = None
+    try:
+        stmt_u = select(Usuario.telefono).where(Usuario.id == user_uuid)
+        res_u = await db.execute(stmt_u)
+        telefono_socio = res_u.scalar_one_or_none()
+
+        stmt_s = select(Suministro.alias).where(
+            Suministro.usuario_id == user_uuid,
+            Suministro.cod_socio == cod_socio
+        )
+        res_s = await db.execute(stmt_s)
+        alias_s = res_s.scalar_one_or_none()
+        if alias_s:
+            nombre_socio = f"SOCIO {cod_socio_int} ({alias_s})"
+    except Exception:
+        pass
+
+    # Despachar telemetría a COSMOL-Reportes en segundo plano (Requerimiento 2)
+    background_tasks.add_task(
+        despachar_auditoria_reportes,
+        codigo_socio=cod_socio_int,
+        nombres=nombre_socio,
+        telefono=telefono_socio,
+        id_tipo=id_tipo_pago,
+        tipo_consulta=tipo_nombre,
+    )
+
+    # Generación de Comprobante Mock
+    tz_bolivia = timezone(timedelta(hours=-4))
+    ahora = datetime.now(tz_bolivia)
+    nro_trx = f"TRX-MOCK-{ahora.strftime('%Y%m%d%H%M')}-{random.randint(1000, 9999)}"
+
+    return SimularPagoResponse(
+        exito=True,
+        cod_socio=cod_socio.strip(),
+        canal_id=payload.canal_id,
+        nro_transaccion=nro_trx,
+        monto_bs=payload.monto_bs,
+        fecha_pago=ahora.strftime("%d/%m/%Y %H:%M:%S"),
+        mensaje="Simulación de pago completada con éxito. No se realizaron cobros reales.",
+        es_simulacion=True
+    )
+
