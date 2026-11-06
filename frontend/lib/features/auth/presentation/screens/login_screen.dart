@@ -104,13 +104,129 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       } else {
         final authState = ref.read(authProvider);
         if (authState.requiereTransferencia) {
-          TransferenciaDispositivoModal.show(
-            context,
-            codSocio: _socioCodeController.text.trim(),
-          );
+          _mostrarModalCuentaExistenteLogin(context, authState);
         }
       }
     }
+  }
+
+  void _mostrarModalCuentaExistenteLogin(BuildContext context, AuthState state) {
+    final codSocio = _socioCodeController.text.trim();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Container(
+                width: 48,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.phonelink_lock,
+                  color: AppColors.primary,
+                  size: 40,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Cuenta Ya Registrada',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.h2.copyWith(
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'El socio ${state.nombreTitular ?? "COSMOL"} (Cód: $codSocio) ya tiene una sesión activa vinculada en su equipo ${state.dispositivoAnteriorModelo ?? "registrado"} con el número:\n\n${state.telefonoEnmascarado ?? "vinculado"}',
+              textAlign: TextAlign.center,
+              style: AppTextStyles.body1.copyWith(
+                color: AppColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 24),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(ctx);
+                context.push(
+                  '/migrar-celular',
+                  extra: {
+                    'cod_socio': codSocio,
+                    'nombre_titular': state.nombreTitular,
+                  },
+                );
+              },
+              icon: const Icon(Icons.phonelink_setup, color: AppColors.primary),
+              label: const Text(
+                '¿Cambiaste de número? Registrar nuevo celular',
+                style: TextStyle(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                side: const BorderSide(color: AppColors.primary),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            CosmolButton(
+              text: '¿Mismo número? Transferir a este equipo',
+              icon: Icons.swap_horiz,
+              onPressed: () {
+                Navigator.pop(ctx);
+                TransferenciaDispositivoModal.show(
+                  context,
+                  codSocio: codSocio,
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                ref.read(authProvider.notifier).cancelarTransferencia();
+              },
+              child: Text(
+                'Cancelar y mantener sesión en el otro equipo',
+                style: AppTextStyles.body2.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _openWhatsAppHelp() async {

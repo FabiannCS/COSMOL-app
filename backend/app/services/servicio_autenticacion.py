@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.exceptions import (
     AppException,
     BadRequestException,
+    ConflictException,
     ForbiddenException,
     NotFoundException,
     UnauthorizedException,
@@ -611,14 +612,19 @@ class ServicioAutenticacion:
 
             logger.info(
                 f"Intento de login para socio '{cod_socio}' desde nuevo dispositivo '{device_id}' ({modelo_dispositivo}). "
-                f"Sesión activa previa detectada en '{device_activo}' ({modelo_anterior}). Requiere confirmación OTP."
+                f"Sesión activa previa detectada en '{device_activo}' ({modelo_anterior}). Requiere confirmación o migración."
             )
-            return TokenResponse(
-                requiere_transferencia=True,
-                session_transfer_id=session_transfer_id,
-                dispositivo_anterior_modelo=modelo_anterior,
-                telefono_enmascarado=tel_enmascarado,
-                mensaje=f"Ya existe una sesión activa en {modelo_anterior}. Para continuar en este equipo, autorice la transferencia mediante código OTP."
+            raise ConflictException(
+                message=f"La cuenta ya tiene una sesión activa vinculada a {modelo_anterior}. Debe transferir su sesión o registrar su nuevo número de celular.",
+                error_code="DEVICE_CHANGE_DETECTED",
+                details={
+                    "cod_socio": cod_socio,
+                    "nombre_titular": nombre_socio,
+                    "dispositivo_anterior_modelo": modelo_anterior,
+                    "telefono_enmascarado": tel_enmascarado,
+                    "session_transfer_id": session_transfer_id,
+                    "requiere_transferencia": True,
+                }
             )
 
         # 6. Persistir o actualizar Dispositivo si hay conexión DB

@@ -67,6 +67,26 @@ class SessionRevokedException extends AppException {
   });
 }
 
+/// Cambio de Dispositivo Detectado / Cuenta ya activa en otro equipo (409 - DEVICE_CHANGE_DETECTED)
+class DeviceChangeDetectedException extends AppException {
+  final String codSocio;
+  final String? nombreTitular;
+  final String? dispositivoAnteriorModelo;
+  final String? telefonoEnmascarado;
+  final String? sessionTransferId;
+
+  const DeviceChangeDetectedException({
+    required super.message,
+    required this.codSocio,
+    this.nombreTitular,
+    this.dispositivoAnteriorModelo,
+    this.telefonoEnmascarado,
+    this.sessionTransferId,
+    super.code = 'DEVICE_CHANGE_DETECTED',
+    super.details,
+  });
+}
+
 /// Primer Acceso Requerido (401 - ONBOARDING_REQUIRED)
 class OnboardingRequiredException extends AppException {
   const OnboardingRequiredException({

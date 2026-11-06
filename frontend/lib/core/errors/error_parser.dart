@@ -109,6 +109,18 @@ class ErrorParser {
           details: details,
         );
 
+      case 'DEVICE_CHANGE_DETECTED':
+        return DeviceChangeDetectedException(
+          message: message,
+          codSocio: details?['cod_socio']?.toString() ?? '',
+          nombreTitular: details?['nombre_titular']?.toString(),
+          dispositivoAnteriorModelo:
+              details?['dispositivo_anterior_modelo']?.toString(),
+          telefonoEnmascarado: details?['telefono_enmascarado']?.toString(),
+          sessionTransferId: details?['session_transfer_id']?.toString(),
+          details: details,
+        );
+
       case 'ONBOARDING_REQUIRED':
         return OnboardingRequiredException(
           message: message,

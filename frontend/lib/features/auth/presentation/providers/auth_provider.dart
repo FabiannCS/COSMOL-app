@@ -32,6 +32,7 @@ class AuthState {
   final String? sessionTransferId;
   final String? dispositivoAnteriorModelo;
   final String? telefonoEnmascarado;
+  final String? nombreTitular;
   final String? debugCodigoOtp;
   final bool isTransferring;
 
@@ -48,6 +49,7 @@ class AuthState {
     this.sessionTransferId,
     this.dispositivoAnteriorModelo,
     this.telefonoEnmascarado,
+    this.nombreTitular,
     this.debugCodigoOtp,
     this.isTransferring = false,
   });
@@ -65,6 +67,7 @@ class AuthState {
     String? sessionTransferId,
     String? dispositivoAnteriorModelo,
     String? telefonoEnmascarado,
+    String? nombreTitular,
     String? debugCodigoOtp,
     bool? isTransferring,
     bool clearTransferState = false,
@@ -90,6 +93,9 @@ class AuthState {
       telefonoEnmascarado: clearTransferState
           ? null
           : (telefonoEnmascarado ?? this.telefonoEnmascarado),
+      nombreTitular: clearTransferState
+          ? null
+          : (nombreTitular ?? this.nombreTitular),
       debugCodigoOtp:
           clearTransferState ? null : (debugCodigoOtp ?? this.debugCodigoOtp),
       isTransferring:
@@ -315,6 +321,20 @@ class AuthNotifier extends StateNotifier<AuthState> {
         status: AuthStatus.onboardingRequired,
         errorMessage: e.message,
         isLoading: false,
+      );
+      return false;
+    } on DeviceChangeDetectedException catch (e) {
+      if (!mounted) return false;
+      state = state.copyWith(
+        status: AuthStatus.unauthenticated,
+        requiereTransferencia: true,
+        sessionTransferId: e.sessionTransferId,
+        dispositivoAnteriorModelo: e.dispositivoAnteriorModelo,
+        telefonoEnmascarado: e.telefonoEnmascarado,
+        nombreTitular: e.nombreTitular,
+        activeCodSocio: e.codSocio.isNotEmpty ? e.codSocio : cleanCodSocio,
+        isLoading: false,
+        errorMessage: e.message,
       );
       return false;
     } on AppException catch (e) {

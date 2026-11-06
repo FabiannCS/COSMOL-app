@@ -103,13 +103,14 @@ async def test_intento_login_dispositivo_diferente_requiere_transferencia(client
             "modelo_dispositivo": nuevo_modelo
         }
     )
-    assert res.status_code == 200
-    data = res.json()
+    assert res.status_code == 409
+    body = res.json()
+    assert body["success"] is False
+    assert body["error"]["code"] == "DEVICE_CHANGE_DETECTED"
+    data = body["error"]["details"]
 
     assert data["requiere_transferencia"] is True
     assert data["session_transfer_id"] is not None
-    assert data["access_token"] is None
-    assert data["refresh_token"] is None
     assert data["dispositivo_anterior_modelo"] == datos["modelo_viejo"]
     assert "***" in data["telefono_enmascarado"]
 
@@ -131,7 +132,7 @@ async def test_flujo_completo_transferencia_dispositivo(client: AsyncClient, red
     nuevo_device_id = "hardware-pixel-8-new"
     nuevo_modelo = "Google Pixel 8"
 
-    # 1. Login inicial en nuevo hardware
+    # 1. Login inicial en nuevo hardware -> retorna 409 DEVICE_CHANGE_DETECTED
     res_login = await client.post(
         "/api/v1/autenticacion/login",
         json={
@@ -141,7 +142,10 @@ async def test_flujo_completo_transferencia_dispositivo(client: AsyncClient, red
             "modelo_dispositivo": nuevo_modelo
         }
     )
-    transfer_id = res_login.json()["session_transfer_id"]
+    assert res_login.status_code == 409
+    body_login = res_login.json()
+    assert body_login["error"]["code"] == "DEVICE_CHANGE_DETECTED"
+    transfer_id = body_login["error"]["details"]["session_transfer_id"]
     assert transfer_id is not None
 
     # 2. Solicitar OTP para la migración

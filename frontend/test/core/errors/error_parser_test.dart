@@ -90,6 +90,39 @@ void main() {
       expect(result, isA<SessionRevokedException>());
     });
 
+    test('parse maps DEVICE_CHANGE_DETECTED to DeviceChangeDetectedException', () {
+      final dioException = DioException(
+        requestOptions: RequestOptions(path: '/login'),
+        type: DioExceptionType.badResponse,
+        response: Response(
+          requestOptions: RequestOptions(path: '/login'),
+          statusCode: 409,
+          data: {
+            'success': false,
+            'error': {
+              'code': 'DEVICE_CHANGE_DETECTED',
+              'message': 'Cuenta ya activa en otro equipo.',
+              'details': {
+                'cod_socio': '11543',
+                'nombre_titular': 'EDDY FRANCO',
+                'dispositivo_anterior_modelo': 'Samsung Galaxy S23',
+                'telefono_enmascarado': '+591 7***9384',
+                'session_transfer_id': 'trf-12345',
+              },
+            },
+          },
+        ),
+      );
+
+      final result = ErrorParser.parse(dioException);
+      expect(result, isA<DeviceChangeDetectedException>());
+      final devEx = result as DeviceChangeDetectedException;
+      expect(devEx.codSocio, '11543');
+      expect(devEx.nombreTitular, 'EDDY FRANCO');
+      expect(devEx.dispositivoAnteriorModelo, 'Samsung Galaxy S23');
+      expect(devEx.sessionTransferId, 'trf-12345');
+    });
+
     test('parse handles FastAPI detail string fallback', () {
       final dioException = DioException(
         requestOptions: RequestOptions(path: '/otp'),
