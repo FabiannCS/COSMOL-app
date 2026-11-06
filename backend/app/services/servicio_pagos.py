@@ -102,8 +102,8 @@ class ServicioPagos:
         canales = [
             CanalPagoItem(
                 id="qr_simple",
-                nombre="Pago Rápido con Código QR (Demo)",
-                descripcion="Genera un código QR Simple interoperable para pagar desde cualquier app bancaria de Bolivia",
+                nombre="Pago Rápido con Código QR (Jesús Nazareno)",
+                descripcion="Genera un código QR Simple interoperable de la Cooperativa Jesús Nazareno para pagar desde cualquier app bancaria de Bolivia",
                 url_redireccion="mock://pago-qr",
                 icono="qr_code",
                 soporta_qr=True,
