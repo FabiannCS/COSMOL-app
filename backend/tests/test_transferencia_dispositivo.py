@@ -200,3 +200,56 @@ async def test_flujo_completo_transferencia_dispositivo(client: AsyncClient, red
     clave_transfer = await redis_override.get(f"transferencia_dispositivo:{transfer_id}")
     assert clave_transfer is None
 
+
+@pytest.mark.asyncio
+async def test_migracion_telefono_emite_sub_uuid_valido(client: AsyncClient, usuario_con_sesion_activa):
+    """
+    Verifica que el flujo de migración de número celular emita un token JWT con 'sub' siendo
+    un UUID hexadecimal válido (no un string de diccionario), evitando el error:
+    ValueError: badly formed hexadecimal UUID string en endpoints como /deuda, /consumo, /documentos.
+    """
+    from app.core.security import decode_token
+
+    datos = usuario_con_sesion_activa
+    nuevo_celular = "64601410"
+
+    # 1. Iniciar migración
+    res_ini = await client.post(
+        "/api/v1/autenticacion/migrar-telefono/iniciar",
+        json={
+            "cod_socio": datos["cod_socio"],
+            "ci": datos["ci"],
+            "pin_actual": datos["pin"],
+            "nuevo_telefono": nuevo_celular,
+            "canal": "WHATSAPP"
+        }
+    )
+    assert res_ini.status_code == 200
+    data_ini = res_ini.json()
+    session_id = data_ini["session_id"]
+    codigo_otp = data_ini["debug_codigo_otp"]
+    assert codigo_otp is not None
+
+    # 2. Confirmar migración
+    res_conf = await client.post(
+        "/api/v1/autenticacion/migrar-telefono/confirmar",
+        json={
+            "session_id": session_id,
+            "codigo_otp": codigo_otp
+        }
+    )
+    assert res_conf.status_code == 200
+    data_conf = res_conf.json()
+    token = data_conf["access_token"]
+    assert token is not None
+
+    # 3. Decodificar payload y verificar que sub sea parseable como UUID
+    payload = decode_token(token)
+    sub = payload.get("sub")
+    assert sub is not None
+    # No debe ser un string de diccionario como "{'sub': '...'}"
+    assert not sub.startswith("{")
+    parsed_uuid = uuid.UUID(sub)
+    assert str(parsed_uuid) == datos["user_id"]
+
+

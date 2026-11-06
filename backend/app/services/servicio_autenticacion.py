@@ -1134,8 +1134,12 @@ class ServicioAutenticacion:
             USUARIOS_REGISTRADOS_DB[cod_socio]["telefono"] = nuevo_telefono
 
         # Emitir tokens JWT
-        access_token = create_access_token({"sub": user_id_str, "cod_socio": cod_socio})
-        refresh_token = create_refresh_token({"sub": user_id_str, "cod_socio": cod_socio})
+        extra_claims = {
+            "cod_socio": cod_socio,
+            "nombre": nombre_titular
+        }
+        access_token = create_access_token(subject=user_id_str, extra_claims=extra_claims)
+        refresh_token = create_refresh_token(subject=user_id_str)
 
         logger.info(f"[MIGRACIÓN TELÉFONO EXITOSA] Socio {cod_socio} migrado a {nuevo_telefono}.")
 

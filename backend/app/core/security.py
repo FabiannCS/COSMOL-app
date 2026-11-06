@@ -44,6 +44,12 @@ def create_access_token(
     else:
         expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
+    claims: Dict[str, Any] = dict(extra_claims) if extra_claims else {}
+    if isinstance(subject, dict):
+        sub_val = subject.get("sub") or subject.get("id") or ""
+        claims.update({k: v for k, v in subject.items() if k not in ("sub", "id")})
+        subject = sub_val
+
     to_encode: Dict[str, Any] = {
         "sub": str(subject),
         "iat": now,
@@ -52,8 +58,8 @@ def create_access_token(
         "jti": str(uuid.uuid4())
     }
 
-    if extra_claims:
-        to_encode.update(extra_claims)
+    if claims:
+        to_encode.update(claims)
 
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
@@ -72,6 +78,9 @@ def create_refresh_token(
         expire = now + expires_delta
     else:
         expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+
+    if isinstance(subject, dict):
+        subject = subject.get("sub") or subject.get("id") or ""
 
     to_encode: Dict[str, Any] = {
         "sub": str(subject),
