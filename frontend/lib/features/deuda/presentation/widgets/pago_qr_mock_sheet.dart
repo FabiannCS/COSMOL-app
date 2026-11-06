@@ -88,43 +88,25 @@ class PagoQrMockSheet extends ConsumerStatefulWidget {
 }
 
 class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
-  // Catálogo de variantes bancarias oficiales para alternar en cada generación de QR
+  // Catálogo de la entidad bancaria oficial de convenio (Cooperativa Jesús Nazareno R.L.)
   static const List<_VarianteQrBanco> _variantesBancos = [
     _VarianteQrBanco(
-      bancoNombre: 'Banco Unión S.A.',
-      sigla: 'BUNION',
-      colorPrimario: Color(0xFF003E6B), // Azul Petróleo Institucional
-      colorSecundario: Color(0xFF0B1C30),
+      bancoNombre: 'Jesús Nazareno',
+      sigla: 'JESUS_NAZARENO',
+      colorPrimario: Color(0xFF006837), // Verde Nazareno Institucional
+      colorSecundario: Color(0xFF07381E),
       eyeShape: QrEyeShape.square,
       moduleShape: QrDataModuleShape.square,
-      formatoGlosa: 'COSMOL-UNION-SIMPLEQR',
+      formatoGlosa: 'COSMOL-JESUS-NAZARENO-SIMPLEQR',
     ),
     _VarianteQrBanco(
-      bancoNombre: 'Banco de Crédito BCP',
-      sigla: 'BCP',
-      colorPrimario: Color(0xFF002A54), // Azul Marino BCP
-      colorSecundario: Color(0xFF051B38),
+      bancoNombre: 'Jesús Nazareno',
+      sigla: 'JESUS_NAZARENO',
+      colorPrimario: Color(0xFF007A3D), // Variante Esmeralda Nazareno
+      colorSecundario: Color(0xFF0A4724),
       eyeShape: QrEyeShape.circle,
       moduleShape: QrDataModuleShape.circle,
-      formatoGlosa: 'COSMOL-BCP-SIMPLEQR',
-    ),
-    _VarianteQrBanco(
-      bancoNombre: 'Banco Nacional de Bolivia (BNB)',
-      sigla: 'BNB',
-      colorPrimario: Color(0xFF007A3D), // Verde BNB
-      colorSecundario: Color(0xFF0A3319),
-      eyeShape: QrEyeShape.square,
-      moduleShape: QrDataModuleShape.circle,
-      formatoGlosa: 'COSMOL-BNB-SIMPLEQR',
-    ),
-    _VarianteQrBanco(
-      bancoNombre: 'Banco Mercantil Santa Cruz',
-      sigla: 'BMSC',
-      colorPrimario: Color(0xFF0C3860), // Azul BMSC
-      colorSecundario: Color(0xFF1E293B),
-      eyeShape: QrEyeShape.circle,
-      moduleShape: QrDataModuleShape.square,
-      formatoGlosa: 'COSMOL-BMSC-SIMPLEQR',
+      formatoGlosa: 'COSMOL-JESUS-NAZARENO-SIMPLEQR',
     ),
   ];
 
@@ -152,9 +134,14 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
     super.initState();
     _pasoActual = _PasoPagoSheet.seleccionFacturas;
 
-    // Normalizar facturas disponibles
+    // Normalizar facturas disponibles ordenadas cronológicamente (más antigua primero)
     if (widget.facturas.isNotEmpty) {
       _facturasDisponibles = List.from(widget.facturas);
+      _facturasDisponibles.sort((a, b) {
+        if (a.anio != b.anio) return a.anio.compareTo(b.anio);
+        if (a.mes != b.mes) return a.mes.compareTo(b.mes);
+        return b.diasMora.compareTo(a.diasMora);
+      });
     } else {
       // Fallback si no vinieron ítems desagregados pero existe saldo
       _facturasDisponibles = [
@@ -176,7 +163,7 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
     // Por defecto, todas las facturas se seleccionan inicialmente
     _facturasSeleccionadas = _facturasDisponibles.map((f) => f.nroFacip).toSet();
 
-    // Inicializar primera variante bancaria
+    // Inicializar primera variante bancaria (Cooperativa Jesús Nazareno)
     _varianteActual = _variantesBancos[0];
     _payloadQrEstatico = '';
     _montoFijadoQr = 0.0;
@@ -209,12 +196,37 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
     return periodos.join(', ');
   }
 
-  void _toggleFactura(String nroFacip) {
+  /// Selección estricta de facturas en orden cronológico obligatorio (FIFO):
+  /// Obliga a pagar la primera factura (más antigua) antes de permitir la segunda,
+  /// y así sucesivamente.
+  void _toggleFacturaPorIndice(int index) {
     setState(() {
-      if (_facturasSeleccionadas.contains(nroFacip)) {
-        _facturasSeleccionadas.remove(nroFacip);
+      final nroFacip = _facturasDisponibles[index].nroFacip;
+      final estaSeleccionadaActualmente =
+          _facturasSeleccionadas.contains(nroFacip);
+
+      if (!estaSeleccionadaActualmente) {
+        // Al seleccionar la factura 'index', obligatoriamente se marcan todas desde la primera (0) hasta 'index'
+        _facturasSeleccionadas.clear();
+        for (int i = 0; i <= index; i++) {
+          _facturasSeleccionadas.add(_facturasDisponibles[i].nroFacip);
+        }
       } else {
-        _facturasSeleccionadas.add(nroFacip);
+        // Ya estaba seleccionada:
+        final totalSeleccionadas = _facturasSeleccionadas.length;
+        if (index == totalSeleccionadas - 1) {
+          // Si es la última de la secuencia seleccionada, la desmarca (retrocede a 0 .. index - 1)
+          _facturasSeleccionadas.clear();
+          for (int i = 0; i < index; i++) {
+            _facturasSeleccionadas.add(_facturasDisponibles[i].nroFacip);
+          }
+        } else {
+          // Si tiene facturas posteriores seleccionadas, corta para dejar seleccionadas hasta 'index'
+          _facturasSeleccionadas.clear();
+          for (int i = 0; i <= index; i++) {
+            _facturasSeleccionadas.add(_facturasDisponibles[i].nroFacip);
+          }
+        }
       }
     });
   }
@@ -224,8 +236,10 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
       if (_facturasSeleccionadas.length == _facturasDisponibles.length) {
         _facturasSeleccionadas.clear();
       } else {
-        _facturasSeleccionadas =
-            _facturasDisponibles.map((f) => f.nroFacip).toSet();
+        _facturasSeleccionadas.clear();
+        for (final f in _facturasDisponibles) {
+          _facturasSeleccionadas.add(f.nroFacip);
+        }
       }
     });
   }
@@ -400,6 +414,33 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
 
         const SizedBox(height: 16),
 
+        // Banner explicativo de orden cronológico obligatorio (FIFO)
+        Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEFF6FF),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFBFDBFE)),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.info_outline, size: 18, color: Color(0xFF1D4ED8)),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Por normativa, las facturas deben cancelarse en orden cronológico obligatorio (la más antigua primero).',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Color(0xFF1E40AF),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+
         // Barra informativa de selección
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -429,7 +470,7 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
 
         const SizedBox(height: 8),
 
-        // Lista interactiva de facturas disponibles
+        // Lista interactiva de facturas disponibles con prelación estricta
         ...List.generate(_facturasDisponibles.length, (index) {
           final f = _facturasDisponibles[index];
           final estaSeleccionada = _facturasSeleccionadas.contains(f.nroFacip);
@@ -457,20 +498,20 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => _toggleFactura(f.nroFacip),
+                onTap: () => _toggleFacturaPorIndice(index),
                 child: Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   child: Row(
                     children: [
-                      // Checkbox
+                      // Checkbox controlado por prelación cronológica
                       Checkbox(
                         value: estaSeleccionada,
                         activeColor: const Color(0xFF16A34A),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        onChanged: (_) => _toggleFactura(f.nroFacip),
+                        onChanged: (_) => _toggleFacturaPorIndice(index),
                       ),
                       const SizedBox(width: 8),
 
@@ -481,6 +522,32 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
                           children: [
                             Row(
                               children: [
+                                Container(
+                                  margin: const EdgeInsets.only(right: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: index == 0
+                                        ? const Color(0xFFFEF2F2)
+                                        : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(6),
+                                    border: Border.all(
+                                      color: index == 0
+                                          ? const Color(0xFFFECACA)
+                                          : const Color(0xFFE2E8F0),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    index == 0 ? '#1 Más antigua' : '#${index + 1}',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      color: index == 0
+                                          ? const Color(0xFFB91C1C)
+                                          : AppColors.textSecondary,
+                                    ),
+                                  ),
+                                ),
                                 Flexible(
                                   child: Text(
                                     mesTexto,
@@ -993,8 +1060,8 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
               const Divider(height: 18),
               _buildFilaTicket('Código de Socio', comprobante.codSocio),
               const Divider(height: 18),
-              _buildFilaTicket(
-                  'Entidad Receptora', '${_varianteActual.bancoNombre} (Demo)'),
+              _buildFilaTicket('Entidad Receptora',
+                  '${_varianteActual.bancoNombre} (Convenio COSMOL)'),
               const Divider(height: 18),
               _buildFilaTicket('Facturas Canceladas',
                   '$_cantFacturasFijadas factura(s) seleccionada(s)'),

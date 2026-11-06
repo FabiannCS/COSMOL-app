@@ -203,7 +203,7 @@ async def simular_pago(
         tipo_nombre = "Pago: Multipago (Demo)"
     else:
         id_tipo_pago = 12
-        tipo_nombre = "Pago: Código QR (Demo)"
+        tipo_nombre = "Pago: QR Jesús Nazareno (Demo)"
 
     # Obtener datos de socio para enriquecer telemetría
     nombre_socio = f"SOCIO {cod_socio_int}"
