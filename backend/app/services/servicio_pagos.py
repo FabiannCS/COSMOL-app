@@ -102,7 +102,7 @@ class ServicioPagos:
         canales = [
             CanalPagoItem(
                 id="qr_simple",
-                nombre="Pago Rápido con Código QR (Jesús Nazareno)",
+                nombre="Pagar por la App (Jesús Nazareno)",
                 descripcion="Genera un código QR Simple interoperable de la Cooperativa Jesús Nazareno para pagar desde cualquier app bancaria de Bolivia",
                 url_redireccion="mock://pago-qr",
                 icono="qr_code",
@@ -112,21 +112,12 @@ class ServicioPagos:
             CanalPagoItem(
                 id="multipago",
                 nombre="Multipago Bolivia",
-                descripcion="Pago seguro con Simple QR interoperable, Tarjeta de Débito/Crédito y Banca por Internet",
+                descripcion="Pago seguro con Simple QR interoperable, Tarjeta de Débito/Crédito y Banca por Internet en pasarela oficial",
                 url_redireccion=settings.URL_MULTIPAGO_COSMOL,
-                icono="qr_code",
+                icono="open_in_browser",
                 soporta_qr=True,
                 activo=True
             ),
-            CanalPagoItem(
-                id="pago_al_paso",
-                nombre="Pago al Paso 24/7",
-                descripcion="Red de cobranza y plataforma de pago digital habilitada para servicios COSMOL R.L.",
-                url_redireccion=settings.URL_PAGO_AL_PASO_COSMOL,
-                icono="storefront",
-                soporta_qr=True,
-                activo=True
-            )
         ]
 
         return CanalesPagoResponse(
@@ -154,9 +145,9 @@ class ServicioPagos:
         persiste la traza en PostgreSQL y despacha auditoría asíncrona hacia ChatbotReportes.
         """
         canal_limpio = canal_id.strip().lower()
-        if canal_limpio not in ("multipago", "pago_al_paso"):
+        if canal_limpio != "multipago":
             raise BadRequestException(
-                message=f"Canal de pago '{canal_id}' no es válido. Opciones permitidas: 'multipago', 'pago_al_paso'.",
+                message=f"Canal de pago '{canal_id}' no es válido para redirección externa. Opción permitida: 'multipago'.",
                 error_code="INVALID_PAYMENT_CHANNEL"
             )
 
@@ -182,11 +173,7 @@ class ServicioPagos:
         )
 
         # 3. Determinar URL oficial de redirección
-        url_destino = (
-            settings.URL_MULTIPAGO_COSMOL
-            if canal_limpio == "multipago"
-            else settings.URL_PAGO_AL_PASO_COSMOL
-        )
+        url_destino = settings.URL_MULTIPAGO_COSMOL
 
         # 4. Registrar en PostgreSQL
         try:
@@ -212,7 +199,7 @@ class ServicioPagos:
             monto_bs
         )
 
-        nombre_canal = "Multipago Bolivia" if canal_limpio == "multipago" else "Pago al Paso 24/7"
+        nombre_canal = "Multipago Bolivia"
         return RegistrarIntentoPagoResponse(
             exito=True,
             cod_socio=cod_socio.strip(),

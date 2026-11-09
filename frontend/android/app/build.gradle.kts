@@ -8,7 +8,8 @@ plugins {
 android {
     namespace = "bo.cosmol.app.cosmol_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    // ndkVersion se omite para evitar descargar 8.5 GB de NDK en laptops con almacenamiento ajustado
+    // ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
