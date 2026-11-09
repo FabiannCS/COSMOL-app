@@ -119,10 +119,13 @@ async def test_obtener_canales_pago_exitoso(client: AsyncClient, db_session: Asy
     assert multipago["url_redireccion"] == settings.URL_MULTIPAGO_COSMOL
     assert multipago["soporta_qr"] is True
 
-    # Validar canal Pago al Paso
-    al_paso = next(c for c in data["canales"] if c["id"] == "pago_al_paso")
-    assert al_paso["nombre"] == "Pago al Paso 24/7"
-    assert al_paso["url_redireccion"] == settings.URL_PAGO_AL_PASO_COSMOL
+    # Validar canal Pagar por la App (QR Simple Jesús Nazareno)
+    qr_app = next(c for c in data["canales"] if c["id"] == "qr_simple")
+    assert "Jesús Nazareno" in qr_app["nombre"]
+    assert qr_app["soporta_qr"] is True
+
+    # Validar que Pago al Paso ya no está presente
+    assert not any(c["id"] == "pago_al_paso" for c in data["canales"])
 
 
 @pytest.mark.asyncio
