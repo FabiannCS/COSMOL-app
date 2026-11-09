@@ -499,6 +499,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
     state = state.copyWith(status: AuthStatus.onboardingRequired);
   }
 
+  void resetStatus() {
+    state = state.copyWith(
+      status: AuthStatus.unauthenticated,
+      clearTransferState: true,
+      errorMessage: null,
+      isLoading: false,
+    );
+  }
+
   Future<void> setAuthenticatedSession({
     required String accessToken,
     required String refreshToken,

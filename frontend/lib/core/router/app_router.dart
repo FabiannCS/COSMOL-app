@@ -47,7 +47,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       }
 
       if (status == AuthStatus.onboardingRequired) {
-        return isOnboarding ? null : '/onboarding';
+        return isLoggingIn || isOnboarding || isRecuperarPassword || isMigrarCelular ? null : '/onboarding';
       }
 
       if (status == AuthStatus.authenticated) {

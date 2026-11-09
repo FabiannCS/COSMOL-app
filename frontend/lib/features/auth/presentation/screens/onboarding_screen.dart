@@ -6,6 +6,7 @@ import '../../../../core/config/theme/app_text_styles.dart';
 import '../../../../core/widgets/cosmol_app_bar.dart';
 import '../../../../core/widgets/cosmol_button.dart';
 import '../../../../core/widgets/cosmol_text_field.dart';
+import '../providers/auth_provider.dart';
 import '../providers/onboarding_provider.dart';
 import '../widgets/onboarding_progress_tracker.dart';
 
@@ -125,6 +126,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               icon: Icons.login,
               onPressed: () {
                 Navigator.pop(ctx);
+                ref.read(authProvider.notifier).resetStatus();
                 context.go('/login');
               },
             ),
@@ -184,9 +186,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final onboardingState = ref.watch(onboardingProvider);
 
     return PopScope(
-      canPop: context.canPop(),
+      canPop: false,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) {
+        if (didPop) return;
+        ref.read(authProvider.notifier).resetStatus();
+        if (context.canPop()) {
+          context.pop();
+        } else {
           context.go('/login');
         }
       },
@@ -197,6 +203,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           subtitle: 'Registro De Socio',
           showBackButton: true,
           onBackPressed: () {
+            ref.read(authProvider.notifier).resetStatus();
             if (context.canPop()) {
               context.pop();
             } else {
