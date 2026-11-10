@@ -44,8 +44,15 @@ def create_access_token(
     else:
         expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
 
+    sub_val = subject
+    if isinstance(subject, dict):
+        sub_val = subject.get("sub") or subject.get("id") or subject.get("usuario_id")
+        extra = {k: v for k, v in subject.items() if k not in ("sub", "id", "usuario_id")}
+        if extra:
+            extra_claims = {**(extra_claims or {}), **extra}
+
     to_encode: Dict[str, Any] = {
-        "sub": str(subject),
+        "sub": str(sub_val),
         "iat": now,
         "exp": expire,
         "type": "access",
@@ -73,8 +80,12 @@ def create_refresh_token(
     else:
         expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
 
+    sub_val = subject
+    if isinstance(subject, dict):
+        sub_val = subject.get("sub") or subject.get("id") or subject.get("usuario_id")
+
     to_encode: Dict[str, Any] = {
-        "sub": str(subject),
+        "sub": str(sub_val),
         "iat": now,
         "exp": expire,
         "type": "refresh",

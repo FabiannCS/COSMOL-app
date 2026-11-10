@@ -268,6 +268,8 @@ class MigrarTelefonoIniciarResponse(BaseModel):
 class MigrarTelefonoConfirmarRequest(BaseModel):
     session_id: str = Field(..., description="ID de sesión obtenido al iniciar la migración.")
     codigo_otp: str = Field(..., min_length=6, max_length=6, description="Código de 6 dígitos recibido en el nuevo celular.")
+    device_id: Optional[str] = Field(default=None, description="Identificador único del nuevo dispositivo.")
+    modelo_dispositivo: Optional[str] = Field(default=None, description="Modelo del nuevo dispositivo móvil.")
 
     @field_validator("codigo_otp")
     @classmethod

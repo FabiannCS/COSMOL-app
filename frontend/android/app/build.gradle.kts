@@ -37,6 +37,23 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    applicationVariants.all {
+        val variant = this
+        outputs.all {
+            val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
+            output?.outputFileName = "COSMOL-RL-app-v${variant.versionName}.apk"
+        }
+        assembleProvider.configure {
+            doLast {
+                val flutterApkDir = rootProject.layout.buildDirectory.dir("app/outputs/flutter-apk").get().asFile
+                val defaultApk = flutterApkDir.resolve("app-release.apk")
+                if (defaultApk.exists()) {
+                    defaultApk.copyTo(flutterApkDir.resolve("COSMOL-RL-app-v${variant.versionName}.apk"), overwrite = true)
+                }
+            }
+        }
+    }
 }
 
 kotlin {

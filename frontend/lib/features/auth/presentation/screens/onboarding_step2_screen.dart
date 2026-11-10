@@ -6,6 +6,7 @@ import '../../../../core/config/theme/app_text_styles.dart';
 import '../../../../core/widgets/cosmol_app_bar.dart';
 import '../../../../core/widgets/cosmol_button.dart';
 import '../../../../core/widgets/cosmol_text_field.dart';
+import '../providers/auth_provider.dart';
 import '../providers/onboarding_provider.dart';
 import '../widgets/onboarding_step2_stepper.dart';
 import '../widgets/verified_socio_card.dart';
@@ -134,6 +135,7 @@ class _OnboardingStep2ScreenState extends ConsumerState<OnboardingStep2Screen> {
             suffixIcon: Icons.login,
             onPressed: () {
               Navigator.of(ctx).pop();
+              ref.read(authProvider.notifier).resetStatus();
               context.go('/login');
             },
           ),

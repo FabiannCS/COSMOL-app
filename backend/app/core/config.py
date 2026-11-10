@@ -1,6 +1,6 @@
 import os
-from typing import List
-from pydantic import field_validator
+from typing import Any, List, Optional
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     """
     # Entorno y Depuración
     PROJECT_NAME: str = "COSMOL R.L. - Backend API"
-    VERSION: str = "1.0.6"
+    VERSION: str = "1.1.0"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
@@ -20,6 +20,17 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def parse_debug_bool(cls, v: Any) -> bool:
+        if isinstance(v, str):
+            v_lower = v.strip().lower()
+            if v_lower in ("release", "prod", "production", "false", "0", "no", "disabled"):
+                return False
+            if v_lower in ("debug", "dev", "development", "true", "1", "yes", "enabled"):
+                return True
+        return bool(v)
 
     @field_validator("SECRET_KEY")
     @classmethod
@@ -55,12 +66,23 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "cosmol_user"
     POSTGRES_PASSWORD: str = "cosmol_secret_pass"
     POSTGRES_DB: str = "cosmol_db"
-    DATABASE_URL: str = "postgresql+asyncpg://cosmol_user:cosmol_secret_pass@db-postgres:5432/cosmol_db"
+    DATABASE_URL: Optional[str] = None
 
     # Caché y Redis
     REDIS_HOST: str = "cache-redis"
     REDIS_PORT: int = 6379
-    REDIS_URL: str = "redis://cache-redis:6379/0"
+    REDIS_URL: Optional[str] = None
+
+    @model_validator(mode="after")
+    def assemble_dynamic_urls(self) -> "Settings":
+        if not self.DATABASE_URL:
+            self.DATABASE_URL = (
+                f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+                f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+            )
+        if not self.REDIS_URL:
+            self.REDIS_URL = f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+        return self
 
     # Almacenamiento de Documentos (MinIO)
     MINIO_ENDPOINT: str = "storage-minio:9000"

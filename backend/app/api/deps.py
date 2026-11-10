@@ -65,9 +65,14 @@ async def get_token_payload(token: Optional[str] = Depends(oauth2_scheme)) -> Di
         )
 
 
-async def get_current_user_id(payload: Dict[str, Any] = Depends(get_token_payload)) -> str:
+async def get_current_user_id(
+    payload: Dict[str, Any] = Depends(get_token_payload),
+    redis: Redis = Depends(get_redis)
+) -> str:
     """
     Obtiene el ID del usuario digital autenticado extraído directamente del JWT payload ('sub').
+    Valida en tiempo real contra Redis que la sesión del dispositivo no haya sido revocada
+    por el inicio de sesión en un nuevo hardware (Estilo WhatsApp Single-Device).
     """
     user_id: Optional[str] = payload.get("sub")
     if not user_id:
@@ -75,4 +80,23 @@ async def get_current_user_id(payload: Dict[str, Any] = Depends(get_token_payloa
             message="El token no contiene un identificador de usuario válido",
             error_code="AUTH_TOKEN_NO_SUBJECT"
         )
+
+    token_device_id: Optional[str] = payload.get("device_id")
+    if token_device_id and redis:
+        try:
+            device_activo = await redis.get(f"sesion_activa:{user_id}")
+            if device_activo:
+                if isinstance(device_activo, bytes):
+                    device_activo = device_activo.decode("utf-8")
+                if device_activo != token_device_id:
+                    raise UnauthorizedException(
+                        message="Su sesión ha sido iniciada en otro dispositivo. Por seguridad, debe iniciar sesión nuevamente.",
+                        error_code="SESSION_REVOKED_NEW_DEVICE"
+                    )
+        except UnauthorizedException:
+            raise
+        except Exception:
+            # En caso de fallo transitorio en Redis, permitir paso para alta disponibilidad
+            pass
+
     return user_id

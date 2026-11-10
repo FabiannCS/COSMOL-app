@@ -1,9 +1,9 @@
 """
 Rutas y Endpoints REST para Autenticación, Onboarding Dual OTP y Multicuenta.
 """
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from uuid import UUID
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, status
 from redis.asyncio import Redis
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -404,13 +404,17 @@ async def migrar_telefono_iniciar(
 )
 async def migrar_telefono_confirmar(
     datos: MigrarTelefonoConfirmarRequest,
+    x_device_id: Optional[str] = Header(None, alias="X-Device-Id"),
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> MigrarTelefonoConfirmarResponse:
     servicio = ServicioAutenticacion(redis, db=db)
+    dev_id = datos.device_id or x_device_id
     res = await servicio.confirmar_migracion_telefono(
         session_id=datos.session_id,
-        codigo_otp=datos.codigo_otp
+        codigo_otp=datos.codigo_otp,
+        device_id=dev_id,
+        modelo_dispositivo=datos.modelo_dispositivo
     )
     return MigrarTelefonoConfirmarResponse(**res)
 

@@ -99,10 +99,16 @@ class ConsumoPeriodoModel {
   String get estado => estadoLectura;
   String? get fecha => fechaLectura;
 
-  bool get isPagado =>
-      estadoLectura == '1' ||
-      estadoLectura == 'NORMAL' ||
-      estadoLectura.toLowerCase() == 'pagado';
+  bool get isPagado {
+    final e = estadoLectura.toLowerCase().trim();
+    if (e == 'impaga' || e == 'impago' || e == 'pendiente' || e == 'vencida' || e == 'vencido' || e == '0') {
+      return false;
+    }
+    return e == '1' ||
+        e == 'normal' ||
+        e == 'pagado' ||
+        e == 'pagada';
+  }
 
   String get mesNombreCorto {
     const meses = [
@@ -276,3 +282,64 @@ class HistorialConsumoModel {
 
 // Alias de retrocompatibilidad
 typedef ConsumoHistorialResponse = HistorialConsumoModel;
+
+/// Estados posibles para una factura en el historial de consumo:
+/// - pagada: Factura cancelada/pagada.
+/// - impaga: Factura pendiente de pago regular.
+/// - vencida: Factura con mora que superó el umbral (primera impaga si hay más de 2 impagas).
+enum EstadoFacturaConsumo {
+  pagada,
+  impaga,
+  vencida,
+}
+
+extension ConsumoFacturaListExtension on List<ConsumoPeriodoModel> {
+  /// Determina el estado de cobro de cada factura según las reglas de negocio de COSMOL RL:
+  /// 1. Si está pagada -> EstadoFacturaConsumo.pagada
+  /// 2. Si no está pagada:
+  ///    - Si hay más de 2 facturas impagas en total (> 2):
+  ///      Las 2 más recientes cronológicamente se mantienen como 'impaga'.
+  ///      Todas las anteriores (más antiguas) pasan a ser 'vencida'.
+  ///    - Si hay 2 o menos facturas impagas (<= 2):
+  ///      Todas las facturas no pagadas son 'impaga'.
+  EstadoFacturaConsumo obtenerEstadoFactura(ConsumoPeriodoModel factura) {
+    if (factura.isPagado) {
+      return EstadoFacturaConsumo.pagada;
+    }
+
+    if (factura.estadoLectura.toUpperCase().contains('VENCID')) {
+      return EstadoFacturaConsumo.vencida;
+    }
+
+    final unpaidItems = where((f) => !f.isPagado).toList();
+    if (unpaidItems.length > 2) {
+      // Ordenar cronológicamente (más antigua primero, más reciente al final)
+      final sortedUnpaid = List<ConsumoPeriodoModel>.from(unpaidItems);
+      sortedUnpaid.sort((a, b) {
+        final cmpAnio = a.anio.compareTo(b.anio);
+        if (cmpAnio != 0) return cmpAnio;
+        final cmpMes = a.mes.compareTo(b.mes);
+        if (cmpMes != 0) return cmpMes;
+        return indexOf(a).compareTo(indexOf(b));
+      });
+
+      // Las 2 facturas impagas más recientes en el tiempo se mantienen como 'impaga'
+      final dosMasRecientes = sortedUnpaid.sublist(sortedUnpaid.length - 2);
+
+      final esDeLasDosMasRecientes = dosMasRecientes.any((f) =>
+          f.periodo == factura.periodo &&
+          f.anio == factura.anio &&
+          f.mes == factura.mes &&
+          (indexOf(f) == indexOf(factura) || f == factura));
+
+      if (esDeLasDosMasRecientes) {
+        return EstadoFacturaConsumo.impaga;
+      }
+
+      // Todas las demás impagas que superan las 2 permitidas pasan a ser 'vencida'
+      return EstadoFacturaConsumo.vencida;
+    }
+
+    return EstadoFacturaConsumo.impaga;
+  }
+}

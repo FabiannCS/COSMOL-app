@@ -233,13 +233,13 @@ class ConsumoHistoryTable extends StatelessWidget {
                             ),
                           ),
 
-                          // Estado (Pagado / Pendiente) - Overflow-Proof con FittedBox
+                          // Estado (Pagada / Impaga / Vencida) - Overflow-Proof con FittedBox
                           Expanded(
                             flex: 3,
                             child: Center(
                               child: FittedBox(
                                 fit: BoxFit.scaleDown,
-                                child: _buildStatusChip(item.isPagado),
+                                child: _buildStatusChip(facturas.obtenerEstadoFactura(item)),
                               ),
                             ),
                           ),
@@ -307,42 +307,40 @@ class ConsumoHistoryTable extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusChip(bool isPagado) {
-    if (isPagado) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              'Pagado',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                color: AppColors.successGreen,
-              ),
-            ),
-          ],
-        ),
-      );
-    } else {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(width: 3),
-            Text(
-              'Pendiente',
-              style: GoogleFonts.plusJakartaSans(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w700,
-                color: AppColors.errorRed,
-              ),
-            ),
-          ],
-        ),
-      );
+  Widget _buildStatusChip(EstadoFacturaConsumo estado) {
+    final String label;
+    final Color color;
+
+    switch (estado) {
+      case EstadoFacturaConsumo.pagada:
+        label = 'Pagada';
+        color = AppColors.successGreen;
+        break;
+      case EstadoFacturaConsumo.impaga:
+        label = 'Impaga';
+        color = const Color(0xFFE65100);
+        break;
+      case EstadoFacturaConsumo.vencida:
+        label = 'Vencida';
+        color = AppColors.errorRed;
+        break;
     }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -1065,7 +1065,9 @@ class ServicioAutenticacion:
     async def confirmar_migracion_telefono(
         self,
         session_id: str,
-        codigo_otp: str
+        codigo_otp: str,
+        device_id: Optional[str] = None,
+        modelo_dispositivo: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Confirma la migración validando el OTP del nuevo celular.
@@ -1096,6 +1098,7 @@ class ServicioAutenticacion:
 
         nombre_titular = "Socio COSMOL"
         suministros_lista: List[SuministroResponse] = []
+        nuevo_dev = device_id or f"mig_{uuid.uuid4().hex[:12]}"
 
         if self.db:
             u_id = uuid.UUID(user_id_str)
@@ -1104,11 +1107,30 @@ class ServicioAutenticacion:
             usuario_db = res.scalars().first()
             if usuario_db:
                 usuario_db.telefono = nuevo_telefono
+
+                # Registrar o actualizar Dispositivo en BD si se proporcionó device_id
+                if device_id:
+                    stmt_disp = select(Dispositivo).where(
+                        Dispositivo.usuario_id == usuario_db.id,
+                        Dispositivo.device_id == device_id
+                    )
+                    res_disp = await self.db.execute(stmt_disp)
+                    disp_existente = res_disp.scalars().first()
+                    if disp_existente:
+                        if modelo_dispositivo:
+                            disp_existente.modelo_dispositivo = modelo_dispositivo
+                        disp_existente.ultimo_acceso = datetime.now(timezone.utc)
+                    else:
+                        disp_nuevo = Dispositivo(
+                            usuario_id=usuario_db.id,
+                            device_id=device_id,
+                            modelo_dispositivo=modelo_dispositivo,
+                            ultimo_acceso=datetime.now(timezone.utc)
+                        )
+                        self.db.add(disp_nuevo)
+
                 await self.db.commit()
                 await self.db.refresh(usuario_db)
-
-                # Revocar sesiones previas en otros dispositivos
-                await self.redis.delete(f"sesion_activa:{u_id}")
 
                 nom_real = await self._obtener_nombre_socio(cod_socio)
                 if nom_real:
@@ -1133,11 +1155,20 @@ class ServicioAutenticacion:
         if cod_socio in USUARIOS_REGISTRADOS_DB:
             USUARIOS_REGISTRADOS_DB[cod_socio]["telefono"] = nuevo_telefono
 
-        # Emitir tokens JWT
-        access_token = create_access_token({"sub": user_id_str, "cod_socio": cod_socio})
-        refresh_token = create_refresh_token({"sub": user_id_str, "cod_socio": cod_socio})
+        # Asignar la nueva sesión activa en Redis (revoca automáticamente el dispositivo previo)
+        sesion_dispositivo_key = f"sesion_activa:{user_id_str}"
+        await self.redis.set(sesion_dispositivo_key, nuevo_dev)
 
-        logger.info(f"[MIGRACIÓN TELÉFONO EXITOSA] Socio {cod_socio} migrado a {nuevo_telefono}.")
+        # Emitir tokens JWT limpios (subject = user_id string UUID plano)
+        extra_claims = {
+            "cod_socio": cod_socio,
+            "nombre": nombre_titular,
+            "device_id": nuevo_dev
+        }
+        access_token = create_access_token(subject=user_id_str, extra_claims=extra_claims)
+        refresh_token = create_refresh_token(subject=user_id_str)
+
+        logger.info(f"[MIGRACIÓN TELÉFONO EXITOSA] Socio {cod_socio} migrado a {nuevo_telefono} en dispositivo {nuevo_dev}.")
 
         return {
             "mensaje": "Número de teléfono actualizado exitosamente. Bienvenido a COSMOL.",
