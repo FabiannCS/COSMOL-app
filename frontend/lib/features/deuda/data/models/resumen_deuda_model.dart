@@ -218,3 +218,64 @@ class ResumenDeudaModel {
     };
   }
 }
+
+/// Estados posibles para una factura en la sección de Deuda:
+/// - pagada: Factura cancelada/pagada.
+/// - impaga: Factura no pagada regular (si hay <= 2 impagas, o las 2 más recientes si hay > 2).
+/// - vencida: Factura con mora que superó el umbral (antiguas si hay más de 2 impagas).
+enum EstadoFacturaDeuda {
+  pagada,
+  impaga,
+  vencida,
+}
+
+extension DeudaFacturaListExtension on List<FacturaPendienteModel> {
+  /// Determina el estado de cobro de cada factura impaga según las reglas de negocio de COSMOL RL:
+  /// 1. Si hay más de 2 facturas impagas en total (> 2):
+  ///    - Las 2 más recientes cronológicamente se mantienen como 'impaga'.
+  ///    - Todas las anteriores (más antiguas) pasan a ser 'vencida'.
+  /// 2. Si hay 2 o menos facturas impagas (<= 2):
+  ///    - Todas las facturas no pagadas son 'impaga'.
+  EstadoFacturaDeuda obtenerEstadoFactura(FacturaPendienteModel factura) {
+    if (isEmpty) {
+      return EstadoFacturaDeuda.impaga;
+    }
+
+    if (length > 2) {
+      // Ordenar cronológicamente (más antigua primero, más reciente al final)
+      final sortedUnpaid = List<FacturaPendienteModel>.from(this);
+      sortedUnpaid.sort((a, b) {
+        final cmpAnio = a.anio.compareTo(b.anio);
+        if (cmpAnio != 0) return cmpAnio;
+        final cmpMes = a.mes.compareTo(b.mes);
+        if (cmpMes != 0) return cmpMes;
+        final cmpMora = b.diasMora.compareTo(a.diasMora);
+        if (cmpMora != 0) return cmpMora;
+        return indexOf(a).compareTo(indexOf(b));
+      });
+
+      // Las 2 facturas impagas más recientes en el tiempo se mantienen como 'impaga'
+      final dosMasRecientes = sortedUnpaid.sublist(sortedUnpaid.length - 2);
+      final idxFactura = indexOf(factura);
+
+      final esDeLasDosMasRecientes = dosMasRecientes.any((f) {
+        if (identical(f, factura) || f == factura) return true;
+        if (idxFactura != -1 && indexOf(f) != idxFactura) return false;
+        return f.nroFacip == factura.nroFacip &&
+            f.nroFactura == factura.nroFactura &&
+            f.periodo == factura.periodo &&
+            f.anio == factura.anio &&
+            f.mes == factura.mes;
+      });
+
+      if (esDeLasDosMasRecientes) {
+        return EstadoFacturaDeuda.impaga;
+      }
+
+      // Todas las demás impagas antiguas que superan las 2 permitidas pasan a ser 'vencida'
+      return EstadoFacturaDeuda.vencida;
+    }
+
+    return EstadoFacturaDeuda.impaga;
+  }
+}

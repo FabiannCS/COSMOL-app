@@ -100,8 +100,8 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
       _tabController.animateTo(state.selectedTabIndex);
     }
 
-    final facturasCount = state.facturas.length;
-    final avisosCobranzaCount = state.avisosCobranza.length;
+    final facturasCount = state.facturasUnificadas.length;
+    final avisosCobranzaCount = state.avisosCobranzaCompletos.length;
     final avisosCorteCount = state.avisosCorte.length;
 
     return RefreshIndicator(
@@ -262,9 +262,9 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
             ),
             const SizedBox(height: 14),
 
-            // Selector de filtro de facturas (Todas, Pagadas, Pendientes)
-            if (_tabController.index == 0) ...[
-              _buildFiltroFacturas(state),
+            // Selector de filtro de estado (Todas, Pagadas, Impagas, Vencidas) para Factura y Cobranza
+            if (_tabController.index == 0 || _tabController.index == 1) ...[
+              _buildFiltroDocumentos(state, esCobranza: _tabController.index == 1),
               const SizedBox(height: 12),
             ],
 
@@ -280,35 +280,64 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
     );
   }
 
-  Widget _buildFiltroFacturas(DocumentosState state) {
+  Widget _buildFiltroDocumentos(
+    DocumentosState state, {
+    required bool esCobranza,
+  }) {
+    final filtroActual =
+        esCobranza ? state.filtroCobranza : state.filtroFacturas;
+    final totalCount = esCobranza
+        ? state.avisosCobranzaCompletos.length
+        : state.facturasUnificadas.length;
+    final pagadasCount = esCobranza
+        ? state.totalCobranzaPagadasCount
+        : state.totalFacturasPagadasCount;
+    final impagasCount = esCobranza
+        ? state.totalCobranzaImpagasCount
+        : state.totalFacturasImpagasCount;
+    final vencidasCount = esCobranza
+        ? state.totalCobranzaVencidasCount
+        : state.totalFacturasVencidasCount;
+
+    void seleccionarFiltro(FiltroEstadoFactura filtro) {
+      final notifier = ref.read(documentosProvider.notifier);
+      if (esCobranza) {
+        notifier.cambiarFiltroCobranza(filtro);
+      } else {
+        notifier.cambiarFiltroFacturas(filtro);
+      }
+    }
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
           _buildFilterChip(
-            label: 'Todas (${state.facturasUnificadas.length})',
-            isSelected: state.filtroFacturas == FiltroEstadoFactura.todas,
-            onSelected: () => ref
-                .read(documentosProvider.notifier)
-                .cambiarFiltroFacturas(FiltroEstadoFactura.todas),
+            label: 'Todas ($totalCount)',
+            isSelected: filtroActual == FiltroEstadoFactura.todas,
+            selectedColor: AppColors.primary,
+            onSelected: () => seleccionarFiltro(FiltroEstadoFactura.todas),
           ),
           const SizedBox(width: 8),
           _buildFilterChip(
-            label: 'Pagadas (${state.totalFacturasPagadasCount})',
-            isSelected: state.filtroFacturas == FiltroEstadoFactura.pagadas,
-            selectedColor: AppColors.primary,
-            onSelected: () => ref
-                .read(documentosProvider.notifier)
-                .cambiarFiltroFacturas(FiltroEstadoFactura.pagadas),
+            label: 'Pagadas ($pagadasCount)',
+            isSelected: filtroActual == FiltroEstadoFactura.pagadas,
+            selectedColor: AppColors.successGreen,
+            onSelected: () => seleccionarFiltro(FiltroEstadoFactura.pagadas),
           ),
           const SizedBox(width: 8),
           _buildFilterChip(
-            label: 'Pendientes (${state.totalFacturasPendientesCount})',
-            isSelected: state.filtroFacturas == FiltroEstadoFactura.pendientes,
-            selectedColor: AppColors.primary,
-            onSelected: () => ref
-                .read(documentosProvider.notifier)
-                .cambiarFiltroFacturas(FiltroEstadoFactura.pendientes),
+            label: 'Impagas ($impagasCount)',
+            isSelected: filtroActual == FiltroEstadoFactura.impagas,
+            selectedColor: const Color(0xFFE65100),
+            onSelected: () => seleccionarFiltro(FiltroEstadoFactura.impagas),
+          ),
+          const SizedBox(width: 8),
+          _buildFilterChip(
+            label: 'Vencidas ($vencidasCount)',
+            isSelected: filtroActual == FiltroEstadoFactura.vencidas,
+            selectedColor: AppColors.errorRed,
+            onSelected: () => seleccionarFiltro(FiltroEstadoFactura.vencidas),
           ),
         ],
       ),
@@ -388,12 +417,26 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
     final docs = state.documentosTabActual;
 
     if (docs.isEmpty) {
+      final tieneDatosSinFiltro = (state.selectedTabIndex == 0 &&
+              state.facturasUnificadas.isNotEmpty &&
+              state.filtroFacturas != FiltroEstadoFactura.todas) ||
+          (state.selectedTabIndex == 1 &&
+              state.avisosCobranzaCompletos.isNotEmpty &&
+              state.filtroCobranza != FiltroEstadoFactura.todas);
+
       return DocumentEmptyWidget(
         tabIndex: state.selectedTabIndex,
         isInquilino: state.isInquilino,
-        onRefresh: () => ref
-            .read(documentosProvider.notifier)
-            .cargarDocumentos(forceRefresh: true),
+        customTitle:
+            tieneDatosSinFiltro ? 'Sin documentos en este estado' : null,
+        customDescription: tieneDatosSinFiltro
+            ? 'No se encontraron registros con el filtro seleccionado.'
+            : null,
+        onRefresh: tieneDatosSinFiltro
+            ? null
+            : () => ref
+                .read(documentosProvider.notifier)
+                .cargarDocumentos(forceRefresh: true),
       );
     }
 
@@ -407,6 +450,7 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
 
         return DocumentCardWidget(
           documento: doc,
+          estadoDocumento: state.estadoDeDocumento(doc),
           isDownloading: isDownloading,
           onVer: () => _abrirVisorPdf(doc),
           onDescargar: () => _descargarDocumento(doc),

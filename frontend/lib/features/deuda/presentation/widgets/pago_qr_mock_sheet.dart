@@ -150,7 +150,7 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
           nroFactura: 'Actual',
           codAutorizacion: 'COSMOL',
           periodo: 'Periodo Vigente',
-          mesLectura: 'Factura de Consumo Pendiente',
+          mesLectura: 'Factura de Consumo Impaga',
           anio: DateTime.now().year,
           mes: DateTime.now().month,
           montoBs: widget.montoBs > 0 ? widget.montoBs : 75.0,
@@ -445,14 +445,17 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              'Selecciona las facturas a cancelar (${_facturasDisponibles.length} disponibles):',
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: AppColors.darkNavy,
+            Expanded(
+              child: Text(
+                'Selecciona las facturas a cancelar (${_facturasDisponibles.length} disponibles):',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.darkNavy,
+                ),
               ),
             ),
+            const SizedBox(width: 8),
             TextButton(
               onPressed: _toggleSeleccionarTodas,
               style: TextButton.styleFrom(
@@ -563,7 +566,9 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
                                   ),
                                 ),
                                 const SizedBox(width: 6),
-                                _buildBadgeEstadoFactura(f.estaVencida),
+                                _buildBadgeEstadoFactura(
+                                  _facturasDisponibles.obtenerEstadoFactura(f),
+                                ),
                               ],
                             ),
                             const SizedBox(height: 2),
@@ -1167,39 +1172,57 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
     );
   }
 
-  Widget _buildBadgeEstadoFactura(bool estaVencida) {
-    if (estaVencida) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        decoration: BoxDecoration(
-          color: const Color(0xFFFEE2E2),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: const Text(
-          'Vencida',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            color: AppColors.errorRed,
+  Widget _buildBadgeEstadoFactura(EstadoFacturaDeuda estado) {
+    switch (estado) {
+      case EstadoFacturaDeuda.pagada:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFFDCFCE7),
+            borderRadius: BorderRadius.circular(6),
           ),
-        ),
-      );
+          child: const Text(
+            'Pagada',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF166534),
+            ),
+          ),
+        );
+      case EstadoFacturaDeuda.vencida:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEE2E2),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Text(
+            'Vencida',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: AppColors.errorRed,
+            ),
+          ),
+        );
+      case EstadoFacturaDeuda.impaga:
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFFEDD5),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: const Text(
+            'Impaga',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFFE65100),
+            ),
+          ),
+        );
     }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFEDD5),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: const Text(
-        'Impaga',
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: Color(0xFFC2410C),
-        ),
-      ),
-    );
   }
 
   Widget _buildFilaTicket(

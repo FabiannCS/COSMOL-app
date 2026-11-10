@@ -133,8 +133,17 @@ class DocumentoModel {
   bool get isAvisoCobranza => tipoDocumento == 'AVISO_COBRANZA';
   bool get isAvisoCorte => tipoDocumento == 'AVISO_CORTE';
 
-  bool get isPagado => estadoPago.toUpperCase() == 'PAGADO';
-  bool get isPendiente => estadoPago.toUpperCase() == 'PENDIENTE';
+  bool get isPagado {
+    final e = estadoPago.trim().toUpperCase();
+    return e == 'PAGADO' ||
+        e == 'PAGADA' ||
+        e == '1' ||
+        e == 'CANCELADO' ||
+        e == 'CANCELADA';
+  }
+
+  bool get isNoPagado => !isPagado;
+  bool get isPendiente => !isPagado;
 
   String get tituloLegible {
     switch (tipoDocumento) {
@@ -252,4 +261,71 @@ class ListaDocumentosModel {
 
   bool get isTitular => rolAcceso.toUpperCase() == 'TITULAR';
   bool get isInquilino => rolAcceso.toUpperCase() == 'CONSULTA_PAGO';
+}
+
+/// Estados posibles para una factura o aviso de cobranza en el módulo Documentos:
+/// - pagada: Documento cancelado/pagado.
+/// - impaga: Documento no pagado regular (<= 2 impagos o los 2 más recientes si hay > 2).
+/// - vencida: Documento con mora que superó el umbral (antiguos si hay más de 2 impagos).
+enum EstadoDocumento {
+  pagada,
+  impaga,
+  vencida,
+}
+
+extension DocumentoListExtension on List<DocumentoModel> {
+  /// Determina el estado de cobro de cada documento (Factura o Aviso de Cobranza)
+  /// según las reglas de negocio de COSMOL RL:
+  /// 1. Si está pagado -> EstadoDocumento.pagada
+  /// 2. Si viene marcado explícitamente como VENCIDA/VENCIDO -> EstadoDocumento.vencida
+  /// 3. Si no está pagado:
+  ///    - Si hay más de 2 documentos no pagados en total (> 2):
+  ///      Los 2 más recientes cronológicamente se mantienen como 'impaga'.
+  ///      Todos los anteriores (más antiguos) pasan a ser 'vencida'.
+  ///    - Si hay 2 o menos documentos no pagados (<= 2):
+  ///      Todos los documentos no pagados son 'impaga'.
+  EstadoDocumento obtenerEstadoDocumento(DocumentoModel doc) {
+    if (doc.isPagado) {
+      return EstadoDocumento.pagada;
+    }
+
+    if (doc.estadoPago.toUpperCase().contains('VENCID')) {
+      return EstadoDocumento.vencida;
+    }
+
+    final unpaidItems = where((d) => !d.isAvisoCorte && !d.isPagado).toList();
+    if (unpaidItems.length > 2) {
+      // Ordenar cronológicamente (más antiguo primero, más reciente al final)
+      final sortedUnpaid = List<DocumentoModel>.from(unpaidItems);
+      sortedUnpaid.sort((a, b) {
+        final cmpAnio = a.anio.compareTo(b.anio);
+        if (cmpAnio != 0) return cmpAnio;
+        final cmpMes = a.mes.compareTo(b.mes);
+        if (cmpMes != 0) return cmpMes;
+        return indexOf(a).compareTo(indexOf(b));
+      });
+
+      // Los 2 documentos no pagados más recientes se mantienen como 'impaga'
+      final dosMasRecientes = sortedUnpaid.sublist(sortedUnpaid.length - 2);
+      final idxDoc = indexOf(doc);
+
+      final esDeLosDosMasRecientes = dosMasRecientes.any((d) {
+        if (identical(d, doc) || d == doc) return true;
+        if (idxDoc != -1 && indexOf(d) != idxDoc) return false;
+        return d.id == doc.id &&
+            d.periodo == doc.periodo &&
+            d.anio == doc.anio &&
+            d.mes == doc.mes;
+      });
+
+      if (esDeLosDosMasRecientes) {
+        return EstadoDocumento.impaga;
+      }
+
+      // Todos los demás no pagados antiguos pasan a ser 'vencida'
+      return EstadoDocumento.vencida;
+    }
+
+    return EstadoDocumento.impaga;
+  }
 }

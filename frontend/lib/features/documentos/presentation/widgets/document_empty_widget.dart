@@ -7,12 +7,16 @@ class DocumentEmptyWidget extends StatelessWidget {
   final int tabIndex;
   final bool isInquilino;
   final VoidCallback? onRefresh;
+  final String? customTitle;
+  final String? customDescription;
 
   const DocumentEmptyWidget({
     super.key,
     required this.tabIndex,
     this.isInquilino = false,
     this.onRefresh,
+    this.customTitle,
+    this.customDescription,
   });
 
   @override
@@ -20,7 +24,10 @@ class DocumentEmptyWidget extends StatelessWidget {
     String title;
     String description;
 
-    if (isInquilino && (tabIndex == 0 || tabIndex == 2)) {
+    if (customTitle != null && customDescription != null) {
+      title = customTitle!;
+      description = customDescription!;
+    } else if (isInquilino && (tabIndex == 0 || tabIndex == 2)) {
       title = tabIndex == 0
           ? 'Facturas no disponibles'
           : 'Avisos de corte no disponibles';

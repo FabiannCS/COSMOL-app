@@ -461,11 +461,29 @@ class BalanceCardWidget extends ConsumerWidget {
                 child: Column(
                   children: List.generate(facturas.length, (index) {
                     final f = facturas[index];
+                    final estado = facturas.obtenerEstadoFactura(f);
                     final isLast = index == facturas.length - 1;
 
                     final mesNombre = f.mesLectura.isNotEmpty
                         ? f.mesLectura
                         : 'Periodo ${f.periodo}';
+
+                    final String estadoLabel;
+                    final Color estadoColor;
+                    switch (estado) {
+                      case EstadoFacturaDeuda.pagada:
+                        estadoLabel = 'Pagada';
+                        estadoColor = AppColors.successGreen;
+                        break;
+                      case EstadoFacturaDeuda.impaga:
+                        estadoLabel = 'Impaga';
+                        estadoColor = const Color(0xFFE65100);
+                        break;
+                      case EstadoFacturaDeuda.vencida:
+                        estadoLabel = 'Vencida';
+                        estadoColor = AppColors.errorRed;
+                        break;
+                    }
 
                     return Column(
                       children: [
@@ -501,11 +519,9 @@ class BalanceCardWidget extends ConsumerWidget {
                                       ),
                                     ),
                                     Text(
-                                      f.estaVencida ? 'Vencida' : 'Impaga',
+                                      estadoLabel,
                                       style: AppTextStyles.caption.copyWith(
-                                        color: f.estaVencida
-                                            ? AppColors.errorRed
-                                            : const Color(0xFFE65100),
+                                        color: estadoColor,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),

@@ -9,6 +9,7 @@ import '../../data/models/documento_model.dart';
 /// Estado expandido: Revela fechas clave y los botones de acción ("Ver PDF", "Descargar", "Compartir").
 class DocumentCardWidget extends StatefulWidget {
   final DocumentoModel documento;
+  final EstadoDocumento? estadoDocumento;
   final bool isDownloading;
   final VoidCallback onVer;
   final VoidCallback onDescargar;
@@ -18,6 +19,7 @@ class DocumentCardWidget extends StatefulWidget {
   const DocumentCardWidget({
     super.key,
     required this.documento,
+    this.estadoDocumento,
     this.isDownloading = false,
     required this.onVer,
     required this.onDescargar,
@@ -47,10 +49,10 @@ class _DocumentCardWidgetState extends State<DocumentCardWidget> {
   @override
   Widget build(BuildContext context) {
     final doc = widget.documento;
-    final isPagado = doc.isPagado;
     final isCorte = doc.isAvisoCorte;
+    final estado = widget.estadoDocumento ?? [doc].obtenerEstadoDocumento(doc);
 
-    // Configuración visual del badge según estado y tipo
+    // Configuración visual del badge según estado y tipo (Pagada, Impaga, Vencida o Corte)
     final Color badgeBg;
     final Color badgeText;
     final String badgeLabel;
@@ -59,14 +61,24 @@ class _DocumentCardWidgetState extends State<DocumentCardWidget> {
       badgeBg = const Color(0xFFFEE2E2);
       badgeText = AppColors.errorRed;
       badgeLabel = 'Corte';
-    } else if (isPagado) {
-      badgeBg = const Color(0xFFDCFCE7);
-      badgeText = const Color(0xFF166534);
-      badgeLabel = 'Pagada';
     } else {
-      badgeBg = const Color(0xFFFEF3C7);
-      badgeText = const Color(0xFFB45309);
-      badgeLabel = 'Pendiente';
+      switch (estado) {
+        case EstadoDocumento.pagada:
+          badgeBg = const Color(0xFFDCFCE7);
+          badgeText = const Color(0xFF166534);
+          badgeLabel = 'Pagada';
+          break;
+        case EstadoDocumento.impaga:
+          badgeBg = const Color(0xFFFFEDD5);
+          badgeText = const Color(0xFFE65100);
+          badgeLabel = 'Impaga';
+          break;
+        case EstadoDocumento.vencida:
+          badgeBg = const Color(0xFFFEE2E2);
+          badgeText = AppColors.errorRed;
+          badgeLabel = 'Vencida';
+          break;
+      }
     }
 
     // Título y subtítulo limpios
@@ -194,7 +206,7 @@ class _DocumentCardWidgetState extends State<DocumentCardWidget> {
           // Contenido desplegable animado
           AnimatedCrossFade(
             firstChild: const SizedBox.shrink(),
-            secondChild: _buildExpandedContent(doc),
+            secondChild: _buildExpandedContent(doc, estado),
             crossFadeState:
                 _isExpanded ? CrossFadeState.showSecond : CrossFadeState.showFirst,
             duration: const Duration(milliseconds: 220),
@@ -204,8 +216,9 @@ class _DocumentCardWidgetState extends State<DocumentCardWidget> {
     );
   }
 
-  Widget _buildExpandedContent(DocumentoModel doc) {
+  Widget _buildExpandedContent(DocumentoModel doc, EstadoDocumento estado) {
     final isPagado = doc.isPagado;
+    final esVencida = !isPagado && estado == EstadoDocumento.vencida;
 
     return Column(
       children: [
@@ -239,12 +252,10 @@ class _DocumentCardWidgetState extends State<DocumentCardWidget> {
                     Text(
                       'Vence: ${doc.fechaVencimientoFormateada}',
                       style: AppTextStyles.caption.copyWith(
-                        color: doc.isPendiente &&
-                                doc.fechaVencimiento!.isBefore(DateTime.now())
+                        color: esVencida
                             ? AppColors.errorRed
                             : AppColors.textSecondary,
-                        fontWeight: doc.isPendiente &&
-                                doc.fechaVencimiento!.isBefore(DateTime.now())
+                        fontWeight: esVencida
                             ? FontWeight.bold
                             : FontWeight.normal,
                         fontSize: 11,

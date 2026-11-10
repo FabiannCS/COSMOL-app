@@ -47,7 +47,9 @@ class DeudaState {
   
   /// Regla Oficial de Negocio COSMOL R.L.: Un aviso/alerta de corte solo aplica cuando se deben 3 o más facturas.
   bool get alertaCorte => (cantidadFacturas >= 3) && (resumenDeuda?.alertaCorte ?? false);
-  bool get estaVencido => resumenDeuda?.estaVencido ?? false;
+  bool get estaVencido => facturas.isNotEmpty
+      ? facturas.any((f) => facturas.obtenerEstadoFactura(f) == EstadoFacturaDeuda.vencida)
+      : (resumenDeuda?.estaVencido ?? false);
   List<FacturaPendienteModel> get facturas =>
       resumenDeuda?.facturasPendientes ?? const [];
 }
@@ -173,8 +175,10 @@ class DeudaNotifier extends StateNotifier<DeudaState> {
           .toList();
       final nuevoSaldo =
           (resumen.saldoPendienteBs - montoPagado).clamp(0.0, double.infinity);
-      final sigueVencido = restantes.any((f) => f.estaVencida);
-      final sigueAlertaCorte = restantes.length >= 2;
+      final sigueVencido = restantes.any(
+        (f) => restantes.obtenerEstadoFactura(f) == EstadoFacturaDeuda.vencida,
+      );
+      final sigueAlertaCorte = restantes.length >= 3;
 
       state = state.copyWith(
         resumenDeuda: resumen.copyWith(

@@ -79,7 +79,7 @@ class DisruptionNoticeCard extends StatelessWidget {
                 const SizedBox(height: 4),
                 Text(
                   mensajeCustom ??
-                      'Con 3 o más facturas pendientes se emite orden de corte según normativa de COSMOL R.L. Regularice su pago a tiempo para evitar la suspensión del servicio.',
+                      'Con 3 o más facturas impagas se emite orden de corte según normativa de COSMOL R.L. Regularice su pago a tiempo para evitar la suspensión del servicio.',
                   style: AppTextStyles.caption.copyWith(
                     color: AppColors.onSurfaceVariant,
                   ),

@@ -11,8 +11,8 @@ import '../../data/models/documento_model.dart';
 import '../../data/repositories/documentos_repository_impl.dart';
 import '../../domain/repositories/documentos_repository.dart';
 
-/// Filtro de visualización para la pestaña de facturas
-enum FiltroEstadoFactura { todas, pagadas, pendientes }
+/// Filtro de visualización para las pestañas de Factura y Cobranza
+enum FiltroEstadoFactura { todas, pagadas, impagas, vencidas }
 
 class DocumentosState {
   final bool isLoading;
@@ -23,6 +23,7 @@ class DocumentosState {
   final int selectedTabIndex; // 0: Facturas, 1: Avisos Cobranza, 2: Avisos Corte
   final String? currentCodSocio;
   final FiltroEstadoFactura filtroFacturas;
+  final FiltroEstadoFactura filtroCobranza;
 
   const DocumentosState({
     this.isLoading = false,
@@ -33,6 +34,7 @@ class DocumentosState {
     this.selectedTabIndex = 0,
     this.currentCodSocio,
     this.filtroFacturas = FiltroEstadoFactura.todas,
+    this.filtroCobranza = FiltroEstadoFactura.todas,
   });
 
   DocumentosState copyWith({
@@ -44,6 +46,7 @@ class DocumentosState {
     int? selectedTabIndex,
     String? currentCodSocio,
     FiltroEstadoFactura? filtroFacturas,
+    FiltroEstadoFactura? filtroCobranza,
     bool clearError = false,
     bool clearDownloading = false,
   }) {
@@ -56,6 +59,7 @@ class DocumentosState {
       selectedTabIndex: selectedTabIndex ?? this.selectedTabIndex,
       currentCodSocio: currentCodSocio ?? this.currentCodSocio,
       filtroFacturas: filtroFacturas ?? this.filtroFacturas,
+      filtroCobranza: filtroCobranza ?? this.filtroCobranza,
     );
   }
 
@@ -71,41 +75,109 @@ class DocumentosState {
     return docs;
   }
 
-  /// Facturas filtradas según el estado seleccionado (Todas, Pagadas, Pendientes)
+  /// Lista unificada de avisos de cobranza ordenada cronológicamente (más recientes primero)
+  List<DocumentoModel> get avisosCobranzaCompletos {
+    final docs = List<DocumentoModel>.from(documentosResponse?.avisosCobranza ?? []);
+    docs.sort((a, b) {
+      final compAnio = b.anio.compareTo(a.anio);
+      if (compAnio != 0) return compAnio;
+      return b.mes.compareTo(a.mes);
+    });
+    return docs;
+  }
+
+  /// Calcula el estado de un documento evaluando siempre contra la colección completa
+  /// de su tipo (sin verse afectado por filtros activos de UI).
+  EstadoDocumento estadoDeDocumento(DocumentoModel doc) {
+    if (doc.isFactura) {
+      return facturasUnificadas.obtenerEstadoDocumento(doc);
+    }
+    if (doc.isAvisoCobranza) {
+      return avisosCobranzaCompletos.obtenerEstadoDocumento(doc);
+    }
+    return doc.isPagado ? EstadoDocumento.pagada : EstadoDocumento.impaga;
+  }
+
+  /// Facturas filtradas según el estado seleccionado (Todas, Pagadas, Impagas, Vencidas)
   List<DocumentoModel> get facturas {
     final list = facturasUnificadas;
     switch (filtroFacturas) {
       case FiltroEstadoFactura.pagadas:
-        return list.where((f) => f.isPagado).toList();
-      case FiltroEstadoFactura.pendientes:
-        return list.where((f) => f.isPendiente).toList();
+        return list
+            .where((f) => list.obtenerEstadoDocumento(f) == EstadoDocumento.pagada)
+            .toList();
+      case FiltroEstadoFactura.impagas:
+        return list
+            .where((f) => list.obtenerEstadoDocumento(f) == EstadoDocumento.impaga)
+            .toList();
+      case FiltroEstadoFactura.vencidas:
+        return list
+            .where((f) => list.obtenerEstadoDocumento(f) == EstadoDocumento.vencida)
+            .toList();
       case FiltroEstadoFactura.todas:
         return list;
     }
   }
 
-  int get totalFacturasPagadasCount =>
-      facturasUnificadas.where((f) => f.isPagado).length;
+  int get totalFacturasPagadasCount => facturasUnificadas
+      .where((f) => facturasUnificadas.obtenerEstadoDocumento(f) == EstadoDocumento.pagada)
+      .length;
 
-  int get totalFacturasPendientesCount =>
-      facturasUnificadas.where((f) => f.isPendiente).length;
+  int get totalFacturasImpagasCount => facturasUnificadas
+      .where((f) => facturasUnificadas.obtenerEstadoDocumento(f) == EstadoDocumento.impaga)
+      .length;
 
-  List<DocumentoModel> get avisosCobranza => documentosResponse?.avisosCobranza ?? [];
-  
+  int get totalFacturasVencidasCount => facturasUnificadas
+      .where((f) => facturasUnificadas.obtenerEstadoDocumento(f) == EstadoDocumento.vencida)
+      .length;
+
+  /// Avisos de cobranza filtrados según el estado seleccionado (Todas, Pagadas, Impagas, Vencidas)
+  List<DocumentoModel> get avisosCobranza {
+    final list = avisosCobranzaCompletos;
+    switch (filtroCobranza) {
+      case FiltroEstadoFactura.pagadas:
+        return list
+            .where((a) => list.obtenerEstadoDocumento(a) == EstadoDocumento.pagada)
+            .toList();
+      case FiltroEstadoFactura.impagas:
+        return list
+            .where((a) => list.obtenerEstadoDocumento(a) == EstadoDocumento.impaga)
+            .toList();
+      case FiltroEstadoFactura.vencidas:
+        return list
+            .where((a) => list.obtenerEstadoDocumento(a) == EstadoDocumento.vencida)
+            .toList();
+      case FiltroEstadoFactura.todas:
+        return list;
+    }
+  }
+
+  int get totalCobranzaPagadasCount => avisosCobranzaCompletos
+      .where((a) => avisosCobranzaCompletos.obtenerEstadoDocumento(a) == EstadoDocumento.pagada)
+      .length;
+
+  int get totalCobranzaImpagasCount => avisosCobranzaCompletos
+      .where((a) => avisosCobranzaCompletos.obtenerEstadoDocumento(a) == EstadoDocumento.impaga)
+      .length;
+
+  int get totalCobranzaVencidasCount => avisosCobranzaCompletos
+      .where((a) => avisosCobranzaCompletos.obtenerEstadoDocumento(a) == EstadoDocumento.vencida)
+      .length;
+
   /// Regla Oficial de Negocio COSMOL R.L.:
-  /// Un aviso de corte únicamente aplica y se notifica cuando el socio tiene 3 o más facturas pendientes.
+  /// Un aviso de corte únicamente aplica y se notifica cuando el socio tiene 3 o más facturas impagas.
   List<DocumentoModel> get avisosCorte {
     final rawAvisos = documentosResponse?.avisosCorte ?? [];
     if (rawAvisos.isEmpty) return [];
 
-    final facturasPendientesCount = facturasUnificadas.where((doc) => doc.isPendiente).length;
-    final cobranzasPendientesCount = avisosCobranza.where((doc) => doc.isPendiente).length;
+    final facturasImpagasCount = facturasUnificadas.where((doc) => !doc.isPagado).length;
+    final cobranzasImpagasCount = avisosCobranzaCompletos.where((doc) => !doc.isPagado).length;
 
-    final cantidadFacturasPendientes = facturasPendientesCount > 0
-        ? facturasPendientesCount
-        : cobranzasPendientesCount;
+    final cantidadFacturasImpagas = facturasImpagasCount > 0
+        ? facturasImpagasCount
+        : cobranzasImpagasCount;
 
-    if (cantidadFacturasPendientes < 3) {
+    if (cantidadFacturasImpagas < 3) {
       return [];
     }
 
@@ -162,6 +234,10 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
 
   void cambiarFiltroFacturas(FiltroEstadoFactura filtro) {
     state = state.copyWith(filtroFacturas: filtro);
+  }
+
+  void cambiarFiltroCobranza(FiltroEstadoFactura filtro) {
+    state = state.copyWith(filtroCobranza: filtro);
   }
 
   /// Carga la lista de documentos y el historial de 12 meses para el socio especificado o actual.
