@@ -182,3 +182,9 @@ redis_data/
 minio_data/
 storage_data/
 docker-compose.override.yml
+
+# ------------------------------------------------------------------------------
+# 10. AI Agents & Assistant Metadata
+# ------------------------------------------------------------------------------
+.agents/
+.gemini/
