@@ -42,6 +42,10 @@ class DetalleSuministroResponse(BaseModel):
     rol_usuario: Literal["TITULAR", "CONSULTA_PAGO"] = Field(
         ..., description="Nivel de acceso del usuario autenticado sobre este suministro"
     )
+    telefono_celular: str = Field(
+        "",
+        description="Número de teléfono celular registrado del usuario titular (vacío para rol CONSULTA_PAGO)"
+    )
 
 
 class ResumenDeudaResponse(BaseModel):

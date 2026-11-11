@@ -40,7 +40,7 @@ class DocumentInquilinoBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Por confidencialidad del titular, solo tienes acceso a los Avisos de Cobranza para gestionar tus pagos. Las facturas fiscales y avisos de corte están reservados al titular.',
+                  'Por confidencialidad del titular, solo tienes acceso a los Avisos de Cobranza para gestionar tus pagos. Las facturas fiscales están reservadas al titular.',
                   style: AppTextStyles.caption.copyWith(
                     color: const Color(0xFF1E3A8A),
                     height: 1.3,

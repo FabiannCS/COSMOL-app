@@ -3,6 +3,7 @@ import 'package:cosmol_app/features/deuda/data/models/resumen_deuda_model.dart';
 import 'package:cosmol_app/features/deuda/domain/repositories/pagos_repository.dart';
 import 'package:cosmol_app/features/deuda/presentation/providers/pagos_provider.dart';
 import 'package:cosmol_app/features/deuda/presentation/widgets/balance_card_widget.dart';
+import 'package:cosmol_app/features/deuda/presentation/widgets/disruption_notice_card.dart';
 import 'package:cosmol_app/features/deuda/presentation/widgets/pago_qr_mock_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -330,6 +331,100 @@ void main() {
       expect(find.text('Vencida'), findsOneWidget);
       expect(find.text('Impaga'), findsNWidgets(2));
       expect(find.text('Pendiente'), findsNothing);
+    });
+
+    testWidgets(
+      'BalanceCardWidget ordena facturas pendientes de forma descendente (más reciente primero)',
+      (tester) async {
+        final deuda = ResumenDeudaModel(
+          codSocio: '23807',
+          saldoPendienteBs: 240.0,
+          cantidadFacturasPendientes: 3,
+          estaVencido: true,
+          alertaCorte: true,
+          facturasPendientes: [
+            _crearFacturaDeuda(
+              nroFacip: 'F-8',
+              nroFactura: '801',
+              anio: 2026,
+              mes: 8,
+              mesLectura: 'Agosto 2026',
+              diasMora: 60,
+            ),
+            _crearFacturaDeuda(
+              nroFacip: 'F-9',
+              nroFactura: '901',
+              anio: 2026,
+              mes: 9,
+              mesLectura: 'Septiembre 2026',
+              diasMora: 30,
+            ),
+            _crearFacturaDeuda(
+              nroFacip: 'F-10',
+              nroFactura: '1001',
+              anio: 2026,
+              mes: 10,
+              mesLectura: 'Octubre 2026',
+              estaVencidaBackend: false,
+              diasMora: 0,
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          ProviderScope(
+            child: MaterialApp(
+              home: Scaffold(
+                body: SingleChildScrollView(
+                  child: BalanceCardWidget(
+                    deuda: deuda,
+                    onVerRecibo: () {},
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        final yOctubre = tester.getTopLeft(find.text('Octubre 2026')).dy;
+        final ySeptiembre = tester.getTopLeft(find.text('Septiembre 2026')).dy;
+        final yAgosto = tester.getTopLeft(find.text('Agosto 2026')).dy;
+
+        expect(yOctubre, lessThan(ySeptiembre));
+        expect(ySeptiembre, lessThan(yAgosto));
+        expect(find.text('Impaga'), findsNWidgets(2));
+        expect(find.text('Vencida'), findsOneWidget);
+      },
+    );
+
+    test('DisruptionNoticeCard.formatearFechaVencimiento convierte YYYY-MM-DD a dd/MM/yyyy', () {
+      expect(DisruptionNoticeCard.formatearFechaVencimiento('2026-10-31'), '31/10/2026');
+      expect(DisruptionNoticeCard.formatearFechaVencimiento('2026-2-5'), '05/02/2026');
+      expect(DisruptionNoticeCard.formatearFechaVencimiento('2026-10-31T08:15:00Z'), '31/10/2026');
+      expect(DisruptionNoticeCard.formatearFechaVencimiento('31/10/2026'), '31/10/2026');
+      expect(DisruptionNoticeCard.formatearFechaVencimiento('31-10-2026'), '31/10/2026');
+    });
+
+    testWidgets('DisruptionNoticeCard muestra la fecha de vencimiento en formato dd/MM/yyyy', (tester) async {
+      const deuda = ResumenDeudaModel(
+        codSocio: '23807',
+        saldoPendienteBs: 240.0,
+        cantidadFacturasPendientes: 3,
+        fechaProximoVencimiento: '2026-10-31',
+        estaVencido: true,
+        alertaCorte: true,
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: DisruptionNoticeCard(deuda: deuda),
+          ),
+        ),
+      );
+
+      expect(find.text('Fecha de vencimiento: 31/10/2026'), findsOneWidget);
+      expect(find.textContaining('2026-10-31'), findsNothing);
     });
   });
 }

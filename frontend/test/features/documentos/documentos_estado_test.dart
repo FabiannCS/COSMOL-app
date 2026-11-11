@@ -234,11 +234,100 @@ void main() {
       expect(find.text('Pendiente'), findsNothing);
     });
 
-    testWidgets('DocumentosScreen muestra filtros Todas/Pagadas/Impagas/Vencidas y estados en Factura y Cobranza', (tester) async {
+    testWidgets('DocumentCardWidget en estado Vencida mantiene PDF por defecto y muestra solo aviso en filtro Vencidas', (tester) async {
+      final docFacturaVencida = _crearDoc(
+        id: 'fv-1',
+        tipoDocumento: 'FACTURA',
+        anio: 2026,
+        mes: 8,
+        estadoPago: 'PENDIENTE',
+      );
+      final docCobranzaVencida = _crearDoc(
+        id: 'cv-1',
+        tipoDocumento: 'AVISO_COBRANZA',
+        anio: 2026,
+        mes: 7,
+        estadoPago: 'PENDIENTE',
+      );
+      var accionesInvocadas = 0;
+
+      // 1) En vista "Todas" (mostrarSoloAvisoVencida = false): se muestra como tarjeta normal con Ver PDF/Descargar/Compartir
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: [
+                  DocumentCardWidget(
+                    documento: docFacturaVencida,
+                    estadoDocumento: EstadoDocumento.vencida,
+                    initiallyExpanded: true,
+                    onVer: () => accionesInvocadas++,
+                    onDescargar: () => accionesInvocadas++,
+                    onCompartir: () => accionesInvocadas++,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Agosto 2026'), findsOneWidget);
+      expect(find.text('Factura #F-82026'), findsOneWidget);
+      expect(find.text('Vencida'), findsOneWidget);
+      expect(find.text('Aviso de Factura Vencida'), findsNothing);
+      expect(find.text('Ver PDF').hitTestable(), findsOneWidget);
+      expect(find.text('Descargar').hitTestable(), findsOneWidget);
+      expect(find.byIcon(Icons.share_outlined).hitTestable(), findsOneWidget);
+
+      // 2) En filtro "Vencidas" (mostrarSoloAvisoVencida = true): se muestra solo como aviso sin PDF
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: [
+                  DocumentCardWidget(
+                    documento: docFacturaVencida,
+                    estadoDocumento: EstadoDocumento.vencida,
+                    mostrarSoloAvisoVencida: true,
+                    initiallyExpanded: true,
+                    onVer: () => accionesInvocadas++,
+                    onDescargar: () => accionesInvocadas++,
+                    onCompartir: () => accionesInvocadas++,
+                  ),
+                  DocumentCardWidget(
+                    documento: docCobranzaVencida,
+                    estadoDocumento: EstadoDocumento.vencida,
+                    mostrarSoloAvisoVencida: true,
+                    initiallyExpanded: true,
+                    onVer: () => accionesInvocadas++,
+                    onDescargar: () => accionesInvocadas++,
+                    onCompartir: () => accionesInvocadas++,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Aviso de Factura Vencida'), findsOneWidget);
+      expect(find.text('Aviso de Cobranza Vencido'), findsOneWidget);
+      expect(find.text('Vencida'), findsNWidgets(2));
+      expect(find.byIcon(Icons.warning_amber_rounded), findsNWidgets(2));
+      expect(find.text('Ver PDF'), findsNothing);
+      expect(find.text('Descargar'), findsNothing);
+      expect(find.byIcon(Icons.share_outlined), findsNothing);
+      expect(accionesInvocadas, 0);
+    });
+
+    testWidgets('DocumentosScreen oculta Corte; en Todas muestra Vencida como documento con PDF y en Vencidas solo como aviso', (tester) async {
       final response = ListaDocumentosModel(
         codSocio: '23807',
         rolAcceso: 'TITULAR',
-        totalDocumentos: 10,
+        totalDocumentos: 11,
         facturas: [
           _crearDoc(id: 'f5', tipoDocumento: 'FACTURA', anio: 2026, mes: 5, estadoPago: 'PENDIENTE'),
           _crearDoc(id: 'f4', tipoDocumento: 'FACTURA', anio: 2026, mes: 4, estadoPago: 'PENDIENTE'),
@@ -253,7 +342,9 @@ void main() {
           _crearDoc(id: 'c2', tipoDocumento: 'AVISO_COBRANZA', anio: 2026, mes: 2, estadoPago: 'PAGADO'),
           _crearDoc(id: 'c1', tipoDocumento: 'AVISO_COBRANZA', anio: 2026, mes: 1, estadoPago: 'PAGADO'),
         ],
-        avisosCorte: const [],
+        avisosCorte: [
+          _crearDoc(id: 'corte-1', tipoDocumento: 'AVISO_CORTE', anio: 2026, mes: 5, estadoPago: 'PENDIENTE'),
+        ],
         documentos: const [],
       );
 
@@ -294,7 +385,12 @@ void main() {
 
       await tester.pumpAndSettle();
 
-      // Pestaña Factura: 2 Pagada, 2 Impaga (Abril, Mayo), 1 Vencida (Marzo)
+      // La pestaña Corte no debe existir aunque el backend envie avisosCorte
+      expect(find.text('Factura'), findsOneWidget);
+      expect(find.text('Cobranza'), findsOneWidget);
+      expect(find.text('Corte'), findsNothing);
+
+      // Pestaña Factura (filtro Todas): la vencida (Marzo 2026) aparece como factura normal, NO como aviso
       expect(find.text('Todas (5)'), findsOneWidget);
       expect(find.text('Pagadas (2)'), findsOneWidget);
       expect(find.text('Impagas (2)'), findsOneWidget);
@@ -302,18 +398,32 @@ void main() {
       expect(find.text('Pagada'), findsNWidgets(2));
       expect(find.text('Impaga'), findsNWidgets(2));
       expect(find.text('Vencida'), findsOneWidget);
+      expect(find.text('Aviso de Factura Vencida'), findsNothing);
+      expect(find.text('Factura #F-32026'), findsOneWidget);
       expect(find.text('Pendiente'), findsNothing);
       expect(find.text('Pendientes (3)'), findsNothing);
 
-      // Al filtrar por "Vencidas (1)", la tarjeta filtrada debe seguir diciendo "Vencida"
+      // Al expandir Marzo 2026 (Vencida) dentro de "Todas", muestra sus botones de PDF
+      await tester.ensureVisible(find.text('Marzo 2026'));
+      await tester.tap(find.text('Marzo 2026'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ver PDF').hitTestable(), findsOneWidget);
+      expect(find.text('Descargar').hitTestable(), findsOneWidget);
+
+      // Al filtrar por "Vencidas (1)", se muestra únicamente como tarjeta de aviso sin Ver PDF / Descargar / Compartir
       await tester.ensureVisible(find.text('Vencidas (1)'));
       await tester.tap(find.text('Vencidas (1)'));
       await tester.pumpAndSettle();
       expect(find.text('Vencida'), findsOneWidget);
+      expect(find.text('Aviso de Factura Vencida'), findsOneWidget);
+      expect(find.byIcon(Icons.warning_amber_rounded), findsOneWidget);
+      expect(find.text('Ver PDF'), findsNothing);
+      expect(find.text('Descargar'), findsNothing);
+      expect(find.byIcon(Icons.share_outlined), findsNothing);
       expect(find.text('Impaga'), findsNothing);
       expect(find.text('Pagada'), findsNothing);
 
-      // Cambiar a pestaña Cobranza
+      // Cambiar a pestaña Cobranza (por defecto en Todas)
       await tester.ensureVisible(find.text('Cobranza'));
       await tester.tap(find.text('Cobranza'));
       await tester.pumpAndSettle();
@@ -325,7 +435,19 @@ void main() {
       expect(find.text('Pagada'), findsNWidgets(2));
       expect(find.text('Impaga'), findsNWidgets(2));
       expect(find.text('Vencida'), findsOneWidget);
+      expect(find.text('Aviso de Cobranza Vencido'), findsNothing);
+      expect(find.text('Aviso Cobranza N° AV-32026'), findsOneWidget);
       expect(find.text('Pendiente'), findsNothing);
+
+      // En Cobranza -> filtro "Vencidas (1)", también aparece únicamente como aviso sin PDF
+      await tester.ensureVisible(find.text('Vencidas (1)'));
+      await tester.tap(find.text('Vencidas (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Aviso de Cobranza Vencido'), findsOneWidget);
+      expect(find.text('Vencida'), findsOneWidget);
+      expect(find.text('Ver PDF'), findsNothing);
+      expect(find.text('Descargar'), findsNothing);
+      expect(find.byIcon(Icons.share_outlined), findsNothing);
     });
   });
 }

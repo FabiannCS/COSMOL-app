@@ -10,6 +10,7 @@ import '../../data/models/documento_model.dart';
 class DocumentCardWidget extends StatefulWidget {
   final DocumentoModel documento;
   final EstadoDocumento? estadoDocumento;
+  final bool mostrarSoloAvisoVencida;
   final bool isDownloading;
   final VoidCallback onVer;
   final VoidCallback onDescargar;
@@ -20,6 +21,7 @@ class DocumentCardWidget extends StatefulWidget {
     super.key,
     required this.documento,
     this.estadoDocumento,
+    this.mostrarSoloAvisoVencida = false,
     this.isDownloading = false,
     required this.onVer,
     required this.onDescargar,
@@ -93,6 +95,15 @@ class _DocumentCardWidgetState extends State<DocumentCardWidget> {
       subtitulo = doc.periodoFormateado;
     } else {
       subtitulo = doc.periodoFormateado;
+    }
+
+    // Solo en la sección/filtro "Vencidas" se muestra únicamente como aviso informativo
+    // similar al aviso de Inicio, sin opciones de PDF, descarga ni compartir.
+    if (widget.mostrarSoloAvisoVencida && estado == EstadoDocumento.vencida) {
+      return _buildVencidaNoticeCard(
+        doc: doc,
+        subtitulo: subtitulo,
+      );
     }
 
     return AnimatedContainer(
@@ -266,7 +277,7 @@ class _DocumentCardWidgetState extends State<DocumentCardWidget> {
               const SizedBox(height: 10),
 
               // Fila de acciones principales
-              if (doc.permiteDescarga)
+              if (doc.permiteDescarga && !doc.isAvisoCorte)
                 Row(
                   children: [
                     // Botón principal: Ver PDF
@@ -355,6 +366,129 @@ class _DocumentCardWidgetState extends State<DocumentCardWidget> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildVencidaNoticeCard({
+    required DocumentoModel doc,
+    required String subtitulo,
+  }) {
+    final String tipoAviso = doc.isAvisoCobranza
+        ? 'Aviso de Cobranza Vencido'
+        : 'Aviso de Factura Vencida';
+    final String detalleRef = doc.isFactura &&
+            doc.nroFactura != null &&
+            doc.nroFactura!.isNotEmpty
+        ? subtitulo
+        : (doc.isAvisoCobranza &&
+                doc.nroFacip != null &&
+                doc.nroFacip!.isNotEmpty
+            ? 'Aviso Cobranza N° ${doc.nroFacip}'
+            : doc.periodoFormateado);
+    final String metadataVencimiento = doc.fechaVencimiento != null
+        ? '$detalleRef • Venció: ${doc.fechaVencimientoFormateada}'
+        : detalleRef;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.cardSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFFECACA)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.015),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: AppColors.errorContainer,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.warning_amber_rounded,
+              color: AppColors.errorRed,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        tipoAviso,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.caption.copyWith(
+                          color: AppColors.errorRed,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEE2E2),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'Vencida',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.errorRed,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${doc.periodoFormateado} • ${doc.montoBsFormateado}',
+                  style: AppTextStyles.subtitle2.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.darkNavy,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  metadataVencimiento,
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                    fontSize: 11.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Este documento se encuentra vencido. Regularice su pago a tiempo para evitar recargos o la suspensión del servicio.',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.onSurfaceVariant,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

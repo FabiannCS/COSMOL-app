@@ -27,12 +27,10 @@ class DocumentEmptyWidget extends StatelessWidget {
     if (customTitle != null && customDescription != null) {
       title = customTitle!;
       description = customDescription!;
-    } else if (isInquilino && (tabIndex == 0 || tabIndex == 2)) {
-      title = tabIndex == 0
-          ? 'Facturas no disponibles'
-          : 'Avisos de corte no disponibles';
+    } else if (isInquilino && tabIndex == 0) {
+      title = 'Facturas no disponibles';
       description =
-          'Este suministro está configurado en Modo Consulta y Pago. Las facturas oficiales y avisos de corte están reservados para el titular verificado.';
+          'Este suministro está configurado en Modo Consulta y Pago. Las facturas oficiales están reservadas para el titular verificado.';
     } else {
       switch (tabIndex) {
         case 0:
@@ -44,11 +42,6 @@ class DocumentEmptyWidget extends StatelessWidget {
           title = 'Sin avisos de cobranza';
           description =
               'No tienes avisos de cobranza emitidos en este momento.';
-          break;
-        case 2:
-          title = 'Sin avisos de corte';
-          description =
-              'Tu cuenta se encuentra al día y no presenta ninguna notificación de corte.';
           break;
         default:
           title = 'No hay documentos';
@@ -65,11 +58,9 @@ class DocumentEmptyWidget extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: (isInquilino && (tabIndex == 0 || tabIndex == 2))
+                color: (isInquilino && tabIndex == 0)
                     ? const Color(0xFFF3F4F6)
-                    : tabIndex == 2
-                        ? const Color(0xFFE8F8F5)
-                        : const Color(0xFFEFF6FF),
+                    : const Color(0xFFEFF6FF),
                 shape: BoxShape.circle,
               ),
             ),
@@ -91,8 +82,7 @@ class DocumentEmptyWidget extends StatelessWidget {
                 height: 1.4,
               ),
             ),
-            if (onRefresh != null &&
-                !(isInquilino && (tabIndex == 0 || tabIndex == 2))) ...[
+            if (onRefresh != null && !(isInquilino && tabIndex == 0)) ...[
               const SizedBox(height: 20),
               OutlinedButton.icon(
                 onPressed: onRefresh,

@@ -360,7 +360,16 @@ class BalanceCardWidget extends ConsumerWidget {
         (deuda!.saldoPendienteBs > 0 || deuda!.cantidadFacturasPendientes > 0);
 
     if (hasDebt) {
-      final facturas = deuda!.facturasPendientes;
+      // Orden descendente en la vista de Deuda (factura más reciente primero)
+      // sin alterar el orden FIFO interno que utiliza el modal de pagos.
+      final facturas = List<FacturaPendienteModel>.from(deuda!.facturasPendientes)
+        ..sort((a, b) {
+          final cmpAnio = b.anio.compareTo(a.anio);
+          if (cmpAnio != 0) return cmpAnio;
+          final cmpMes = b.mes.compareTo(a.mes);
+          if (cmpMes != 0) return cmpMes;
+          return a.diasMora.compareTo(b.diasMora);
+        });
 
       return Container(
         padding: const EdgeInsets.all(16),

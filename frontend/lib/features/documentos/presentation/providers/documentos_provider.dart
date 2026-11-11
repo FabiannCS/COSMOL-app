@@ -20,7 +20,7 @@ class DocumentosState {
   final String? downloadingDocId;
   final String? errorMessage;
   final ListaDocumentosModel? documentosResponse;
-  final int selectedTabIndex; // 0: Facturas, 1: Avisos Cobranza, 2: Avisos Corte
+  final int selectedTabIndex; // 0: Facturas, 1: Avisos Cobranza
   final String? currentCodSocio;
   final FiltroEstadoFactura filtroFacturas;
   final FiltroEstadoFactura filtroCobranza;
@@ -164,36 +164,13 @@ class DocumentosState {
       .where((a) => avisosCobranzaCompletos.obtenerEstadoDocumento(a) == EstadoDocumento.vencida)
       .length;
 
-  /// Regla Oficial de Negocio COSMOL R.L.:
-  /// Un aviso de corte únicamente aplica y se notifica cuando el socio tiene 3 o más facturas impagas.
-  List<DocumentoModel> get avisosCorte {
-    final rawAvisos = documentosResponse?.avisosCorte ?? [];
-    if (rawAvisos.isEmpty) return [];
-
-    final facturasImpagasCount = facturasUnificadas.where((doc) => !doc.isPagado).length;
-    final cobranzasImpagasCount = avisosCobranzaCompletos.where((doc) => !doc.isPagado).length;
-
-    final cantidadFacturasImpagas = facturasImpagasCount > 0
-        ? facturasImpagasCount
-        : cobranzasImpagasCount;
-
-    if (cantidadFacturasImpagas < 3) {
-      return [];
-    }
-
-    return rawAvisos;
-  }
-
   List<DocumentoModel> get todosDocumentos => documentosResponse?.documentos ?? [];
 
   List<DocumentoModel> get documentosTabActual {
     switch (selectedTabIndex) {
-      case 0:
-        return facturas;
       case 1:
         return avisosCobranza;
-      case 2:
-        return avisosCorte;
+      case 0:
       default:
         return facturas;
     }
@@ -229,7 +206,7 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
   }
 
   void cambiarTab(int index) {
-    state = state.copyWith(selectedTabIndex: index);
+    state = state.copyWith(selectedTabIndex: index.clamp(0, 1));
   }
 
   void cambiarFiltroFacturas(FiltroEstadoFactura filtro) {
@@ -270,8 +247,8 @@ class DocumentosNotifier extends StateNotifier<DocumentosState> {
     try {
       final response = await repository.obtenerDocumentos(codSocio: cleanCodSocio);
 
-      int newTabIndex = state.selectedTabIndex;
-      if (response.isInquilino && state.selectedTabIndex != 1) {
+      int newTabIndex = state.selectedTabIndex.clamp(0, 1);
+      if (response.isInquilino && newTabIndex != 1) {
         newTabIndex = 1;
       }
 

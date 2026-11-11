@@ -92,12 +92,15 @@ void main() {
       expect(notifier.state.selectedTabIndex, 0);
     });
 
-    test('cambiarTab actualiza selectedTabIndex', () {
+    test('cambiarTab actualiza selectedTabIndex y limita indices fuera de rango', () {
       notifier.cambiarTab(1);
       expect(notifier.state.selectedTabIndex, 1);
 
       notifier.cambiarTab(2);
-      expect(notifier.state.selectedTabIndex, 2);
+      expect(notifier.state.selectedTabIndex, 1);
+
+      notifier.cambiarTab(0);
+      expect(notifier.state.selectedTabIndex, 0);
     });
 
     test('cargarDocumentos carga datos exitosamente para titular', () async {
@@ -108,7 +111,6 @@ void main() {
       expect(notifier.state.documentosResponse, isNotNull);
       expect(notifier.state.facturas.length, 1);
       expect(notifier.state.avisosCobranza.length, 1);
-      expect(notifier.state.avisosCorte.isEmpty, isTrue);
       expect(notifier.state.isTitular, isTrue);
       expect(notifier.state.isInquilino, isFalse);
     });
@@ -285,7 +287,7 @@ void main() {
       );
     });
 
-    test('cambiarFiltroCobranza filtra avisos de cobranza sin afectar conteo de avisosCorte', () async {
+    test('cambiarFiltroCobranza filtra avisos de cobranza e ignora avisosCorte en la vista de documentos', () async {
       mockRepository.mockResponse = ListaDocumentosModel(
         codSocio: '23807',
         rolAcceso: 'TITULAR',
@@ -358,13 +360,18 @@ void main() {
       expect(notifier.state.totalCobranzaPagadasCount, 1);
       expect(notifier.state.totalCobranzaVencidasCount, 1);
       expect(notifier.state.totalCobranzaImpagasCount, 2);
-      expect(notifier.state.avisosCorte.length, 1);
+
+      // Aun intentando seleccionar tab 2, debe limitarse a Cobranza (tab 1) y nunca exponer avisosCorte
+      notifier.cambiarTab(2);
+      expect(notifier.state.selectedTabIndex, 1);
+      expect(
+        notifier.state.documentosTabActual.any((d) => d.isAvisoCorte),
+        isFalse,
+      );
 
       notifier.cambiarFiltroCobranza(FiltroEstadoFactura.pagadas);
       expect(notifier.state.avisosCobranza.length, 1);
       expect(notifier.state.avisosCobranza.first.id, 'av-1');
-      // El filtro activo en Cobranza no debe alterar los avisos de corte
-      expect(notifier.state.avisosCorte.length, 1);
 
       notifier.cambiarFiltroCobranza(FiltroEstadoFactura.vencidas);
       expect(notifier.state.avisosCobranza.length, 1);
