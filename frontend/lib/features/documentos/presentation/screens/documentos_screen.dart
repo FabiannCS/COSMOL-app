@@ -25,7 +25,7 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _tabController.addListener(_handleTabChange);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -96,13 +96,13 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
     final activeSuministro = multicuentaState.activeSuministro;
 
     // Sincronizar índice de tab controller si el estado del provider cambia externamente
-    if (_tabController.index != state.selectedTabIndex) {
-      _tabController.animateTo(state.selectedTabIndex);
+    final targetTabIndex = state.selectedTabIndex.clamp(0, 1);
+    if (_tabController.index != targetTabIndex) {
+      _tabController.animateTo(targetTabIndex);
     }
 
-    final facturasCount = state.facturas.length;
-    final avisosCobranzaCount = state.avisosCobranza.length;
-    final avisosCorteCount = state.avisosCorte.length;
+    final facturasCount = state.facturasUnificadas.length;
+    final avisosCobranzaCount = state.avisosCobranzaCompletos.length;
 
     return RefreshIndicator(
       onRefresh: () => ref
@@ -224,7 +224,10 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
                         const Text('Factura'),
                         if (facturasCount > 0) ...[
                           const SizedBox(width: 4),
-                          _buildCountBadge(facturasCount, isSelected: _tabController.index == 0),
+                          _buildCountBadge(
+                            facturasCount,
+                            isSelected: targetTabIndex == 0,
+                          ),
                         ],
                       ],
                     ),
@@ -236,22 +239,9 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
                         const Text('Cobranza'),
                         if (avisosCobranzaCount > 0) ...[
                           const SizedBox(width: 4),
-                          _buildCountBadge(avisosCobranzaCount, isSelected: _tabController.index == 1),
-                        ],
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text('Corte'),
-                        if (avisosCorteCount > 0) ...[
-                          const SizedBox(width: 4),
                           _buildCountBadge(
-                            avisosCorteCount,
-                            isSelected: _tabController.index == 2,
-                            isAlert: true,
+                            avisosCobranzaCount,
+                            isSelected: targetTabIndex == 1,
                           ),
                         ],
                       ],
@@ -262,11 +252,9 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
             ),
             const SizedBox(height: 14),
 
-            // Selector de filtro de facturas (Todas, Pagadas, Pendientes)
-            if (_tabController.index == 0) ...[
-              _buildFiltroFacturas(state),
-              const SizedBox(height: 12),
-            ],
+            // Selector de filtro de estado (Todas, Pagadas, Impagas, Vencidas) para Factura y Cobranza
+            _buildFiltroDocumentos(state, esCobranza: targetTabIndex == 1),
+            const SizedBox(height: 12),
 
             // Contenido de la lista según la pestaña seleccionada
             if (state.isLoading && state.documentosResponse == null) ...[
@@ -280,35 +268,64 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
     );
   }
 
-  Widget _buildFiltroFacturas(DocumentosState state) {
+  Widget _buildFiltroDocumentos(
+    DocumentosState state, {
+    required bool esCobranza,
+  }) {
+    final filtroActual =
+        esCobranza ? state.filtroCobranza : state.filtroFacturas;
+    final totalCount = esCobranza
+        ? state.avisosCobranzaCompletos.length
+        : state.facturasUnificadas.length;
+    final pagadasCount = esCobranza
+        ? state.totalCobranzaPagadasCount
+        : state.totalFacturasPagadasCount;
+    final impagasCount = esCobranza
+        ? state.totalCobranzaImpagasCount
+        : state.totalFacturasImpagasCount;
+    final vencidasCount = esCobranza
+        ? state.totalCobranzaVencidasCount
+        : state.totalFacturasVencidasCount;
+
+    void seleccionarFiltro(FiltroEstadoFactura filtro) {
+      final notifier = ref.read(documentosProvider.notifier);
+      if (esCobranza) {
+        notifier.cambiarFiltroCobranza(filtro);
+      } else {
+        notifier.cambiarFiltroFacturas(filtro);
+      }
+    }
+
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
         children: [
           _buildFilterChip(
-            label: 'Todas (${state.facturasUnificadas.length})',
-            isSelected: state.filtroFacturas == FiltroEstadoFactura.todas,
-            onSelected: () => ref
-                .read(documentosProvider.notifier)
-                .cambiarFiltroFacturas(FiltroEstadoFactura.todas),
+            label: 'Todas ($totalCount)',
+            isSelected: filtroActual == FiltroEstadoFactura.todas,
+            selectedColor: AppColors.primary,
+            onSelected: () => seleccionarFiltro(FiltroEstadoFactura.todas),
           ),
           const SizedBox(width: 8),
           _buildFilterChip(
-            label: 'Pagadas (${state.totalFacturasPagadasCount})',
-            isSelected: state.filtroFacturas == FiltroEstadoFactura.pagadas,
-            selectedColor: AppColors.primary,
-            onSelected: () => ref
-                .read(documentosProvider.notifier)
-                .cambiarFiltroFacturas(FiltroEstadoFactura.pagadas),
+            label: 'Pagadas ($pagadasCount)',
+            isSelected: filtroActual == FiltroEstadoFactura.pagadas,
+            selectedColor: AppColors.successGreen,
+            onSelected: () => seleccionarFiltro(FiltroEstadoFactura.pagadas),
           ),
           const SizedBox(width: 8),
           _buildFilterChip(
-            label: 'Pendientes (${state.totalFacturasPendientesCount})',
-            isSelected: state.filtroFacturas == FiltroEstadoFactura.pendientes,
-            selectedColor: AppColors.primary,
-            onSelected: () => ref
-                .read(documentosProvider.notifier)
-                .cambiarFiltroFacturas(FiltroEstadoFactura.pendientes),
+            label: 'Impagas ($impagasCount)',
+            isSelected: filtroActual == FiltroEstadoFactura.impagas,
+            selectedColor: const Color(0xFFE65100),
+            onSelected: () => seleccionarFiltro(FiltroEstadoFactura.impagas),
+          ),
+          const SizedBox(width: 8),
+          _buildFilterChip(
+            label: 'Vencidas ($vencidasCount)',
+            isSelected: filtroActual == FiltroEstadoFactura.vencidas,
+            selectedColor: AppColors.errorRed,
+            onSelected: () => seleccionarFiltro(FiltroEstadoFactura.vencidas),
           ),
         ],
       ),
@@ -362,13 +379,13 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
     );
   }
 
-  Widget _buildCountBadge(int count, {bool isSelected = false, bool isAlert = false}) {
+  Widget _buildCountBadge(int count, {bool isSelected = false}) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: isAlert
-            ? (isSelected ? Colors.white : const Color(0xFFEF4444))
-            : (isSelected ? Colors.white.withValues(alpha: 0.25) : AppColors.primary.withValues(alpha: 0.15)),
+        color: isSelected
+            ? Colors.white.withValues(alpha: 0.25)
+            : AppColors.primary.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(10),
       ),
       child: Text(
@@ -376,9 +393,7 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
         style: TextStyle(
           fontSize: 10,
           fontWeight: FontWeight.bold,
-          color: isAlert
-              ? (isSelected ? const Color(0xFFEF4444) : Colors.white)
-              : (isSelected ? Colors.white : AppColors.primary),
+          color: isSelected ? Colors.white : AppColors.primary,
         ),
       ),
     );
@@ -386,16 +401,35 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
 
   Widget _buildDocumentList(DocumentosState state, dynamic activeSuministro) {
     final docs = state.documentosTabActual;
+    final tabIndex = state.selectedTabIndex.clamp(0, 1);
 
     if (docs.isEmpty) {
+      final tieneDatosSinFiltro = (tabIndex == 0 &&
+              state.facturasUnificadas.isNotEmpty &&
+              state.filtroFacturas != FiltroEstadoFactura.todas) ||
+          (tabIndex == 1 &&
+              state.avisosCobranzaCompletos.isNotEmpty &&
+              state.filtroCobranza != FiltroEstadoFactura.todas);
+
       return DocumentEmptyWidget(
-        tabIndex: state.selectedTabIndex,
+        tabIndex: tabIndex,
         isInquilino: state.isInquilino,
-        onRefresh: () => ref
-            .read(documentosProvider.notifier)
-            .cargarDocumentos(forceRefresh: true),
+        customTitle:
+            tieneDatosSinFiltro ? 'Sin documentos en este estado' : null,
+        customDescription: tieneDatosSinFiltro
+            ? 'No se encontraron registros con el filtro seleccionado.'
+            : null,
+        onRefresh: tieneDatosSinFiltro
+            ? null
+            : () => ref
+                .read(documentosProvider.notifier)
+                .cargarDocumentos(forceRefresh: true),
       );
     }
+
+    final filtroActual =
+        tabIndex == 1 ? state.filtroCobranza : state.filtroFacturas;
+    final esFiltroVencidas = filtroActual == FiltroEstadoFactura.vencidas;
 
     return ListView.builder(
       shrinkWrap: true,
@@ -406,7 +440,10 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
         final isDownloading = state.isDownloading && state.downloadingDocId == doc.id;
 
         return DocumentCardWidget(
+          key: ValueKey(doc.id),
           documento: doc,
+          estadoDocumento: state.estadoDeDocumento(doc),
+          mostrarSoloAvisoVencida: esFiltroVencidas,
           isDownloading: isDownloading,
           onVer: () => _abrirVisorPdf(doc),
           onDescargar: () => _descargarDocumento(doc),

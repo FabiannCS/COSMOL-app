@@ -158,13 +158,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: '/perfil',
         name: 'perfil',
         builder: (context, state) {
-          final activeSuministro = ref.watch(multicuentaProvider).activeSuministro;
           return Scaffold(
             backgroundColor: AppColors.lightBackground,
             appBar: const CosmolAppBar(
               title: 'Mi Perfil',
+              showBackButton: true,
             ),
-            body: PerfilScreen(activeSuministro: activeSuministro),
+            body: SafeArea(
+              child: Consumer(
+                builder: (context, widgetRef, _) {
+                  final activeSuministro =
+                      widgetRef.watch(multicuentaProvider).activeSuministro;
+                  return PerfilScreen(activeSuministro: activeSuministro);
+                },
+              ),
+            ),
           );
         },
       ),

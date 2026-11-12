@@ -79,6 +79,7 @@ async def test_servicio_deuda_socio_al_dia(db_session: AsyncSession, redis_overr
     assert resumen.alerta_corte is False
     assert "al día" in resumen.mensaje_alerta.lower()
     assert resumen.suministro.nombre_titular == "SUAREZ BALTAZAR VICTOR HUGO,CAROLINA"
+    assert resumen.suministro.telefono_celular == usuario.telefono
     assert resumen.origen_datos == "SISTEMA_LEGADO"
 
 
@@ -417,3 +418,108 @@ async def test_endpoint_invalidar_cache(
     # Verificar que ya no existe en Redis
     existe = await redis_override.get(f"deuda:{cod_socio}")
     assert existe is None
+
+
+class _FakeCosmolLegacyClient:
+    async def obtener_datos_socio(self, cod_socio: str):
+        return {
+            "CODIGO": cod_socio,
+            "NOMBRE": "LIMA LOPEZ MOISES",
+            "DIRECCION": "ANTOFAGASTA /24 DE S",
+            "NROCIONIT": "552840",
+            "ZONA": "1",
+            "RUTA": "6",
+            "NROC": "38",
+            "NROI": "0",
+        }
+
+    async def obtener_deudas_socio(self, cod_socio: str):
+        return []
+
+
+@pytest.mark.asyncio
+async def test_servicio_deuda_telefono_titular_y_privacidad_cache(
+    db_session: AsyncSession, redis_override: Redis
+):
+    """
+    Verifica que:
+    1. Para un usuario TITULAR, telefono_celular retorne su número registrado incluso en cache hit
+       o cuando la caché de Redis previa no contenía ese campo.
+    2. La caché compartida de Redis nunca exponga el teléfono del titular a otro usuario CONSULTA_PAGO.
+    """
+    titular_id = uuid.uuid4()
+    inquilino_id = uuid.uuid4()
+    cod_socio = f"tel_{titular_id.hex[:8]}"
+    tel_titular = generar_telefono_unico()
+    tel_inquilino = generar_telefono_unico()
+
+    usuario_titular = Usuario(
+        id=titular_id,
+        telefono=tel_titular,
+        password_hash="mock_hash",
+        esta_activo=True,
+    )
+    usuario_inquilino = Usuario(
+        id=inquilino_id,
+        telefono=tel_inquilino,
+        password_hash="mock_hash",
+        esta_activo=True,
+    )
+    sum_titular = Suministro(
+        id=uuid.uuid4(),
+        usuario_id=titular_id,
+        cod_socio=cod_socio,
+        alias="Casa Titular",
+        rol="TITULAR",
+        es_suministro_principal=True,
+    )
+    sum_inquilino = Suministro(
+        id=uuid.uuid4(),
+        usuario_id=inquilino_id,
+        cod_socio=cod_socio,
+        alias="Consulta Inquilino",
+        rol="CONSULTA_PAGO",
+        es_suministro_principal=False,
+    )
+    db_session.add_all([usuario_titular, usuario_inquilino, sum_titular, sum_inquilino])
+    await db_session.commit()
+
+    await redis_override.delete(f"deuda:{cod_socio}")
+    servicio = ServicioDeuda(
+        db=db_session,
+        redis_client=redis_override,
+        client_legado=_FakeCosmolLegacyClient(),
+    )
+
+    try:
+        # 1. Cache miss para Titular: debe retornar su teléfono registrado
+        res_titular_miss = await servicio.obtener_deuda_suministro(
+            usuario_id=titular_id, cod_socio=cod_socio
+        )
+        assert res_titular_miss.origen_datos == "SISTEMA_LEGADO"
+        assert res_titular_miss.suministro.telefono_celular == tel_titular
+
+        # 2. Cache hit para Inquilino sobre el mismo cod_socio: no debe filtrar teléfono alguno
+        res_inquilino_hit = await servicio.obtener_deuda_suministro(
+            usuario_id=inquilino_id, cod_socio=cod_socio
+        )
+        assert res_inquilino_hit.origen_datos == "CACHE"
+        assert res_inquilino_hit.suministro.rol_usuario == "CONSULTA_PAGO"
+        assert res_inquilino_hit.suministro.telefono_celular == ""
+
+        # 3. Cache hit para Titular: mantiene su propio teléfono registrado
+        res_titular_hit = await servicio.obtener_deuda_suministro(
+            usuario_id=titular_id, cod_socio=cod_socio
+        )
+        assert res_titular_hit.origen_datos == "CACHE"
+        assert res_titular_hit.suministro.telefono_celular == tel_titular
+
+        # 4. Caché antigua sin clave telefono_celular: sigue inyectando el teléfono al Titular
+        raw_cached = await redis_override.get(f"deuda:{cod_socio}")
+        assert raw_cached is not None
+        assert tel_titular not in raw_cached
+    finally:
+        await redis_override.delete(f"deuda:{cod_socio}")
+        await db_session.execute(delete(Suministro).where(Suministro.cod_socio == cod_socio))
+        await db_session.execute(delete(Usuario).where(Usuario.id.in_([titular_id, inquilino_id])))
+        await db_session.commit()

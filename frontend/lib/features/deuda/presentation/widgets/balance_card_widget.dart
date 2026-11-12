@@ -360,7 +360,16 @@ class BalanceCardWidget extends ConsumerWidget {
         (deuda!.saldoPendienteBs > 0 || deuda!.cantidadFacturasPendientes > 0);
 
     if (hasDebt) {
-      final facturas = deuda!.facturasPendientes;
+      // Orden descendente en la vista de Deuda (factura más reciente primero)
+      // sin alterar el orden FIFO interno que utiliza el modal de pagos.
+      final facturas = List<FacturaPendienteModel>.from(deuda!.facturasPendientes)
+        ..sort((a, b) {
+          final cmpAnio = b.anio.compareTo(a.anio);
+          if (cmpAnio != 0) return cmpAnio;
+          final cmpMes = b.mes.compareTo(a.mes);
+          if (cmpMes != 0) return cmpMes;
+          return a.diasMora.compareTo(b.diasMora);
+        });
 
       return Container(
         padding: const EdgeInsets.all(16),
@@ -461,11 +470,29 @@ class BalanceCardWidget extends ConsumerWidget {
                 child: Column(
                   children: List.generate(facturas.length, (index) {
                     final f = facturas[index];
+                    final estado = facturas.obtenerEstadoFactura(f);
                     final isLast = index == facturas.length - 1;
 
                     final mesNombre = f.mesLectura.isNotEmpty
                         ? f.mesLectura
                         : 'Periodo ${f.periodo}';
+
+                    final String estadoLabel;
+                    final Color estadoColor;
+                    switch (estado) {
+                      case EstadoFacturaDeuda.pagada:
+                        estadoLabel = 'Pagada';
+                        estadoColor = AppColors.successGreen;
+                        break;
+                      case EstadoFacturaDeuda.impaga:
+                        estadoLabel = 'Impaga';
+                        estadoColor = const Color(0xFFE65100);
+                        break;
+                      case EstadoFacturaDeuda.vencida:
+                        estadoLabel = 'Vencida';
+                        estadoColor = AppColors.errorRed;
+                        break;
+                    }
 
                     return Column(
                       children: [
@@ -501,11 +528,9 @@ class BalanceCardWidget extends ConsumerWidget {
                                       ),
                                     ),
                                     Text(
-                                      f.estaVencida ? 'Vencida' : 'Impaga',
+                                      estadoLabel,
                                       style: AppTextStyles.caption.copyWith(
-                                        color: f.estaVencida
-                                            ? AppColors.errorRed
-                                            : const Color(0xFFE65100),
+                                        color: estadoColor,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),

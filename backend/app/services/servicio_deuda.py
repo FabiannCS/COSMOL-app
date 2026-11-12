@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import ForbiddenException, NotFoundException
-from app.db.models import Suministro
+from app.db.models import Suministro, Usuario
 from app.integrations.cosmol_client import cosmol_client, CosmolLegacyClient
 from app.schemas.deuda import (
     DashboardMultiSuministroResponse,
@@ -158,11 +158,15 @@ class ServicioDeuda:
         return facturas
 
     def _aplicar_enmascaramiento(
-        self, detalle: DetalleSuministroResponse, rol_usuario: str
+        self,
+        detalle: DetalleSuministroResponse,
+        rol_usuario: str,
+        telefono_usuario: str = "",
     ) -> DetalleSuministroResponse:
         """
         Si el usuario es inquilino o pagador externo (CONSULTA_PAGO),
-        enmascara nombre, cédula y dirección para proteger la privacidad.
+        enmascara nombre, cédula, dirección y omite el teléfono del titular para proteger la privacidad.
+        Si el usuario es TITULAR, expone su número telefónico celular registrado.
         """
         if rol_usuario == "CONSULTA_PAGO":
             return DetalleSuministroResponse(
@@ -173,7 +177,11 @@ class ServicioDeuda:
                 ubicacion=detalle.ubicacion,
                 categoria=detalle.categoria,
                 rol_usuario="CONSULTA_PAGO",
+                telefono_celular="",
             )
+        telefono_final = (telefono_usuario or detalle.telefono_celular or "").strip()
+        if telefono_final != detalle.telefono_celular:
+            return detalle.model_copy(update={"telefono_celular": telefono_final})
         return detalle
 
     async def obtener_deuda_suministro(
@@ -212,15 +220,23 @@ class ServicioDeuda:
 
         rol_usuario = suministro_db.rol  # "TITULAR" o "CONSULTA_PAGO"
 
+        telefono_usuario = ""
+        if rol_usuario == "TITULAR":
+            stmt_tel = select(Usuario.telefono).where(Usuario.id == usuario_id)
+            res_tel = await self.db.execute(stmt_tel)
+            telefono_usuario = (res_tel.scalar_one_or_none() or "").strip()
+
         # 2. Comprobar caché de Redis si no se forzó refresco
         if not forzar_refresco:
             cached_data = await obtener_deuda_cache(self.redis, codigo)
             if cached_data:
                 try:
                     resumen_base = ResumenDeudaResponse(**cached_data)
-                    # Ajustar rol y enmascaramiento al rol del usuario actual
+                    # Ajustar rol, privacidad y teléfono registrado del usuario autenticado
                     detalle_ajustado = self._aplicar_enmascaramiento(
-                        resumen_base.suministro, rol_usuario
+                        resumen_base.suministro,
+                        rol_usuario,
+                        telefono_usuario=telefono_usuario,
                     )
                     return ResumenDeudaResponse(
                         cod_socio=resumen_base.cod_socio,
@@ -323,9 +339,11 @@ class ServicioDeuda:
             ttl_seconds=settings.DEBT_CACHE_TTL_SECONDS
         )
 
-        # 6. Retornar aplicando enmascaramiento si corresponde al rol del usuario
+        # 6. Retornar aplicando enmascaramiento y teléfono según rol del usuario
         detalle_para_usuario = self._aplicar_enmascaramiento(
-            detalle_titular_completo, rol_usuario
+            detalle_titular_completo,
+            rol_usuario,
+            telefono_usuario=telefono_usuario,
         )
         return ResumenDeudaResponse(
             cod_socio=codigo,

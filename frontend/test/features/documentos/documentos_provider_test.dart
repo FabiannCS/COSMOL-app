@@ -92,12 +92,15 @@ void main() {
       expect(notifier.state.selectedTabIndex, 0);
     });
 
-    test('cambiarTab actualiza selectedTabIndex', () {
+    test('cambiarTab actualiza selectedTabIndex y limita indices fuera de rango', () {
       notifier.cambiarTab(1);
       expect(notifier.state.selectedTabIndex, 1);
 
       notifier.cambiarTab(2);
-      expect(notifier.state.selectedTabIndex, 2);
+      expect(notifier.state.selectedTabIndex, 1);
+
+      notifier.cambiarTab(0);
+      expect(notifier.state.selectedTabIndex, 0);
     });
 
     test('cargarDocumentos carga datos exitosamente para titular', () async {
@@ -108,7 +111,6 @@ void main() {
       expect(notifier.state.documentosResponse, isNotNull);
       expect(notifier.state.facturas.length, 1);
       expect(notifier.state.avisosCobranza.length, 1);
-      expect(notifier.state.avisosCorte.isEmpty, isTrue);
       expect(notifier.state.isTitular, isTrue);
       expect(notifier.state.isInquilino, isFalse);
     });
@@ -153,45 +155,84 @@ void main() {
       expect(bytes[3], 70); // 'F'
     });
 
-    test('cambiarFiltroFacturas filtra correctamente entre todas, pagadas y pendientes', () async {
+    test('cambiarFiltroFacturas filtra correctamente entre todas, pagadas, impagas y vencidas', () async {
       mockRepository.mockResponse = ListaDocumentosModel(
         codSocio: '23807',
         rolAcceso: 'TITULAR',
-        totalDocumentos: 3,
+        totalDocumentos: 6,
         facturas: [
           DocumentoModel(
             id: 'doc-factura-1',
             codSocio: '23807',
             tipoDocumento: 'FACTURA',
             nroFactura: '84920',
-            periodo: '08/2026',
+            periodo: '04/2026',
             anio: 2026,
-            mes: 8,
+            mes: 4,
             montoBs: 85.50,
-            fechaEmision: DateTime(2026, 8, 1),
-            fechaVencimiento: DateTime(2026, 8, 25),
+            fechaEmision: DateTime(2026, 4, 1),
+            fechaVencimiento: DateTime(2026, 4, 25),
             estadoPago: 'PAGADO',
-            fechaPago: '2026-08-25',
+            fechaPago: '2026-04-25',
           ),
           DocumentoModel(
             id: 'doc-factura-2',
             codSocio: '23807',
             tipoDocumento: 'FACTURA',
             nroFactura: '84921',
-            periodo: '07/2026',
+            periodo: '05/2026',
             anio: 2026,
-            mes: 7,
+            mes: 5,
             montoBs: 70.00,
-            fechaEmision: DateTime(2026, 7, 1),
-            fechaVencimiento: DateTime(2026, 7, 25),
+            fechaEmision: DateTime(2026, 5, 1),
+            fechaVencimiento: DateTime(2026, 5, 25),
             estadoPago: 'PAGADO',
-            fechaPago: '2026-07-28',
+            fechaPago: '2026-05-28',
           ),
           DocumentoModel(
             id: 'doc-factura-3',
             codSocio: '23807',
             tipoDocumento: 'FACTURA',
             nroFactura: '84922',
+            periodo: '06/2026',
+            anio: 2026,
+            mes: 6,
+            montoBs: 75.00,
+            fechaEmision: DateTime(2026, 6, 1),
+            fechaVencimiento: DateTime(2026, 6, 25),
+            estadoPago: 'PENDIENTE',
+          ),
+          DocumentoModel(
+            id: 'doc-factura-4',
+            codSocio: '23807',
+            tipoDocumento: 'FACTURA',
+            nroFactura: '84923',
+            periodo: '07/2026',
+            anio: 2026,
+            mes: 7,
+            montoBs: 80.00,
+            fechaEmision: DateTime(2026, 7, 1),
+            fechaVencimiento: DateTime(2026, 7, 25),
+            estadoPago: 'PENDIENTE',
+          ),
+          DocumentoModel(
+            id: 'doc-factura-5',
+            codSocio: '23807',
+            tipoDocumento: 'FACTURA',
+            nroFactura: '84924',
+            periodo: '08/2026',
+            anio: 2026,
+            mes: 8,
+            montoBs: 85.00,
+            fechaEmision: DateTime(2026, 8, 1),
+            fechaVencimiento: DateTime(2026, 8, 25),
+            estadoPago: 'PENDIENTE',
+          ),
+          DocumentoModel(
+            id: 'doc-factura-6',
+            codSocio: '23807',
+            tipoDocumento: 'FACTURA',
+            nroFactura: '84925',
             periodo: '09/2026',
             anio: 2026,
             mes: 9,
@@ -199,7 +240,6 @@ void main() {
             fechaEmision: DateTime(2026, 9, 1),
             fechaVencimiento: DateTime(2026, 9, 25),
             estadoPago: 'PENDIENTE',
-            fechaPago: null,
           ),
         ],
         avisosCobranza: const [],
@@ -209,20 +249,140 @@ void main() {
 
       await notifier.cargarDocumentos(codSocio: '23807');
 
-      // Todas
-      expect(notifier.state.facturas.length, 3);
+      // Todas: 2 pagadas, 2 impagas (08 y 09), 2 vencidas (06 y 07)
+      expect(notifier.state.facturas.length, 6);
       expect(notifier.state.totalFacturasPagadasCount, 2);
-      expect(notifier.state.totalFacturasPendientesCount, 1);
+      expect(notifier.state.totalFacturasImpagasCount, 2);
+      expect(notifier.state.totalFacturasVencidasCount, 2);
 
       // Filtrar por Pagadas
       notifier.cambiarFiltroFacturas(FiltroEstadoFactura.pagadas);
       expect(notifier.state.facturas.length, 2);
       expect(notifier.state.facturas.every((f) => f.isPagado), isTrue);
 
-      // Filtrar por Pendientes
-      notifier.cambiarFiltroFacturas(FiltroEstadoFactura.pendientes);
-      expect(notifier.state.facturas.length, 1);
-      expect(notifier.state.facturas.first.isPendiente, isTrue);
+      // Filtrar por Impagas (deben ser únicamente 08/2026 y 09/2026)
+      notifier.cambiarFiltroFacturas(FiltroEstadoFactura.impagas);
+      expect(notifier.state.facturas.length, 2);
+      expect(
+        notifier.state.facturas.map((f) => f.periodo).toSet(),
+        {'08/2026', '09/2026'},
+      );
+      expect(
+        notifier.state.facturas
+            .every((f) => notifier.state.estadoDeDocumento(f) == EstadoDocumento.impaga),
+        isTrue,
+      );
+
+      // Filtrar por Vencidas (deben ser 06/2026 y 07/2026, conservando estado vencida)
+      notifier.cambiarFiltroFacturas(FiltroEstadoFactura.vencidas);
+      expect(notifier.state.facturas.length, 2);
+      expect(
+        notifier.state.facturas.map((f) => f.periodo).toSet(),
+        {'06/2026', '07/2026'},
+      );
+      expect(
+        notifier.state.facturas
+            .every((f) => notifier.state.estadoDeDocumento(f) == EstadoDocumento.vencida),
+        isTrue,
+      );
+    });
+
+    test('cambiarFiltroCobranza filtra avisos de cobranza e ignora avisosCorte en la vista de documentos', () async {
+      mockRepository.mockResponse = ListaDocumentosModel(
+        codSocio: '23807',
+        rolAcceso: 'TITULAR',
+        totalDocumentos: 5,
+        facturas: const [],
+        avisosCobranza: [
+          DocumentoModel(
+            id: 'av-1',
+            codSocio: '23807',
+            tipoDocumento: 'AVISO_COBRANZA',
+            periodo: '05/2026',
+            anio: 2026,
+            mes: 5,
+            montoBs: 50.0,
+            fechaEmision: DateTime(2026, 5, 1),
+            estadoPago: 'PAGADO',
+          ),
+          DocumentoModel(
+            id: 'av-2',
+            codSocio: '23807',
+            tipoDocumento: 'AVISO_COBRANZA',
+            periodo: '06/2026',
+            anio: 2026,
+            mes: 6,
+            montoBs: 60.0,
+            fechaEmision: DateTime(2026, 6, 1),
+            estadoPago: 'PENDIENTE',
+          ),
+          DocumentoModel(
+            id: 'av-3',
+            codSocio: '23807',
+            tipoDocumento: 'AVISO_COBRANZA',
+            periodo: '07/2026',
+            anio: 2026,
+            mes: 7,
+            montoBs: 70.0,
+            fechaEmision: DateTime(2026, 7, 1),
+            estadoPago: 'PENDIENTE',
+          ),
+          DocumentoModel(
+            id: 'av-4',
+            codSocio: '23807',
+            tipoDocumento: 'AVISO_COBRANZA',
+            periodo: '08/2026',
+            anio: 2026,
+            mes: 8,
+            montoBs: 80.0,
+            fechaEmision: DateTime(2026, 8, 1),
+            estadoPago: 'PENDIENTE',
+          ),
+        ],
+        avisosCorte: [
+          DocumentoModel(
+            id: 'corte-1',
+            codSocio: '23807',
+            tipoDocumento: 'AVISO_CORTE',
+            periodo: '08/2026',
+            anio: 2026,
+            mes: 8,
+            montoBs: 210.0,
+            fechaEmision: DateTime(2026, 8, 15),
+            estadoPago: 'PENDIENTE',
+          ),
+        ],
+        documentos: const [],
+      );
+
+      await notifier.cargarDocumentos(codSocio: '23807');
+
+      expect(notifier.state.totalCobranzaPagadasCount, 1);
+      expect(notifier.state.totalCobranzaVencidasCount, 1);
+      expect(notifier.state.totalCobranzaImpagasCount, 2);
+
+      // Aun intentando seleccionar tab 2, debe limitarse a Cobranza (tab 1) y nunca exponer avisosCorte
+      notifier.cambiarTab(2);
+      expect(notifier.state.selectedTabIndex, 1);
+      expect(
+        notifier.state.documentosTabActual.any((d) => d.isAvisoCorte),
+        isFalse,
+      );
+
+      notifier.cambiarFiltroCobranza(FiltroEstadoFactura.pagadas);
+      expect(notifier.state.avisosCobranza.length, 1);
+      expect(notifier.state.avisosCobranza.first.id, 'av-1');
+
+      notifier.cambiarFiltroCobranza(FiltroEstadoFactura.vencidas);
+      expect(notifier.state.avisosCobranza.length, 1);
+      expect(notifier.state.avisosCobranza.first.id, 'av-2');
+
+      notifier.cambiarFiltroCobranza(FiltroEstadoFactura.impagas);
+      expect(notifier.state.avisosCobranza.length, 2);
+      expect(
+        notifier.state.avisosCobranza.map((a) => a.id).toSet(),
+        {'av-3', 'av-4'},
+      );
     });
   });
 }
