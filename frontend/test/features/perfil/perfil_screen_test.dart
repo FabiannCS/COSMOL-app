@@ -319,5 +319,74 @@ void main() {
         expect(find.text('Cambiar PIN / Contraseña'), findsNothing);
       },
     );
+
+    testWidgets(
+      'en modo titular secundario, PerfilScreen muestra teléfono y datos pero oculta cambiar PIN',
+      (WidgetTester tester) async {
+        const activeSuministro = SuministroModel(
+          id: 'sum-786',
+          codSocio: '786',
+          alias: 'Oficina',
+          nombre: 'LIMA LOPEZ MOISES',
+          rol: 'TITULAR',
+          esSuministroPrincipal: false, // Titular secundario
+        );
+
+        const resumenMock = ResumenDeudaModel(
+          codSocio: '786',
+          suministro: DetalleSuministroModel(
+            codSocio: '786',
+            nombreTitular: 'LIMA LOPEZ MOISES',
+            ciNit: '552840',
+            direccion: 'CALLE COMERCIO 123',
+            ubicacion: '1.6.38.0',
+            rolUsuario: 'TITULAR',
+            telefonoCelular: '+59160968075',
+          ),
+          saldoPendienteBs: 0.0,
+          cantidadFacturasPendientes: 0,
+          estaVencido: false,
+          alertaCorte: false,
+        );
+
+        final notifier = DeudaNotifier(_FakeDeudaRepository(resumenMock));
+        await notifier.cargarDeuda('786');
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              storageServiceProvider.overrideWithValue(_FakeStorageService()),
+              deudaProvider.overrideWith((ref) => notifier),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.lightTheme,
+              home: Scaffold(
+                backgroundColor: AppColors.lightBackground,
+                appBar: const CosmolAppBar(
+                  title: 'Mi Perfil',
+                  showBackButton: true,
+                ),
+                body: const PerfilScreen(activeSuministro: activeSuministro),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        // 1. Rol de Usuario debe decir Titular Secundario
+        expect(find.text('Titular Secundario'), findsOneWidget);
+
+        // 2. Teléfono sí se muestra porque es Titular
+        expect(find.text('+59160968075'), findsOneWidget);
+
+        // 3. Dirección sin censura porque es Titular
+        expect(find.text('CALLE COMERCIO 123'), findsOneWidget);
+
+        // 4. Cambiar PIN y Seguridad y Cuenta deben estar OCULTOS para titular secundario
+        expect(find.text('Seguridad y Cuenta'), findsNothing);
+        expect(find.text('Cambiar PIN / Contraseña'), findsNothing);
+      },
+    );
   });
 }

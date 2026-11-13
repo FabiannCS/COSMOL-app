@@ -93,14 +93,19 @@ class ReconexionNotifier extends StateNotifier<ReconexionState> {
     state = state.copyWith(isSubmitting: true, clearError: true);
 
     try {
-      String? fotoUrl;
-      if (fotoBytes != null && fotoBytes.isNotEmpty) {
-        fotoUrl = await _repository.subirFotoEvidencia(
-          bytes: fotoBytes,
-          filename: fotoFilename ?? 'evidencia.jpg',
-          codSocio: codSocio,
+      if (fotoBytes == null || fotoBytes.isEmpty) {
+        state = state.copyWith(
+          isSubmitting: false,
+          errorMessage: 'Debe adjuntar una fotografía de evidencia (obligatoria).',
         );
+        return false;
       }
+
+      final fotoUrl = await _repository.subirFotoEvidencia(
+        bytes: fotoBytes,
+        filename: fotoFilename ?? 'evidencia.jpg',
+        codSocio: codSocio,
+      );
 
       final payload = SolicitudReconexionPayload(
         codigoSocio: codSocio,

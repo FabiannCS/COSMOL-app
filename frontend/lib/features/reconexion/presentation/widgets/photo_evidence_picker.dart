@@ -90,12 +90,28 @@ class _PhotoEvidencePickerState extends State<PhotoEvidencePicker> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                )
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.errorBackground,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: AppColors.errorRed.withAlpha(80)),
+                  ),
+                  child: Text(
+                    'Obligatorio',
+                    style: AppTextStyles.caption.copyWith(
+                      color: AppColors.errorRed,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
             ],
           ),
           const SizedBox(height: 6),
           Text(
-            'Envíe una fotografía para verificar el estado de la conexión física del medidor.',
+            'Envíe una fotografía del medidor o fachada para verificar el estado de la conexión física (requisito obligatorio).',
             style: AppTextStyles.body2,
           ),
           const SizedBox(height: 12),

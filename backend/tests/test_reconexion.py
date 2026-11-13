@@ -258,6 +258,21 @@ async def test_solicitar_reconexion_rechazada_por_alta_morosidad(mock_socio_dato
         assert exc_info.value.error_code == "ALTA_MOROSIDAD"
 
 
+@pytest.mark.asyncio
+async def test_solicitar_reconexion_rechazada_sin_foto(mock_socio_datos):
+    """Regla: La fotografía de evidencia es obligatoria para tramitar la reconexión."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        SolicitudReconexionCreate(
+            codigo_socio="267657",
+            id_tipo_reconexion=TipoReconexionEnum.CORTE_NORMAL,
+            coordenadas_gps="-17.345678, -63.254123",
+            glosa="Acometida esquina",
+            foto_url=""
+        )
+
+
 # ==============================================================================
 # 3. PRUEBAS DE HISTORIAL Y ALMACENAMIENTO MINIO
 # ==============================================================================

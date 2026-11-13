@@ -3,14 +3,14 @@ class SolicitudReconexionPayload {
   final int idTipoReconexion;
   final String coordenadasGps;
   final String glosa;
-  final String? fotoUrl;
+  final String fotoUrl;
 
   const SolicitudReconexionPayload({
     required this.codigoSocio,
     required this.idTipoReconexion,
     required this.coordenadasGps,
     required this.glosa,
-    this.fotoUrl,
+    required this.fotoUrl,
   });
 
   Map<String, dynamic> toJson() {

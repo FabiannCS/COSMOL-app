@@ -182,6 +182,12 @@ class ServicioReconexion:
         codigo = str(datos.codigo_socio).strip()
 
         # 1. Validación estricta de precondiciones
+        if not datos.foto_url or not datos.foto_url.strip():
+            raise BadRequestException(
+                message="La fotografía de evidencia es obligatoria para tramitar la reconexión.",
+                error_code="FOTO_OBLIGATORIA"
+            )
+
         elegibilidad = await self.verificar_elegibilidad(codigo)
         if not elegibilidad.es_elegible:
             logger.warning(

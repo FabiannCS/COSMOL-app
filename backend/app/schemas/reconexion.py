@@ -55,8 +55,9 @@ class SolicitudReconexionCreate(BaseModel):
         max_length=250,
         description="Descripción con referencias visibles del domicilio (color de puerta, árbol, etc.)"
     )
-    foto_url: Optional[str] = Field(
-        None,
+    foto_url: str = Field(
+        ...,
+        min_length=5,
         description="URL accesible de la fotografía de evidencia cargada previamente a MinIO"
     )
 
@@ -66,6 +67,14 @@ class SolicitudReconexionCreate(BaseModel):
         limpio = v.strip()
         if len(limpio) < 5:
             raise ValueError("La descripción debe tener al menos 5 caracteres con referencias claras del domicilio.")
+        return limpio
+
+    @field_validator("foto_url")
+    @classmethod
+    def validar_foto_url(cls, v: str) -> str:
+        limpio = v.strip()
+        if len(limpio) < 5:
+            raise ValueError("La fotografía de evidencia es obligatoria para tramitar la reconexión.")
         return limpio
 
 

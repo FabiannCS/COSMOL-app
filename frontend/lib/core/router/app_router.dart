@@ -57,9 +57,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 
         final activeSuministro = ref.read(multicuentaProvider).activeSuministro;
         final isInquilino = activeSuministro?.isInquilino ?? false;
+        final esTitularSecundario = activeSuministro?.esTitularSecundario ?? false;
         if (isInquilino) {
           if (state.matchedLocation.startsWith('/documentos') ||
-              state.matchedLocation.startsWith('/reconexion')) {
+              state.matchedLocation.startsWith('/reconexion') ||
+              state.matchedLocation == '/cambiar-pin') {
+            return '/dashboard';
+          }
+        }
+        if (esTitularSecundario) {
+          if (state.matchedLocation == '/cambiar-pin') {
             return '/dashboard';
           }
         }

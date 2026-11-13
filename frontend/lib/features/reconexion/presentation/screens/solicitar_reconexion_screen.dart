@@ -64,6 +64,16 @@ class _SolicitarReconexionScreenState
       return;
     }
 
+    if (_fotoBytes == null || _fotoBytes!.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debe adjuntar una fotografía de evidencia (fachada o medidor).'),
+          backgroundColor: AppColors.errorRed,
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) {
       return;
     }

@@ -79,11 +79,23 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
     final deudaState = ref.watch(deudaProvider);
     final detalle = deudaState.resumenDeuda?.suministro;
 
+    final multicuentaState = ref.watch(multicuentaProvider);
+    final activeSuministro = multicuentaState.activeSuministro ?? widget.activeSuministro;
+
     final nombreTitular = detalle?.nombreTitular ?? '';
-    final activeRol = widget.activeSuministro?.rol?.toString().toUpperCase();
+    final activeRol = activeSuministro?.rol?.toString().toUpperCase();
     final isTitular = detalle?.rolUsuario != null
         ? detalle!.rolUsuario == 'TITULAR'
         : (activeRol == null || activeRol == 'TITULAR');
+    final esPrincipal = activeSuministro?.esSuministroPrincipal == true;
+    final isTitularPrincipal = isTitular && esPrincipal;
+
+    String getRolUsuarioLabel() {
+      if (isTitular) {
+        return esPrincipal ? 'Titular Principal' : 'Titular Secundario';
+      }
+      return 'Consulta y Pago';
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -135,7 +147,7 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
               ),
               child: Column(
                 children: [
-                  _InfoRow(label: 'Rol de Usuario', value: isTitular ? 'Titular' : 'Consulta y Pago'),
+                  _InfoRow(label: 'Rol de Usuario', value: getRolUsuarioLabel()),
                   if (isTitular) ...[
                     const Divider(height: 24, color: AppColors.borderSubtle),
                     _InfoRow(label: 'Teléfono', value: detalle.telefonoCelular.isNotEmpty ? detalle.telefonoCelular : 'No registrado'),
@@ -155,7 +167,7 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
             const SizedBox(height: 32),
           ],
 
-          if (isTitular) ...[
+          if (isTitularPrincipal) ...[
             Text('Seguridad y Cuenta', style: AppTextStyles.subtitle1),
             const SizedBox(height: 16),
             Material(
