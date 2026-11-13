@@ -7,7 +7,7 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 import redis.asyncio as aioredis
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BadRequestException, NotFoundException
@@ -281,7 +281,11 @@ class ServicioSuministros:
                 stmt_all = (
                     select(Suministro)
                     .where(Suministro.usuario_id == usuario_id)
-                    .order_by(Suministro.es_suministro_principal.desc(), Suministro.created_at.asc())
+                    .order_by(
+                        Suministro.es_suministro_principal.desc(),
+                        case((Suministro.rol == "TITULAR", 1), else_=2).asc(),
+                        Suministro.created_at.asc()
+                    )
                 )
                 res_all = await self.db.execute(stmt_all)
                 suministros_db = res_all.scalars().all()
@@ -307,7 +311,17 @@ class ServicioSuministros:
         if not usuario:
             return []
 
-        suministros_mem = usuario.get("suministros", [])
+        def _prioridad_suministro(s: Dict[str, Any]) -> int:
+            if s.get("es_suministro_principal", False):
+                return 0
+            if str(s.get("rol", "")).upper() == "TITULAR":
+                return 1
+            return 2
+
+        suministros_mem = sorted(
+            usuario.get("suministros", []),
+            key=_prioridad_suministro
+        )
         nombres_mem = await asyncio.gather(
             *[self._obtener_nombre_socio(s["cod_socio"]) for s in suministros_mem],
             return_exceptions=True

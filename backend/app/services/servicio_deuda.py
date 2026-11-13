@@ -73,15 +73,24 @@ def enmascarar_ci_nit(ci: str) -> str:
 
 def enmascarar_direccion(direccion: str) -> str:
     """
-    Enmascara parcialmente la dirección del predio.
-    Ejemplo: 'SANTA CRUZ 117' -> 'SANTA CRUZ ***'
+    Enmascara la dirección del predio para modo consulta, mostrando únicamente
+    la primera y última letra de cada palabra para máxima privacidad.
+    Ejemplo: 'BARRIO GUABIRA CALLE 3' -> 'B***O G*****A C***E 3'
     """
-    if not direccion:
+    if not direccion or not direccion.strip():
         return "Dirección no disponible"
-    partes = direccion.strip().split()
-    if len(partes) > 1:
-        return f"{' '.join(partes[:-1])} ***"
-    return f"{partes[0][:3]}***"
+    palabras = direccion.strip().split()
+    resultado = []
+    for p in palabras:
+        if p in ["/", "-", ",", "#"]:
+            resultado.append(p)
+        elif len(p) <= 1:
+            resultado.append(p)
+        elif len(p) == 2:
+            resultado.append(f"{p[0]}*")
+        else:
+            resultado.append(f"{p[0]}{'*' * (len(p) - 2)}{p[-1]}")
+    return " ".join(resultado)
 
 
 class ServicioDeuda:

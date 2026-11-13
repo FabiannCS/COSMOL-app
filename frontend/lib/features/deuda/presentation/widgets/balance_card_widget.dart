@@ -612,20 +612,22 @@ class BalanceCardWidget extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primary,
-              side: const BorderSide(color: AppColors.primary),
-              minimumSize: const Size(double.infinity, 44),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+          if (deuda?.suministro?.rolUsuario == 'TITULAR') ...[
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: AppColors.primary,
+                side: const BorderSide(color: AppColors.primary),
+                minimumSize: const Size(double.infinity, 44),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
+              onPressed: onVerRecibo,
+              icon: const Icon(Icons.receipt_long, size: 18),
+              label: const Text('Ver Historial de Facturas'),
             ),
-            onPressed: onVerRecibo,
-            icon: const Icon(Icons.receipt_long, size: 18),
-            label: const Text('Ver Historial de Facturas'),
-          ),
+          ],
         ],
       ),
     );

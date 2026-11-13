@@ -42,6 +42,7 @@ class _ConsumoScreenState extends ConsumerState<ConsumoScreen> {
     final multicuentaState = ref.watch(multicuentaProvider);
     final activeSuministro = multicuentaState.activeSuministro;
     final activeCodSocio = activeSuministro?.codSocio.trim() ?? '';
+    final isTitular = activeSuministro?.rol.toUpperCase() == 'TITULAR';
 
     // Escuchar cambios de suministro para recargar datos automáticamente
     ref.listen(multicuentaProvider.select((s) => s.activeSuministro), (prev, next) {
@@ -272,19 +273,21 @@ class _ConsumoScreenState extends ConsumerState<ConsumoScreen> {
                 onSelectMes: (index) {
                   consumoNotifier.seleccionarMes(index);
                 },
-                onExportarPdf: () {
-                  if (widget.onVerFacturas != null) {
-                    widget.onVerFacturas!();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text(
-                          'El historial de facturas está disponible para descarga en la pestaña Documentos.',
-                        ),
-                      ),
-                    );
-                  }
-                },
+                onExportarPdf: isTitular
+                    ? () {
+                        if (widget.onVerFacturas != null) {
+                          widget.onVerFacturas!();
+                        } else {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'El historial de facturas está disponible para descarga en la pestaña Documentos.',
+                              ),
+                            ),
+                          );
+                        }
+                      }
+                    : null,
               ),
             ],
             const SizedBox(height: 24),

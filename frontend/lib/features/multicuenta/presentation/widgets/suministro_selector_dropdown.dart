@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
+import '../../../auth/data/models/login_response_model.dart';
 import '../providers/multicuenta_provider.dart';
 
 String _enmascararNombre(String nombreCompleto) {
@@ -141,7 +142,7 @@ class SuministroSelectorDropdown extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 6),
-                    _buildRolBadge(active.rol),
+                    _buildRolBadge(active),
                   ],
                 ),
                 if (_hasCustomAlias(active.alias, active.codSocio)) ...[
@@ -173,12 +174,24 @@ class SuministroSelectorDropdown extends ConsumerWidget {
     );
   }
 
-  Widget _buildRolBadge(String rol) {
-    final isTitular = rol.toUpperCase() == 'TITULAR';
+  Widget _buildRolBadge(SuministroModel item) {
+    final String label;
+    final Color color;
+    if (item.esSuministroPrincipal) {
+      label = 'TITULAR PRINCIPAL';
+      color = AppColors.primary;
+    } else if (item.rol.toUpperCase() == 'TITULAR') {
+      label = 'TITULAR SECUNDARIO';
+      color = const Color(0xFF1D4ED8);
+    } else {
+      label = 'CONSULTA Y PAGO';
+      color = AppColors.warningOrange;
+    }
+
     return Text(
-      isTitular ? 'TITULAR' : 'CONSULTA',
+      label,
       style: TextStyle(
-        color: isTitular ? AppColors.primary : AppColors.warningOrange,
+        color: color,
         fontSize: 10,
         fontWeight: FontWeight.bold,
         letterSpacing: 0.4,
@@ -309,16 +322,7 @@ class _SuministrosBottomSheet extends ConsumerWidget {
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    Text(
-                                      isTitular ? 'TITULAR' : 'CONSULTA',
-                                      style: TextStyle(
-                                        color: isTitular
-                                            ? AppColors.primary
-                                            : AppColors.warningOrange,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
+                                    _buildItemRolBadge(item),
                                   ],
                                 ),
                                 if (_hasCustomAlias(item.alias, item.codSocio)) ...[
@@ -371,6 +375,30 @@ class _SuministrosBottomSheet extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildItemRolBadge(SuministroModel item) {
+    final String label;
+    final Color color;
+    if (item.esSuministroPrincipal) {
+      label = 'TITULAR PRINCIPAL';
+      color = AppColors.primary;
+    } else if (item.rol.toUpperCase() == 'TITULAR') {
+      label = 'TITULAR SECUNDARIO';
+      color = const Color(0xFF1D4ED8);
+    } else {
+      label = 'CONSULTA Y PAGO';
+      color = AppColors.warningOrange;
+    }
+
+    return Text(
+      label,
+      style: TextStyle(
+        color: color,
+        fontSize: 10,
+        fontWeight: FontWeight.bold,
       ),
     );
   }

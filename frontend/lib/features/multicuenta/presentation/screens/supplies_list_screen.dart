@@ -142,6 +142,11 @@ class SuppliesListScreen extends ConsumerWidget {
                       backgroundColor: AppColors.successGreen,
                     ),
                   );
+                  // Si se desvinculó la cuenta activa en modo consulta, redirigir al titular principal
+                  if (item.isInquilino) {
+                    onSuministroSeleccionado?.call();
+                    context.go('/dashboard');
+                  }
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -223,6 +228,26 @@ class SuppliesListScreen extends ConsumerWidget {
     return 'Socio: ${item.codSocio}';
   }
 
+  String _getBadgeLabel(SuministroModel item) {
+    if (item.esSuministroPrincipal) {
+      return 'TITULAR PRINCIPAL';
+    }
+    if (item.rol.toUpperCase() == 'TITULAR') {
+      return 'TITULAR SECUNDARIO';
+    }
+    return 'CONSULTA Y PAGO';
+  }
+
+  Color _getBadgeColor(SuministroModel item) {
+    if (item.esSuministroPrincipal) {
+      return AppColors.primary;
+    }
+    if (item.rol.toUpperCase() == 'TITULAR') {
+      return const Color(0xFF1D4ED8);
+    }
+    return AppColors.warningOrange;
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(multicuentaProvider);
@@ -281,7 +306,8 @@ class SuppliesListScreen extends ConsumerWidget {
                     final item = state.suministros[index];
                     final isSelected =
                         item.codSocio == state.activeSuministro?.codSocio;
-                    final isTitular = item.rol.toUpperCase() == 'TITULAR';
+                    final isModoConsultaActivo =
+                        state.activeSuministro?.isInquilino ?? false;
 
                     return Container(
                       padding: const EdgeInsets.all(16),
@@ -316,11 +342,9 @@ class SuppliesListScreen extends ConsumerWidget {
                                 ),
                               ),
                               Text(
-                                isTitular
-                                    ? 'TITULAR'
-                                    : 'CONSULTA',
+                                _getBadgeLabel(item),
                                 style: TextStyle(
-                                  color: AppColors.primary,
+                                  color: _getBadgeColor(item),
                                   fontSize: 11,
                                   fontWeight: FontWeight.bold,
                                   letterSpacing: 0.5,
@@ -397,36 +421,37 @@ class SuppliesListScreen extends ConsumerWidget {
                                   },
                                   child: const Text('Activar'),
                                 ),
-                              TextButton.icon(
-                                onPressed: () {
-                                  if (item.esSuministroPrincipal) {
-                                    _mostrarAvisoNoDesvincularPrincipal(
-                                        context, item);
-                                  } else {
-                                    _confirmarDesvinculacion(
-                                        context, ref, item);
-                                  }
-                                },
-                                icon: const Icon(
-                                  Icons.link_off_rounded,
-                                  size: 16,
-                                  color: AppColors.errorRed,
-                                ),
-                                label: const Text(
-                                  'Desvincular',
-                                  style: TextStyle(
+                              if (!isModoConsultaActivo || isSelected)
+                                TextButton.icon(
+                                  onPressed: () {
+                                    if (item.esSuministroPrincipal) {
+                                      _mostrarAvisoNoDesvincularPrincipal(
+                                          context, item);
+                                    } else {
+                                      _confirmarDesvinculacion(
+                                          context, ref, item);
+                                    }
+                                  },
+                                  icon: const Icon(
+                                    Icons.link_off_rounded,
+                                    size: 16,
                                     color: AppColors.errorRed,
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
+                                  ),
+                                  label: const Text(
+                                    'Desvincular',
+                                    style: TextStyle(
+                                      color: AppColors.errorRed,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppColors.errorRed,
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 8, vertical: 4),
+                                    visualDensity: VisualDensity.compact,
                                   ),
                                 ),
-                                style: TextButton.styleFrom(
-                                  foregroundColor: AppColors.errorRed,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 4),
-                                  visualDensity: VisualDensity.compact,
-                                ),
-                              ),
                             ],
                           ),
                         ],

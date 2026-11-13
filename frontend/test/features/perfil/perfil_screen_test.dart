@@ -247,5 +247,77 @@ void main() {
         expect(find.text('Ir'), findsOneWidget);
       },
     );
+
+    testWidgets(
+      'en modo consulta, PerfilScreen muestra banner de privacidad, oculta teléfono y cambiar PIN, y censura dirección',
+      (WidgetTester tester) async {
+        const activeSuministro = SuministroModel(
+          id: 'sum-999',
+          codSocio: '999',
+          alias: 'Alquiler',
+          nombre: 'PEREZ JUAN',
+          rol: 'CONSULTA_PAGO',
+          esSuministroPrincipal: false,
+        );
+
+        const resumenMock = ResumenDeudaModel(
+          codSocio: '999',
+          suministro: DetalleSuministroModel(
+            codSocio: '999',
+            nombreTitular: 'P***Z J**N',
+            ciNit: '***840',
+            direccion: 'ANTOFAGASTA / 24 DE S',
+            ubicacion: '1.6.38.0',
+            rolUsuario: 'CONSULTA_PAGO',
+            telefonoCelular: '',
+          ),
+          saldoPendienteBs: 150.0,
+          cantidadFacturasPendientes: 1,
+          estaVencido: false,
+          alertaCorte: false,
+        );
+
+        final notifier = DeudaNotifier(_FakeDeudaRepository(resumenMock));
+        await notifier.cargarDeuda('999');
+
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [
+              storageServiceProvider.overrideWithValue(_FakeStorageService()),
+              deudaProvider.overrideWith((ref) => notifier),
+            ],
+            child: MaterialApp(
+              theme: AppTheme.lightTheme,
+              home: Scaffold(
+                backgroundColor: AppColors.lightBackground,
+                appBar: const CosmolAppBar(
+                  title: 'Mi Perfil',
+                  showBackButton: true,
+                ),
+                body: const PerfilScreen(activeSuministro: activeSuministro),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pumpAndSettle();
+
+        // 1. Banner "Modo Consulta y Pago Activo" debe estar visible en Perfil
+        expect(find.text('Modo Consulta y Pago Activo'), findsOneWidget);
+
+        // 2. Información del Socio: Rol debe ser Consulta y Pago, Teléfono debe estar oculto
+        expect(find.text('Información del Socio'), findsOneWidget);
+        expect(find.text('Consulta y Pago'), findsOneWidget);
+        expect(find.text('Teléfono'), findsNothing);
+
+        // 3. Dirección censurada palabra por palabra (primera y última letra)
+        // 'ANTOFAGASTA / 24 DE S' -> 'A*********A / 2* D* S'
+        expect(find.text('A*********A / 2* D* S'), findsOneWidget);
+
+        // 4. Seguridad y Cuenta / Cambiar PIN debe estar completamente oculto
+        expect(find.text('Seguridad y Cuenta'), findsNothing);
+        expect(find.text('Cambiar PIN / Contraseña'), findsNothing);
+      },
+    );
   });
 }

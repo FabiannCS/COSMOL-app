@@ -7,7 +7,6 @@ import '../../data/models/documento_model.dart';
 import '../providers/documentos_provider.dart';
 import '../widgets/document_card_widget.dart';
 import '../widgets/document_empty_widget.dart';
-import '../widgets/document_inquilino_banner.dart';
 import 'pdf_viewer_screen.dart';
 
 /// Pantalla principal para el Repositorio Digital de Documentos y Facturas PDF (Fase 3).
@@ -151,9 +150,6 @@ class _DocumentosScreenState extends ConsumerState<DocumentosScreen>
               ],
             ),
             const SizedBox(height: 16),
-
-            // Banner de Inquilino si aplica
-            if (state.isInquilino) const DocumentInquilinoBanner(),
 
             // Error banner si falló la carga
             if (state.errorMessage != null && !state.isLoading) ...[

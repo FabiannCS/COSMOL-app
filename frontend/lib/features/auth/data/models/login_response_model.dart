@@ -37,6 +37,11 @@ class SuministroModel {
       'es_suministro_principal': esSuministroPrincipal,
     };
   }
+
+  bool get esTitular => rol.toUpperCase() == 'TITULAR';
+  bool get isInquilino => rol.toUpperCase() == 'CONSULTA_PAGO';
+  bool get esTitularPrincipal => esSuministroPrincipal;
+  bool get esTitularSecundario => esTitular && !esSuministroPrincipal;
 }
 
 class LoginResponseModel {

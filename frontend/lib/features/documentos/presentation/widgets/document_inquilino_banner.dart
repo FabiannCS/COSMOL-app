@@ -4,7 +4,9 @@ import '../../../../core/config/theme/app_text_styles.dart';
 
 /// Banner informativo de privacidad para suministros en modo CONSULTA_PAGO (Inquilinos/terceros).
 class DocumentInquilinoBanner extends StatelessWidget {
-  const DocumentInquilinoBanner({super.key});
+  final String? mensaje;
+
+  const DocumentInquilinoBanner({super.key, this.mensaje});
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +42,8 @@ class DocumentInquilinoBanner extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Por confidencialidad del titular, solo tienes acceso a los Avisos de Cobranza para gestionar tus pagos. Las facturas fiscales están reservadas al titular.',
+                  mensaje ??
+                      'Por confidencialidad del titular, este suministro está configurado en Modo Consulta y Pago. El cambio de PIN, documentos y datos personales sensibles están reservados al titular.',
                   style: AppTextStyles.caption.copyWith(
                     color: const Color(0xFF1E3A8A),
                     height: 1.3,

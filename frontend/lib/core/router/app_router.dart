@@ -54,6 +54,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         if (isSplash || isLoggingIn || isOnboarding || isRecuperarPassword || isMigrarCelular) {
           return '/dashboard';
         }
+
+        final activeSuministro = ref.read(multicuentaProvider).activeSuministro;
+        final isInquilino = activeSuministro?.isInquilino ?? false;
+        if (isInquilino) {
+          if (state.matchedLocation.startsWith('/documentos') ||
+              state.matchedLocation.startsWith('/reconexion')) {
+            return '/dashboard';
+          }
+        }
       }
 
       return null;

@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user_id, get_db
 from app.core.exceptions import BadRequestException, NotFoundException
-from app.db.models import Usuario
+from app.db.models import Suministro, Usuario
 from app.integrations.minio_client import minio_client
 from app.schemas.reconexion import (
     ElegibilidadReconexionResponse,
@@ -60,7 +60,29 @@ ALLOWED_MIME_TYPES = {
 async def verificar_elegibilidad(
     cod_socio: str,
     current_user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
 ) -> ElegibilidadReconexionResponse:
+    try:
+        uid = UUID(current_user_id)
+        res_sum = await db.execute(
+            select(Suministro.rol).where(
+                Suministro.usuario_id == uid,
+                Suministro.cod_socio == cod_socio,
+            )
+        )
+        rol_suministro = res_sum.scalar_one_or_none()
+        if rol_suministro == "CONSULTA_PAGO":
+            return ElegibilidadReconexionResponse(
+                codigo_socio=cod_socio,
+                es_elegible=False,
+                motivo_bloqueo="MODO_CONSULTA",
+                mensaje_usuario="El suministro está en Modo Consulta y Pago. Las solicitudes de reconexión están reservadas exclusivamente al titular.",
+                facturas_pendientes=0,
+                total_deuda_bs=0.0,
+            )
+    except Exception as exc:
+        logger.debug(f"Error verificando rol en elegibilidad: {exc}")
+
     return await servicio_reconexion.verificar_elegibilidad(cod_socio=cod_socio)
 
 
@@ -173,10 +195,26 @@ async def registrar_solicitud_reconexion(
     telefono_usuario = None
     try:
         uid = UUID(current_user_id)
+        # Validar si el suministro vinculado al usuario tiene rol CONSULTA_PAGO
+        res_sum = await db.execute(
+            select(Suministro.rol).where(
+                Suministro.usuario_id == uid,
+                Suministro.cod_socio == datos.codigo_socio,
+            )
+        )
+        rol_suministro = res_sum.scalar_one_or_none()
+        if rol_suministro == "CONSULTA_PAGO":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="El suministro está en Modo Consulta y Pago. Las solicitudes de reconexión están reservadas exclusivamente al titular.",
+            )
+
         res = await db.execute(select(Usuario.telefono).where(Usuario.id == uid))
         telefono_usuario = res.scalar_one_or_none()
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.debug(f"No se pudo consultar teléfono de usuario {current_user_id}: {exc}")
+        logger.debug(f"No se pudo consultar información de usuario {current_user_id}: {exc}")
 
     return await servicio_reconexion.solicitar_reconexion(
         datos=datos,

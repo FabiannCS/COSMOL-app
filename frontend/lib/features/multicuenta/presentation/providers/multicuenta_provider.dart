@@ -61,19 +61,32 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
     _init(initialSuministros, initialCodSocio);
   }
 
+  List<SuministroModel> _ordenarPorJerarquia(List<SuministroModel> lista) {
+    final copy = List<SuministroModel>.from(lista);
+    copy.sort((a, b) {
+      if (a.esSuministroPrincipal && !b.esSuministroPrincipal) return -1;
+      if (!a.esSuministroPrincipal && b.esSuministroPrincipal) return 1;
+      if (a.esTitular && !b.esTitular) return -1;
+      if (!a.esTitular && b.esTitular) return 1;
+      return a.codSocio.compareTo(b.codSocio);
+    });
+    return copy;
+  }
+
   void _init(List<SuministroModel> initialSuministros, String? initialCodSocio) {
     if (initialSuministros.isNotEmpty) {
+      final ordenados = _ordenarPorJerarquia(initialSuministros);
       SuministroModel? active;
       if (initialCodSocio != null && initialCodSocio.isNotEmpty) {
-        active = initialSuministros.firstWhere(
+        active = ordenados.firstWhere(
           (s) => s.codSocio == initialCodSocio,
-          orElse: () => initialSuministros.first,
+          orElse: () => ordenados.first,
         );
       } else {
-        active = initialSuministros.first;
+        active = ordenados.first;
       }
       state = state.copyWith(
-        suministros: initialSuministros,
+        suministros: ordenados,
         activeSuministro: active,
       );
     } else {
@@ -93,7 +106,8 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
 
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      final lista = await repository.listarSuministros();
+      final rawLista = await repository.listarSuministros();
+      final lista = _ordenarPorJerarquia(rawLista);
       final activeCodSocio = await storageService.getActiveCodSocio();
 
       SuministroModel? active;
@@ -132,8 +146,9 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
   Future<void> _aplicarFallbackOfflineSuministros(String defaultError) async {
     final cached = storageService.getCachedSuministros();
     if (cached != null && cached.isNotEmpty) {
-      final listaCached =
-          cached.map((item) => SuministroModel.fromJson(item)).toList();
+      final listaCached = _ordenarPorJerarquia(
+        cached.map((item) => SuministroModel.fromJson(item)).toList(),
+      );
       final activeCod = await storageService.getActiveCodSocio();
 
       final active = (activeCod != null && activeCod.isNotEmpty)
@@ -178,7 +193,7 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
         alias: alias,
       );
 
-      final nuevaLista = [...state.suministros, nuevoSuministro];
+      final nuevaLista = _ordenarPorJerarquia([...state.suministros, nuevoSuministro]);
       await storageService.saveActiveCodSocio(nuevoSuministro.codSocio);
 
       if (!mounted) return true;
@@ -211,12 +226,15 @@ class MulticuentaNotifier extends StateNotifier<MulticuentaState> {
     try {
       await repository.desvincularSuministro(codSocio);
 
-      final nuevaLista =
-          state.suministros.where((s) => s.codSocio != codSocio).toList();
+      final nuevaLista = _ordenarPorJerarquia(
+          state.suministros.where((s) => s.codSocio != codSocio).toList());
 
       SuministroModel? nuevoActivo = state.activeSuministro;
       if (state.activeSuministro?.codSocio == codSocio) {
-        nuevoActivo = nuevaLista.isNotEmpty ? nuevaLista.first : null;
+        nuevoActivo = nuevaLista.isNotEmpty
+            ? nuevaLista.firstWhere((s) => s.esSuministroPrincipal,
+                orElse: () => nuevaLista.first)
+            : null;
         if (nuevoActivo != null) {
           await storageService.saveActiveCodSocio(nuevoActivo.codSocio);
         }

@@ -10,6 +10,7 @@ import '../../../deuda/presentation/providers/deuda_provider.dart';
 import '../../../multicuenta/presentation/providers/multicuenta_provider.dart';
 import '../../../consumo/presentation/providers/consumo_provider.dart';
 import '../../../documentos/presentation/providers/documentos_provider.dart';
+import '../../../documentos/presentation/widgets/document_inquilino_banner.dart';
 
 class PerfilScreen extends ConsumerStatefulWidget {
   final dynamic activeSuministro;
@@ -27,6 +28,18 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
   // Preservado en código para habilitación futura de autenticación biométrica
   bool _biometricEnabled = false;
   bool get _mostrarAutenticacionBiometrica => false;
+
+  String _enmascararDireccion(String direccion) {
+    final limpio = direccion.trim();
+    if (limpio.isEmpty) return 'No registrada';
+    final palabras = limpio.split(RegExp(r'\s+'));
+    return palabras.map((p) {
+      if (p == '/' || p == '-' || p == ',' || p == '#') return p;
+      if (p.length <= 1) return p;
+      if (p.length == 2) return '${p[0]}*';
+      return '${p[0]}${'*' * (p.length - 2)}${p[p.length - 1]}';
+    }).join(' ');
+  }
 
   void _mostrarInfoModal(BuildContext context, {required String titulo, required String contenido}) {
     showModalBottomSheet(
@@ -67,7 +80,10 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
     final detalle = deudaState.resumenDeuda?.suministro;
 
     final nombreTitular = detalle?.nombreTitular ?? '';
-    final isTitular = detalle?.rolUsuario == 'TITULAR';
+    final activeRol = widget.activeSuministro?.rol?.toString().toUpperCase();
+    final isTitular = detalle?.rolUsuario != null
+        ? detalle!.rolUsuario == 'TITULAR'
+        : (activeRol == null || activeRol == 'TITULAR');
 
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
@@ -97,6 +113,12 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
               ],
             ),
           ),
+
+          // Cuadro de advertencia Modo Consulta y Pago Activo
+          if (!isTitular) ...[
+            const SizedBox(height: 20),
+            const DocumentInquilinoBanner(),
+          ],
           
           const SizedBox(height: 32),
           
@@ -114,74 +136,84 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
               child: Column(
                 children: [
                   _InfoRow(label: 'Rol de Usuario', value: isTitular ? 'Titular' : 'Consulta y Pago'),
-                  const Divider(height: 24, color: AppColors.borderSubtle),
-                  _InfoRow(label: 'Teléfono', value: detalle.telefonoCelular.isNotEmpty ? detalle.telefonoCelular : 'No registrado'),
+                  if (isTitular) ...[
+                    const Divider(height: 24, color: AppColors.borderSubtle),
+                    _InfoRow(label: 'Teléfono', value: detalle.telefonoCelular.isNotEmpty ? detalle.telefonoCelular : 'No registrado'),
+                  ],
                   const Divider(height: 24, color: AppColors.borderSubtle),
                   _InfoRow(label: 'CI', value: detalle.ciNit.isNotEmpty ? detalle.ciNit : 'No registrado'),
                   const Divider(height: 24, color: AppColors.borderSubtle),
-                  _InfoRow(label: 'Dirección', value: detalle.direccion.isNotEmpty ? detalle.direccion : 'No registrada'),
+                  _InfoRow(
+                    label: 'Dirección',
+                    value: isTitular
+                        ? (detalle.direccion.isNotEmpty ? detalle.direccion : 'No registrada')
+                        : _enmascararDireccion(detalle.direccion),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 32),
           ],
 
-          Text('Seguridad y Cuenta', style: AppTextStyles.subtitle1),
-          const SizedBox(height: 16),
-          Material(
-            color: AppColors.cardSurface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-              side: const BorderSide(color: AppColors.borderSubtle),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Column(
-                children: [
-                  if (_mostrarAutenticacionBiometrica) ...[
-                    SwitchListTile(
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                      title: Text('Autenticación Biométrica', style: AppTextStyles.body1),
+          if (isTitular) ...[
+            Text('Seguridad y Cuenta', style: AppTextStyles.subtitle1),
+            const SizedBox(height: 16),
+            Material(
+              color: AppColors.cardSurface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AppColors.borderSubtle),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Column(
+                  children: [
+                    if (_mostrarAutenticacionBiometrica) ...[
+                      SwitchListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        title: Text('Autenticación Biométrica', style: AppTextStyles.body1),
+                        subtitle: Text(
+                          'Huella o reconocimiento facial',
+                          style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
+                        ),
+                        value: _biometricEnabled,
+                        activeThumbColor: AppColors.primary,
+                        onChanged: (val) {
+                          setState(() {
+                            _biometricEnabled = val;
+                          });
+                          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(val
+                                  ? 'Autenticación biométrica habilitada.'
+                                  : 'Autenticación biométrica deshabilitada.'),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                        },
+                      ),
+                      const Divider(height: 1, color: AppColors.borderSubtle),
+                    ],
+                    ListTile(
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      title: Text('Cambiar PIN / Contraseña', style: AppTextStyles.body1),
                       subtitle: Text(
-                        'Huella o reconocimiento facial',
+                        'Actualiza tu clave de acceso',
                         style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
                       ),
-                      value: _biometricEnabled,
-                      activeThumbColor: AppColors.primary,
-                      onChanged: (val) {
-                        setState(() {
-                          _biometricEnabled = val;
-                        });
-                        ScaffoldMessenger.of(context).hideCurrentSnackBar();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(val
-                                ? 'Autenticación biométrica habilitada.'
-                                : 'Autenticación biométrica deshabilitada.'),
-                            duration: const Duration(seconds: 2),
-                          ),
-                        );
+                      trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
+                      onTap: () {
+                        context.push('/cambiar-pin');
                       },
                     ),
-                    const Divider(height: 1, color: AppColors.borderSubtle),
                   ],
-                  ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    title: Text('Cambiar PIN / Contraseña', style: AppTextStyles.body1),
-                    subtitle: Text(
-                      'Actualiza tu clave de acceso',
-                      style: AppTextStyles.caption.copyWith(color: AppColors.textSecondary),
-                    ),
-                    trailing: const Icon(Icons.chevron_right_rounded, color: AppColors.textMuted),
-                    onTap: () {
-                      context.push('/cambiar-pin');
-                    },
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
+            const SizedBox(height: 32),
+          ],
 
           const SizedBox(height: 32),
           Text('Acerca de', style: AppTextStyles.subtitle1),

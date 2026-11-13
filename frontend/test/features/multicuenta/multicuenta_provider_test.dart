@@ -196,5 +196,46 @@ void main() {
       expect(notifier.state.activeSuministro?.codSocio, '104523');
       expect(mockStorage.activeCodSocio, '104523');
     });
+
+    test('Ordenamiento por jerarquía: TITULAR PRINCIPAL primero, TITULAR SECUNDARIO segundo, CONSULTA_PAGO al final', () {
+      final consulta = const SuministroModel(
+        id: 'id-c',
+        codSocio: '300',
+        alias: 'Inquilino',
+        rol: 'CONSULTA_PAGO',
+        esSuministroPrincipal: false,
+      );
+      final titularSecundario = const SuministroModel(
+        id: 'id-ts',
+        codSocio: '200',
+        alias: 'Casa 2',
+        rol: 'TITULAR',
+        esSuministroPrincipal: false,
+      );
+      final titularPrincipal = const SuministroModel(
+        id: 'id-tp',
+        codSocio: '100',
+        alias: 'Casa Principal',
+        rol: 'TITULAR',
+        esSuministroPrincipal: true,
+      );
+
+      // Pasamos la lista en desorden deliberadamente
+      final notifier = MulticuentaNotifier(
+        repository: mockRepo,
+        storageService: mockStorage,
+        initialSuministros: [consulta, titularSecundario, titularPrincipal],
+        initialCodSocio: '300',
+      );
+
+      final ordenados = notifier.state.suministros;
+      expect(ordenados.length, 3);
+      expect(ordenados[0].codSocio, '100');
+      expect(ordenados[0].esTitularPrincipal, true);
+      expect(ordenados[1].codSocio, '200');
+      expect(ordenados[1].esTitularSecundario, true);
+      expect(ordenados[2].codSocio, '300');
+      expect(ordenados[2].isInquilino, true);
+    });
   });
 }

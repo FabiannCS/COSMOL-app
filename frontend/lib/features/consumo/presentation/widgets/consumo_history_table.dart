@@ -11,7 +11,7 @@ class ConsumoHistoryTable extends StatelessWidget {
   final double tarifaReferencial;
   final int selectedIndex;
   final ValueChanged<int> onSelectMes;
-  final VoidCallback onExportarPdf;
+  final VoidCallback? onExportarPdf;
 
   const ConsumoHistoryTable({
     super.key,
@@ -20,7 +20,7 @@ class ConsumoHistoryTable extends StatelessWidget {
     required this.tarifaReferencial,
     this.selectedIndex = 0,
     required this.onSelectMes,
-    required this.onExportarPdf,
+    this.onExportarPdf,
   });
 
   @override
@@ -272,33 +272,35 @@ class ConsumoHistoryTable extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                InkWell(
-                  onTap: onExportarPdf,
-                  borderRadius: BorderRadius.circular(6),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.receipt_long_outlined,
-                          size: 16,
-                          color: AppColors.primary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Ver Facturas PDF',
-                          style: GoogleFonts.plusJakartaSans(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                if (onExportarPdf != null) ...[
+                  const SizedBox(width: 8),
+                  InkWell(
+                    onTap: onExportarPdf,
+                    borderRadius: BorderRadius.circular(6),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.receipt_long_outlined,
+                            size: 16,
                             color: AppColors.primary,
                           ),
-                        ),
-                      ],
+                          const SizedBox(width: 4),
+                          Text(
+                            'Ver Facturas PDF',
+                            style: GoogleFonts.plusJakartaSans(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
