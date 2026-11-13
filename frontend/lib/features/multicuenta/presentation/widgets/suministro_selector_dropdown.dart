@@ -88,7 +88,7 @@ class SuministroSelectorDropdown extends ConsumerWidget {
               const Icon(Icons.water_drop_outlined,
                   size: 18, color: AppColors.primary),
               const SizedBox(width: 8),
-              Text('Seleccionar socio', style: AppTextStyles.body2),
+              Text('Seleccionar cuenta', style: AppTextStyles.body2),
               const Icon(Icons.keyboard_arrow_down_rounded,
                   color: AppColors.textSecondary),
             ],
@@ -242,7 +242,7 @@ class _SuministrosBottomSheet extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                'Socios Vinculados',
+                'Cuentas Vinculadas',
                 style: AppTextStyles.h3,
               ),
               IconButton(
@@ -253,7 +253,7 @@ class _SuministrosBottomSheet extends ConsumerWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Selecciona el contrato que deseas consultar o administrar.',
+            'Selecciona la cuenta que deseas consultar o administrar.',
             style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 16),

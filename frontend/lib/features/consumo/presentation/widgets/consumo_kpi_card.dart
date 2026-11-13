@@ -57,7 +57,7 @@ class ConsumoKpiCard extends StatelessWidget {
                     const SizedBox(width: 6),
                     Flexible(
                       child: Text(
-                        'Consumo del Mes Actual',
+                        'Última Medición de Consumo',
                         style: GoogleFonts.plusJakartaSans(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,

@@ -118,6 +118,19 @@ class StorageService {
   static const String _prefixDeuda = 'cached_deuda_';
   static const String _prefixSyncTime = 'cached_sync_time_deuda_';
   static const String _keySuministros = 'cached_suministros_list';
+  static const String _keyReadNotifications = 'read_notifications_ids';
+
+  // --- Notificaciones Leídas (Antirepetición) ---
+  Future<void> saveReadNotificationIds(Set<String> ids) async {
+    _prefs ??= await SharedPreferences.getInstance();
+    await _prefs?.setStringList(_keyReadNotifications, ids.toList());
+  }
+
+  Set<String> getReadNotificationIds() {
+    final list = _prefs?.getStringList(_keyReadNotifications);
+    if (list == null || list.isEmpty) return <String>{};
+    return list.toSet();
+  }
 
   Future<void> saveCachedDeuda(String codSocio, Map<String, dynamic> data) async {
     _prefs ??= await SharedPreferences.getInstance();

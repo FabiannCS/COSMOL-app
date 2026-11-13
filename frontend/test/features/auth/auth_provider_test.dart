@@ -77,6 +77,12 @@ class FakeStorageService implements StorageService {
 
   @override
   List<Map<String, dynamic>>? getCachedSuministros() => null;
+
+  @override
+  Future<void> saveReadNotificationIds(Set<String> ids) async {}
+
+  @override
+  Set<String> getReadNotificationIds() => <String>{};
 }
 
 class FakeDeviceService implements DeviceService {

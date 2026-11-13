@@ -30,13 +30,13 @@ class DocumentEmptyWidget extends StatelessWidget {
     } else if (isInquilino && tabIndex == 0) {
       title = 'Facturas no disponibles';
       description =
-          'Este suministro está configurado en Modo Consulta y Pago. Las facturas oficiales están reservadas para el titular verificado.';
+          'Esta cuenta está configurada en Modo Consulta y Pago. Las facturas oficiales están reservadas para el titular verificado.';
     } else {
       switch (tabIndex) {
         case 0:
           title = 'Sin facturas registradas';
           description =
-              'Aún no se han emitido facturas digitales para este suministro.';
+              'Aún no se han emitido facturas digitales para esta cuenta.';
           break;
         case 1:
           title = 'Sin avisos de cobranza';

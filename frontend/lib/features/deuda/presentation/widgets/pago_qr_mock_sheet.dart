@@ -160,8 +160,8 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
       ];
     }
 
-    // Por defecto, todas las facturas se seleccionan inicialmente
-    _facturasSeleccionadas = _facturasDisponibles.map((f) => f.nroFacip).toSet();
+    // Inicialmente ninguna factura está seleccionada para que el socio inicie la selección
+    _facturasSeleccionadas = <String>{};
 
     // Inicializar primera variante bancaria (Cooperativa Jesús Nazareno)
     _varianteActual = _variantesBancos[0];
@@ -394,7 +394,7 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    'Suministro #${widget.codSocio} • ${widget.nombreTitular}',
+                    'Cuenta #${widget.codSocio} • ${widget.nombreTitular}',
                     style: const TextStyle(
                       fontSize: 12,
                       color: AppColors.textSecondary,
@@ -487,12 +487,12 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
             margin: const EdgeInsets.only(bottom: 10),
             decoration: BoxDecoration(
               color: estaSeleccionada
-                  ? const Color(0xFFF0FDF4)
+                  ? AppColors.surfaceContainerLow
                   : AppColors.pureWhite,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: estaSeleccionada
-                    ? const Color(0xFF22C55E)
+                    ? AppColors.primary
                     : AppColors.borderSubtle,
                 width: estaSeleccionada ? 1.5 : 1.0,
               ),
@@ -510,7 +510,7 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
                       // Checkbox controlado por prelación cronológica
                       Checkbox(
                         value: estaSeleccionada,
-                        activeColor: const Color(0xFF16A34A),
+                        activeColor: AppColors.primary,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(4),
                         ),
@@ -530,23 +530,23 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
                                   padding: const EdgeInsets.symmetric(
                                       horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: index == 0
-                                        ? const Color(0xFFFEF2F2)
+                                    color: estaSeleccionada
+                                        ? AppColors.primary.withAlpha(25)
                                         : const Color(0xFFF1F5F9),
                                     borderRadius: BorderRadius.circular(6),
                                     border: Border.all(
-                                      color: index == 0
-                                          ? const Color(0xFFFECACA)
+                                      color: estaSeleccionada
+                                          ? AppColors.primary.withAlpha(60)
                                           : const Color(0xFFE2E8F0),
                                     ),
                                   ),
                                   child: Text(
-                                    index == 0 ? '#1 Más antigua' : '#${index + 1}',
+                                    '#${index + 1}',
                                     style: TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
-                                      color: index == 0
-                                          ? const Color(0xFFB91C1C)
+                                      color: estaSeleccionada
+                                          ? AppColors.primary
                                           : AppColors.textSecondary,
                                     ),
                                   ),
@@ -590,7 +590,7 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
                           fontSize: 15,
                           fontWeight: FontWeight.w900,
                           color: estaSeleccionada
-                              ? const Color(0xFF15803D)
+                              ? AppColors.primary
                               : AppColors.darkNavy,
                         ),
                       ),
@@ -726,7 +726,7 @@ class _PagoQrMockSheetState extends ConsumerState<PagoQrMockSheet> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'Suministro #${widget.codSocio} • ${widget.nombreTitular}',
+                      'Cuenta #${widget.codSocio} • ${widget.nombreTitular}',
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppColors.textSecondary,

@@ -9,6 +9,7 @@ import '../../../deuda/presentation/screens/deuda_screen.dart';
 import '../../../documentos/presentation/screens/documentos_screen.dart';
 import '../../../multicuenta/presentation/providers/multicuenta_provider.dart';
 import '../../../multicuenta/presentation/screens/supplies_list_screen.dart';
+import '../../../notificaciones/presentation/widgets/notificaciones_bell_icon.dart';
 import '../../../reconexion/presentation/screens/reconexion_status_screen.dart';
 
 /// Shell Principal del Dashboard post-login con Navegación Inferior Fija.
@@ -120,15 +121,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               onPressed: () => context.push('/suministros/vincular'),
             )
           else
-            IconButton(
-              icon: const Icon(Icons.notifications_outlined,
-                  color: AppColors.onSurfaceVariant),
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('No tienes notificaciones pendientes.'),
-                  ),
-                );
+            NotificacionesBellIcon(
+              onVerReconexion: isTitular
+                  ? () {
+                      setState(() {
+                        _currentIndex = 4; // Tab Reconexión
+                      });
+                    }
+                  : null,
+              onVerSocios: () {
+                setState(() {
+                  _currentIndex = isTitular ? 3 : 2; // Tab Socios
+                });
               },
             ),
           IconButton(

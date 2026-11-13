@@ -52,7 +52,7 @@ class SuppliesListScreen extends ConsumerWidget {
           ],
         ),
         content: Text(
-          'El socio "${item.alias.isNotEmpty ? item.alias : item.codSocio}" (Cód: ${item.codSocio}) es el suministro principal registrado con el que creaste tu cuenta en COSMOL R.L.\n\nPor seguridad del sistema, no es posible desvincular el suministro principal registrado.',
+          'El socio "${item.alias.isNotEmpty ? item.alias : item.codSocio}" (Cód: ${item.codSocio}) es la cuenta principal registrada con la que creaste tu acceso en COSMOL R.L.\n\nPor seguridad del sistema, no es posible desvincular la cuenta principal registrada.',
           style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
         ),
         actions: [
@@ -106,7 +106,7 @@ class SuppliesListScreen extends ConsumerWidget {
           ],
         ),
         content: Text(
-          '¿Estás seguro de que deseas desvincular el socio "${item.alias.isNotEmpty ? item.alias : item.codSocio}" (Cód: ${item.codSocio})?\n\nDejarás de ver este suministro en tu lista.',
+          '¿Estás seguro de que deseas desvincular la cuenta "${item.alias.isNotEmpty ? item.alias : item.codSocio}" (Cód: ${item.codSocio})?\n\nDejarás de ver esta cuenta en tu lista.',
           style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
         ),
         actions: [
@@ -137,7 +137,7 @@ class SuppliesListScreen extends ConsumerWidget {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Socio ${item.alias.isNotEmpty ? item.alias : item.codSocio} desvinculado con éxito.',
+                        'Cuenta ${item.alias.isNotEmpty ? item.alias : item.codSocio} desvinculada con éxito.',
                       ),
                       backgroundColor: AppColors.successGreen,
                     ),
@@ -152,7 +152,7 @@ class SuppliesListScreen extends ConsumerWidget {
                     SnackBar(
                       content: Text(
                         ref.read(multicuentaProvider).errorMessage ??
-                            'Error al desvincular socio.',
+                            'Error al desvincular cuenta.',
                       ),
                       backgroundColor: AppColors.errorRed,
                     ),
@@ -258,12 +258,12 @@ class SuppliesListScreen extends ConsumerWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Socios Vinculados',
+            'Cuentas Vinculadas',
             style: AppTextStyles.h2,
           ),
           const SizedBox(height: 6),
           Text(
-            'Administra diferentes socios vinculados a tu cuenta.',
+            'Administra las diferentes cuentas asociadas a tu usuario.',
             style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary),
           ),
           const SizedBox(height: 16),
@@ -281,12 +281,12 @@ class SuppliesListScreen extends ConsumerWidget {
                         size: 64, color: AppColors.textMuted),
                     const SizedBox(height: 16),
                     Text(
-                      'No tienes algún socio vinculado',
+                      'No tienes alguna cuenta vinculada',
                       style: AppTextStyles.subtitle1,
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Agrega tu primer socio para comenzar.',
+                      'Agrega tu primera cuenta para comenzar.',
                       style: AppTextStyles.body2
                           .copyWith(color: AppColors.textSecondary),
                     ),
@@ -312,20 +312,29 @@ class SuppliesListScreen extends ConsumerWidget {
                     return Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: AppColors.cardSurface,
+                        color: isSelected
+                            ? AppColors.surfaceContainerLow
+                            : AppColors.cardSurface,
                         borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: isSelected
                               ? AppColors.primary
                               : AppColors.borderSubtle,
-                          width: isSelected ? 2 : 1,
+                          width: isSelected ? 1.5 : 1,
                         ),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: AppColors.shadowColor,
-                            blurRadius: 8,
-                            offset: Offset(0, 2),
-                          ),
+                        boxShadow: [
+                          if (isSelected)
+                            BoxShadow(
+                              color: AppColors.primary.withAlpha(20),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            )
+                          else
+                            const BoxShadow(
+                              color: AppColors.shadowColor,
+                              blurRadius: 8,
+                              offset: Offset(0, 2),
+                            ),
                         ],
                       ),
                       child: Column(
@@ -400,12 +409,12 @@ class SuppliesListScreen extends ConsumerWidget {
                                   children: [
                                     const Icon(Icons.check_circle_rounded,
                                         size: 16,
-                                        color: AppColors.successGreen),
+                                        color: AppColors.primary),
                                     const SizedBox(width: 4),
                                     Text(
-                                      'Socio Activo',
+                                      'Cuenta Activa',
                                       style: AppTextStyles.caption.copyWith(
-                                        color: AppColors.successGreen,
+                                        color: AppColors.primary,
                                         fontWeight: FontWeight.bold,
                                       ),
                                     ),

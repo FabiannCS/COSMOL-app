@@ -65,14 +65,14 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Socio vinculado correctamente en Modo Titular'),
+          content: Text('Cuenta vinculada correctamente en Modo Titular'),
           backgroundColor: AppColors.successGreen,
         ),
       );
       context.pop();
     } else {
       final errorMsg = ref.read(multicuentaProvider).errorMessage ??
-          'No se pudo vincular el Socio.';
+          'No se pudo vincular la cuenta.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMsg),
@@ -100,14 +100,14 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
     if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Socio vinculado correctamente en Modo Consulta'),
+          content: Text('Cuenta vinculada correctamente en Modo Consulta'),
           backgroundColor: AppColors.successGreen,
         ),
       );
       context.pop();
     } else {
       final errorMsg = ref.read(multicuentaProvider).errorMessage ??
-          'No se pudo vincular el Socio.';
+          'No se pudo vincular la cuenta.';
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMsg),
@@ -124,7 +124,7 @@ class _BindSupplyScreenState extends ConsumerState<BindSupplyScreen>
     return Scaffold(
       appBar: CosmolAppBar(
         title: 'COSMOL R.L.',
-        subtitle: 'Vincular Socio',
+        subtitle: 'Vincular Cuenta',
         showBackButton: true,
         onBackPressed: () => context.pop(),
       ),

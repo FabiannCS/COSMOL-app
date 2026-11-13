@@ -45,6 +45,10 @@ class _FakeStorageService implements StorageService {
   Future<void> saveTokens({required String accessToken, required String refreshToken}) async {}
   @override
   Future<void> setBool(String key, bool value) async {}
+  @override
+  Future<void> saveReadNotificationIds(Set<String> ids) async {}
+  @override
+  Set<String> getReadNotificationIds() => <String>{};
 }
 
 class _FakeMulticuentaRepository implements MulticuentaRepository {

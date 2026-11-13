@@ -173,41 +173,7 @@ class ConsumoDetailCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // 3. Desglose de Lecturas Técnicas del Medidor
-          if (selectedFactura.lecturaActual > 0 || selectedFactura.lecturaAnterior > 0 || selectedFactura.fechaLectura != null) ...[
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  _buildReadingItem(
-                    label: 'Lectura Anterior',
-                    value: '${selectedFactura.lecturaAnterior.toInt()}',
-                  ),
-                  Container(height: 24, width: 1, color: const Color(0xFFE2E8F0)),
-                  _buildReadingItem(
-                    label: 'Lectura Actual',
-                    value: '${selectedFactura.lecturaActual.toInt()}',
-                  ),
-                  if (selectedFactura.fechaLectura != null) ...[
-                    Container(height: 24, width: 1, color: const Color(0xFFE2E8F0)),
-                    _buildReadingItem(
-                      label: 'Fecha Toma',
-                      value: selectedFactura.fechaLectura!,
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-
-          // 4. Banner Preventivo si el mes seleccionado supera el 40% vs mes anterior
+          // 3. Banner Preventivo si el mes seleccionado supera el 40% vs mes anterior
           if (tieneAlertaFuga) ...[
             Container(
               width: double.infinity,
@@ -352,30 +318,6 @@ class ConsumoDetailCard extends StatelessWidget {
           ],
         ],
       ),
-    );
-  }
-
-  Widget _buildReadingItem({required String label, required String value}) {
-    return Column(
-      children: [
-        Text(
-          label,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 9.5,
-            fontWeight: FontWeight.w600,
-            color: const Color(0xFF64748B),
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: GoogleFonts.plusJakartaSans(
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-            color: const Color(0xFF0F172A),
-          ),
-        ),
-      ],
     );
   }
 }

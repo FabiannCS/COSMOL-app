@@ -43,7 +43,7 @@ class DocumentInquilinoBanner extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   mensaje ??
-                      'Por confidencialidad del titular, este suministro está configurado en Modo Consulta y Pago. El cambio de PIN, documentos y datos personales sensibles están reservados al titular.',
+                      'Por confidencialidad del titular, esta cuenta está configurada en Modo Consulta y Pago. El cambio de PIN, documentos y datos personales sensibles están reservados al titular.',
                   style: AppTextStyles.caption.copyWith(
                     color: const Color(0xFF1E3A8A),
                     height: 1.3,
