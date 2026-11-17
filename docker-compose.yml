@@ -1,7 +1,4 @@
 services:
-  # ----------------------------------------------------------------------------
-  # Backend API (FastAPI)
-  # ----------------------------------------------------------------------------
   backend-api:
     build:
       context: ./backend
@@ -27,9 +24,6 @@ services:
       cache-redis:
         condition: service_healthy
 
-  # ----------------------------------------------------------------------------
-  # Base de Datos Relacional (PostgreSQL 16)
-  # ----------------------------------------------------------------------------
   db-postgres:
     image: postgres:16-alpine
     container_name: cosmol-db-postgres
@@ -47,11 +41,7 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cosmol_user} -d ${POSTGRES_DB:-cosmol_db}"]
       interval: 5s
       timeout: 5s
-      retries: 5
-
-  # ----------------------------------------------------------------------------
-  # Memoria y Caché (Redis 7)
-  # ----------------------------------------------------------------------------
+      retries: 5----
   cache-redis:
     image: redis:7-alpine
     container_name: cosmol-cache-redis
@@ -65,9 +55,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ----------------------------------------------------------------------------
-  # Almacenamiento de Objetos / PDFs (MinIO S3)
-  # ----------------------------------------------------------------------------
   storage-minio:
     image: quay.io/minio/minio:latest
     container_name: cosmol-storage-minio
