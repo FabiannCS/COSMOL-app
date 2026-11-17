@@ -1,4 +1,5 @@
 import logging
+import os
 from datetime import datetime
 from typing import Any, Dict, Optional
 import httpx
@@ -54,19 +55,27 @@ class ReportesApiClient(BaseApiClient):
     def _resolver_url_destino(self) -> Optional[str]:
         """
         Resuelve la URL destino previniendo discrepancias entre entornos:
-        Soporta URLs base ("http://host:8082"), con "/api" ("http://host:8082/api")
-        o completas ("http://host:8082/api/consultas").
+        Soporta URLs base ("http://host:8081"), con "/api" ("http://host:8081/api")
+        o completas ("http://host:8081/api/consultas").
         Sanea automáticamente si se configuró erróneamente con "/api/v1".
+        Ajusta dinámicamente localhost a host.docker.internal si opera dentro de contenedor Docker.
         """
         raw_url = (settings.REPORTES_API_URL or "").strip().rstrip("/")
         if not raw_url:
-            return None
+            raw_url = "http://host.docker.internal:8081/api/consultas" if os.path.exists("/.dockerenv") else "http://localhost:8081/api/consultas"
 
         # Sanear si alguien configuró /v1 o /api/v1 por confusión con la API de socios
         if "/api/v1" in raw_url:
             raw_url = raw_url.replace("/api/v1", "/api")
         elif raw_url.endswith("/v1"):
             raw_url = raw_url[:-3].rstrip("/")
+
+        # Si corre dentro de un contenedor Docker y apunta a localhost, enrutar a host.docker.internal
+        if os.path.exists("/.dockerenv"):
+            if "localhost" in raw_url:
+                raw_url = raw_url.replace("localhost", "host.docker.internal")
+            elif "127.0.0.1" in raw_url:
+                raw_url = raw_url.replace("127.0.0.1", "host.docker.internal")
 
         if raw_url.endswith("/api/consultas") or raw_url.endswith("/consultas"):
             return raw_url

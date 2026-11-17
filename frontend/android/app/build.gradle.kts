@@ -42,7 +42,12 @@ android {
         val variant = this
         outputs.all {
             val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output?.outputFileName = "COSMOL-RL-app-v${variant.versionName}.apk"
+            val abi = output?.filters?.find { it.filterType == "ABI" }?.identifier
+            if (abi != null) {
+                output?.outputFileName = "COSMOL-RL-app-v${variant.versionName}-$abi.apk"
+            } else {
+                output?.outputFileName = "COSMOL-RL-app-v${variant.versionName}.apk"
+            }
         }
         assembleProvider.configure {
             doLast {

@@ -41,7 +41,8 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cosmol_user} -d ${POSTGRES_DB:-cosmol_db}"]
       interval: 5s
       timeout: 5s
-      retries: 5----
+      retries: 5
+
   cache-redis:
     image: redis:7-alpine
     container_name: cosmol-cache-redis
