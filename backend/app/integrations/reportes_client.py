@@ -17,16 +17,12 @@ class ReportesApiClient(BaseApiClient):
     Diseñado para operar en segundo plano con resiliencia total (cero crash).
     """
 
-    # Catálogo Oficial de Eventos pactado en el Contrato con COSMOL-Reportes
+    # Catálogo Oficial de Eventos Consolidados pactado con COSMOL-Reportes
     CATALOGO_EVENTOS = {
         1: "Autenticación / Acceso",
-        2: "Consulta de Deuda",
-        3: "Historial de Consumo",
         5: "Solicitud de Reconexión",
         9: "Descarga de Factura PDF",
         10: "Pago: Multipago",
-        11: "Pago: Pago al Paso",
-        12: "Pago: Código QR",
     }
 
     # Control de circuito / cooldown preventivo para no bloquear la app ante caídas de Reportes
@@ -60,9 +56,16 @@ class ReportesApiClient(BaseApiClient):
         Sanea automáticamente si se configuró erróneamente con "/api/v1".
         Ajusta dinámicamente localhost a host.docker.internal si opera dentro de contenedor Docker.
         """
+        es_docker = (
+            os.path.exists("/.dockerenv")
+            or os.environ.get("RUNNING_IN_DOCKER") == "true"
+            or os.environ.get("RUNNING_IN_DOCKER") == "1"
+            or os.path.exists("/proc/1/cgroup")
+        )
+
         raw_url = (settings.REPORTES_API_URL or "").strip().rstrip("/")
         if not raw_url:
-            raw_url = "http://host.docker.internal:8081/api/consultas" if os.path.exists("/.dockerenv") else "http://localhost:8081/api/consultas"
+            raw_url = "http://host.docker.internal:8081/api/consultas" if es_docker else "http://localhost:8081/api/consultas"
 
         # Sanear si alguien configuró /v1 o /api/v1 por confusión con la API de socios
         if "/api/v1" in raw_url:
@@ -71,7 +74,7 @@ class ReportesApiClient(BaseApiClient):
             raw_url = raw_url[:-3].rstrip("/")
 
         # Si corre dentro de un contenedor Docker y apunta a localhost, enrutar a host.docker.internal
-        if os.path.exists("/.dockerenv"):
+        if es_docker:
             if "localhost" in raw_url:
                 raw_url = raw_url.replace("localhost", "host.docker.internal")
             elif "127.0.0.1" in raw_url:
