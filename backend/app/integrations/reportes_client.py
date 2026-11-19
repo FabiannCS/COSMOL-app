@@ -44,6 +44,31 @@ class ReportesApiClient(BaseApiClient):
         )
         self.servidor_offline: bool = False
 
+    async def get_client(self) -> httpx.AsyncClient:
+        """
+        Retorna cliente HTTP con verify=False para prevenir rechazos SSL internos
+        cuando los contenedores se comunican entre sí en la misma máquina.
+        """
+        import asyncio
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        if (
+            self._client is None
+            or self._client.is_closed
+            or getattr(self, "_loop", None) is not current_loop
+        ):
+            self._loop = current_loop
+            self._client = httpx.AsyncClient(
+                base_url=self.base_url,
+                timeout=self.timeout,
+                headers=self.default_headers,
+                verify=False,
+            )
+        return self._client
+
     def esta_servidor_offline(self) -> bool:
         """Indica si el último intento falló por desconexión de red o timeout."""
         return self.servidor_offline

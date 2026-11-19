@@ -18,7 +18,11 @@ async def encolar_evento_en_redis(payload: Dict[str, Any]) -> bool:
     Almacena un evento en la cola de resiliencia de Redis cuando COSMOL-Reportes está caído.
     Conserva la fecha y hora originales del momento del suceso.
     """
-    if not settings.REPORTES_ENABLED or not settings.REPORTES_API_URL:
+    if not settings.REPORTES_ENABLED:
+        logger.debug("[AUDITORIA OMITIDA] REPORTES_ENABLED=False.")
+        return
+    if not settings.REPORTES_API_URL:
+        logger.warning("[AUDITORIA OMITIDA] REPORTES_API_URL no está configurada en el archivo .env del servidor.")
         return False
 
     try:
@@ -40,7 +44,11 @@ async def vaciar_cola_pendientes(limite: int = 20) -> int:
     Expulsa eventos pendientes de la cola de Redis hacia COSMOL-Reportes.
     Si detecta que el servidor sigue fuera de línea, suspende la expulsión sin penalizar los eventos.
     """
-    if not settings.REPORTES_ENABLED or not settings.REPORTES_API_URL:
+    if not settings.REPORTES_ENABLED:
+        logger.debug("[AUDITORIA OMITIDA] REPORTES_ENABLED=False.")
+        return
+    if not settings.REPORTES_API_URL:
+        logger.warning("[AUDITORIA OMITIDA] REPORTES_API_URL no está configurada en el archivo .env del servidor.")
         return 0
 
     try:
@@ -132,7 +140,11 @@ async def despachar_auditoria_reportes(
     4. Si tiene éxito: Aprovecha la conexión viva para expulsar eventos acumulados en Redis.
     5. Si falla (Reportes caído/timeout): Guarda el evento en la cola de Redis de forma no bloqueante.
     """
-    if not settings.REPORTES_ENABLED or not settings.REPORTES_API_URL:
+    if not settings.REPORTES_ENABLED:
+        logger.debug("[AUDITORIA OMITIDA] REPORTES_ENABLED=False.")
+        return
+    if not settings.REPORTES_API_URL:
+        logger.warning("[AUDITORIA OMITIDA] REPORTES_API_URL no está configurada en el archivo .env del servidor.")
         return
 
     try:
