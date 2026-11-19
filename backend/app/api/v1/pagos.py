@@ -89,17 +89,9 @@ async def registrar_intento_pago(
     except (ValueError, TypeError):
         cod_socio_int = 0
 
-    # Mapeo exacto de la pasarela seleccionada
-    canal_norm = (payload.canal_id or "").strip().lower()
-    if "pago_al_paso" in canal_norm or "pagoalpaso" in canal_norm:
-        id_tipo_pago = 11
-        tipo_nombre = "Pago: Pago al Paso"
-    elif "qr" in canal_norm:
-        id_tipo_pago = 12
-        tipo_nombre = "Pago: Código QR"
-    else:
-        id_tipo_pago = 10
-        tipo_nombre = "Pago: Multipago"
+    # Canal activo: Multipago
+    id_tipo_pago = 10
+    tipo_nombre = "Pago: Multipago"
 
     # Enriquecer datos de socio y celular verificado
     nombre_socio = f"SOCIO {cod_socio_int}"
@@ -193,17 +185,9 @@ async def simular_pago(
     except (ValueError, TypeError):
         cod_socio_int = 0
 
-    # Determinar tipo de evento según canal
-    canal_norm = (payload.canal_id or "").strip().lower()
-    if "pago_al_paso" in canal_norm:
-        id_tipo_pago = 11
-        tipo_nombre = "Pago: Pago al Paso (Demo)"
-    elif "multipago" in canal_norm:
-        id_tipo_pago = 10
-        tipo_nombre = "Pago: Multipago (Demo)"
-    else:
-        id_tipo_pago = 12
-        tipo_nombre = "Pago: QR Jesús Nazareno (Demo)"
+    # Canal activo: Multipago
+    id_tipo_pago = 10
+    tipo_nombre = "Pago: Multipago (Demo)"
 
     # Obtener datos de socio para enriquecer telemetría
     nombre_socio = f"SOCIO {cod_socio_int}"

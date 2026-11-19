@@ -127,6 +127,7 @@ class Settings(BaseSettings):
     REPORTES_ID_USUARIO_APP: int = 3 # Usuario 3 = App Móvil (Usuario 2 = Chatbot WhatsApp)
     REPORTES_TIMEOUT_SECONDS: float = 2.0
     REPORTES_ENABLED: bool = True
+    REPORTES_DEBOUNCE_SEGUNDOS: int = 60 # Control anti-spam atómico en Redis (60s en lugar de hardcode 900s)
 
     model_config = SettingsConfigDict(
         env_file=[

@@ -16,8 +16,8 @@ from app.schemas.deuda import (
     DashboardMultiSuministroResponse,
     ResumenDeudaResponse,
 )
+from app.core.config import settings
 from app.services.servicio_deuda import ServicioDeuda
-from app.tasks.auditoria_reportes import despachar_auditoria_reportes
 
 logger = logging.getLogger(__name__)
 
@@ -92,37 +92,6 @@ async def obtener_deuda_suministro(
     # Si la deuda ya fue liquidada (saldo 0 Bs), cerrar ventana de verificación
     if resumen.saldo_pendiente_bs <= 0.0 or resumen.cantidad_facturas_pendientes == 0:
         await cerrar_ventana_verificacion(redis_client, cod_socio)
-
-    # Despachar evento de Consulta de Deuda a COSMOL-Reportes en segundo plano con debounce
-    try:
-        cod_socio_int = int(str(cod_socio).strip())
-    except (ValueError, TypeError):
-        cod_socio_int = 0
-
-    nombre_titular = (
-        resumen.suministro.nombre_titular
-        if hasattr(resumen, "suministro") and resumen.suministro and hasattr(resumen.suministro, "nombre_titular")
-        else None
-    ) or f"SOCIO {cod_socio_int}"
-
-    telefono_socio = None
-    try:
-        user_uuid = UUID(current_user_id)
-        stmt_u = select(Usuario.telefono).where(Usuario.id == user_uuid)
-        res_u = await db.execute(stmt_u)
-        telefono_socio = res_u.scalar_one_or_none()
-    except Exception:
-        pass
-
-    background_tasks.add_task(
-        despachar_auditoria_reportes,
-        codigo_socio=cod_socio_int,
-        nombres=nombre_titular,
-        telefono=telefono_socio,
-        id_tipo=2,
-        tipo_consulta="Consulta de Deuda",
-        debounce_segundos=900,  # Ventana de 15 minutos por código de socio
-    )
 
     return resumen
 

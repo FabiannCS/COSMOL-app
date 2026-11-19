@@ -119,7 +119,7 @@ async def despachar_auditoria_reportes(
     codigo_socio: int,
     nombres: str,
     telefono: Optional[str] = None,
-    id_tipo: int = 2,
+    id_tipo: int = 1,
     tipo_consulta: Optional[str] = None,
     tipo_ubicacion: str = "APP_MOVIL",
     debounce_segundos: int = 0,
