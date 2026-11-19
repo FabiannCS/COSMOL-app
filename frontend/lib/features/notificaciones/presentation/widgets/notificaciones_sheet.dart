@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/config/theme/app_colors.dart';
 import '../../../../core/config/theme/app_text_styles.dart';
 import '../../../deuda/presentation/providers/deuda_provider.dart';
-import '../../../deuda/presentation/widgets/pago_qr_mock_sheet.dart';
+import '../../../deuda/presentation/providers/pagos_provider.dart';
 import '../../data/models/notificacion_item_model.dart';
 import '../providers/notificaciones_provider.dart';
 
@@ -246,15 +247,17 @@ class NotificacionesSheet extends ConsumerWidget {
         } else {
           final deudaState = ref.read(deudaProvider);
           final resumen = deudaState.resumenDeuda;
-          if (resumen != null) {
-            PagoQrMockSheet.show(
-              context,
-              codSocio: resumen.codSocio,
-              nombreTitular: resumen.suministro?.nombreTitular ?? 'Socio COSMOL',
-              montoBs: resumen.saldoPendienteBs,
-              cantFacturas: resumen.cantidadFacturasPendientes,
-              facturas: resumen.facturasPendientes,
-            );
+          final codSocio = resumen?.codSocio ?? '';
+          if (codSocio.isNotEmpty) {
+            ref.read(pagosProvider.notifier).registrarIntentoYObtenerUrl(
+              codSocio: codSocio,
+              canalId: 'multipago',
+            ).then((url) {
+              final urlFinal = (url != null && url.isNotEmpty)
+                  ? url
+                  : 'https://multipago.com/service/cosmol_payment/first';
+              launchUrl(Uri.parse(urlFinal), mode: LaunchMode.externalApplication);
+            });
           }
         }
         break;
