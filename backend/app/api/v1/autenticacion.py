@@ -218,14 +218,33 @@ async def login(
 )
 async def renovar_token(
     datos: RenovarTokenRequest,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     redis: Redis = Depends(get_redis)
 ) -> TokenResponse:
     servicio = ServicioAutenticacion(redis, db=db)
-    return await servicio.renovar_token(
+    respuesta = await servicio.renovar_token(
         refresh_token=datos.refresh_token,
         device_id=datos.device_id
     )
+    if respuesta.suministros:
+        primer_sum = respuesta.suministros[0]
+        try:
+            cod_socio_int = int(str(primer_sum.cod_socio).strip())
+        except (ValueError, TypeError):
+            cod_socio_int = 0
+
+        nombre_titular = primer_sum.nombre or f"SOCIO {cod_socio_int}"
+        background_tasks.add_task(
+            despachar_auditoria_reportes,
+            codigo_socio=cod_socio_int,
+            nombres=nombre_titular,
+            telefono=None,
+            id_tipo=1,
+            tipo_consulta="Autenticación / Acceso",
+            debounce_segundos=settings.REPORTES_DEBOUNCE_SEGUNDOS,
+        )
+    return respuesta
 
 
 @router.post(

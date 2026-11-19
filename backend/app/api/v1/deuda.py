@@ -18,6 +18,7 @@ from app.schemas.deuda import (
 )
 from app.core.config import settings
 from app.services.servicio_deuda import ServicioDeuda
+from app.tasks.auditoria_reportes import despachar_auditoria_reportes
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,7 @@ router = APIRouter()
     description="Retorna el consolidado de deuda de todos los suministros vinculados al usuario autenticado.",
 )
 async def obtener_dashboard_resumen(
+    background_tasks: BackgroundTasks,
     current_user_id: str = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
     redis_client: Redis = Depends(get_redis),
@@ -41,7 +43,38 @@ async def obtener_dashboard_resumen(
     aprovechando la caché de Redis para cada suministro y sumando el saldo total en Bs.
     """
     servicio = ServicioDeuda(db=db, redis_client=redis_client)
-    return await servicio.obtener_dashboard_general(usuario_id=UUID(current_user_id))
+    resumen = await servicio.obtener_dashboard_general(usuario_id=UUID(current_user_id))
+
+    # Despachar evento de Acceso a la App a COSMOL-Reportes en segundo plano con debounce
+    if resumen.suministros:
+        primer_sum = resumen.suministros[0]
+        try:
+            cod_socio_int = int(str(primer_sum.cod_socio).strip())
+        except (ValueError, TypeError):
+            cod_socio_int = 0
+
+        nombre_titular = (
+            primer_sum.suministro.nombre_titular
+            if hasattr(primer_sum, "suministro") and primer_sum.suministro and hasattr(primer_sum.suministro, "nombre_titular")
+            else f"SOCIO {cod_socio_int}"
+        )
+        telefono_socio = (
+            primer_sum.suministro.telefono_celular
+            if hasattr(primer_sum, "suministro") and primer_sum.suministro and hasattr(primer_sum.suministro, "telefono_celular")
+            else None
+        )
+
+        background_tasks.add_task(
+            despachar_auditoria_reportes,
+            codigo_socio=cod_socio_int,
+            nombres=nombre_titular,
+            telefono=telefono_socio,
+            id_tipo=1,
+            tipo_consulta="Autenticación / Acceso",
+            debounce_segundos=settings.REPORTES_DEBOUNCE_SEGUNDOS,
+        )
+
+    return resumen
 
 
 @router.get(
