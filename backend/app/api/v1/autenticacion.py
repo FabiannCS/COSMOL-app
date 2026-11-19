@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_redis, get_token_payload
+from app.core.config import settings
 from app.db.models import Suministro, Usuario
 from app.schemas.suministro import (
     DesvincularSuministroResponse,
