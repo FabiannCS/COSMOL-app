@@ -5,17 +5,6 @@ import 'package:flutter/foundation.dart';
 class AppConfig {
   AppConfig._();
 
-  // Variables de entorno inyectadas desde el archivo .env (vía --dart-define-from-file=../.env o --dart-define)
-  static const String _envDomain = String.fromEnvironment(
-    'APP_DOMAIN',
-    defaultValue: 'chatbot.cosmol.com.bo',
-  );
-
-  static const String _envPort = String.fromEnvironment(
-    'APP_EXTERNAL_PORT',
-    defaultValue: '443',
-  );
-
   /// URL remota del backend institucional desplegado en el servidor.
   static const String remoteBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
@@ -49,7 +38,7 @@ class AppConfig {
     return remoteBaseUrl;
   }
 
-  static const Duration connectTimeout = Duration(seconds: 10);
-  static const Duration receiveTimeout = Duration(seconds: 10);
-  static const Duration sendTimeout = Duration(seconds: 10);
+  static const Duration connectTimeout = Duration(seconds: 15);
+  static const Duration receiveTimeout = Duration(seconds: 30);
+  static const Duration sendTimeout = Duration(seconds: 15);
 }

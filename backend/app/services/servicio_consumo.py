@@ -23,6 +23,7 @@ from app.services.servicio_cache_consumo import (
     guardar_consumo_cache,
     invalidar_consumo_cache,
     obtener_consumo_cache,
+    obtener_consumo_fallback,
 )
 
 logger = logging.getLogger(__name__)
@@ -88,7 +89,7 @@ class ServicioConsumo:
                 consumo_ultimo_mes_m3=0.0,
                 consumo_atipico=False,
                 porcentaje_variacion_ultimo_mes=None,
-                mensaje_alerta=None,
+                mensaje_alerta="El sistema central de medición está actualizando registros. Deslice hacia abajo para reintentar.",
                 tendencia="ESTABLE",
             )
 
@@ -255,10 +256,41 @@ class ServicioConsumo:
                 except Exception as exc:
                     logger.warning(f"[CACHE CONSUMO] Error al deserializar caché de '{codigo}': {exc}")
 
-        # 3. Consulta al sistema legado mediante el conector de DEV 1
-        datos_crudos = await self.cosmol_client.obtener_historial_consumo(
-            cod_socio=codigo, meses=meses
-        )
+        # 3. Consulta al sistema legado mediante el conector
+        try:
+            datos_crudos = await self.cosmol_client.obtener_historial_consumo(
+                cod_socio=codigo, meses=meses
+            )
+        except Exception as exc:
+            logger.warning(
+                f"[CONSUMO] Fallo o Timeout al consultar historial en sistema legado para socio '{codigo}': {exc}"
+            )
+            # Resiliencia: si Informix falla o tiene timeout, intentar servir desde la caché de respaldo
+            fallback = await obtener_consumo_fallback(self.redis, codigo)
+            if fallback and isinstance(fallback, dict):
+                logger.info(f"[CONSUMO] Sirviendo fallback cache para '{codigo}' tras fallo en sistema legado")
+                periodos_fb = [
+                    ConsumoPeriodoResponse(**p) for p in fallback.get("periodos", [])
+                ]
+                stats_fb = EstadisticasConsumoResponse(
+                    **fallback.get("estadisticas", {})
+                )
+                medidor_fb = (
+                    enmascarar_numero_medidor(nro_medidor_base)
+                    if rol_usuario == "CONSULTA_PAGO"
+                    else nro_medidor_base
+                )
+                return HistorialConsumoResponse(
+                    cod_socio=codigo,
+                    alias=alias,
+                    rol_acceso=rol_usuario,
+                    nro_medidor=medidor_fb,
+                    total_periodos=len(periodos_fb),
+                    periodos=periodos_fb,
+                    estadisticas=stats_fb,
+                )
+            # Si no hay datos en caché de respaldo, retornar degradación elegante sin romper con 503
+            datos_crudos = []
 
         # 4. Procesar periodos y calcular analítica
         periodos = self._procesar_periodos_crudos(datos_crudos)

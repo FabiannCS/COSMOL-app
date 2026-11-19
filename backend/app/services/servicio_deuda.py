@@ -27,6 +27,7 @@ from app.services.servicio_cache_deuda import (
     guardar_deuda_cache,
     invalidar_deuda_cache,
     obtener_deuda_cache,
+    obtener_deuda_fallback,
 )
 
 logger = logging.getLogger(__name__)
@@ -265,14 +266,77 @@ class ServicioDeuda:
                     logger.warning(f"[CACHE DEUDA] Fallo al deserializar caché de '{codigo}': {exc}")
 
         # 3. Consulta al Sistema Comercial Legado de COSMOL
-        datos_socio = await self.cosmol_client.obtener_datos_socio(codigo)
+        datos_socio = None
+        try:
+            datos_socio = await self.cosmol_client.obtener_datos_socio(codigo)
+        except Exception as exc:
+            logger.warning(f"[DEUDA] Error al consultar datos_socio de '{codigo}': {exc}")
+
         if not datos_socio:
+            # Resiliencia: si el sistema legado falla, intentar servir desde caché de respaldo
+            fallback_data = await obtener_deuda_fallback(self.redis, codigo)
+            if fallback_data:
+                logger.info(f"[DEUDA] Sirviendo fallback cache para '{codigo}' tras fallo en datos_socio")
+                resumen_base = ResumenDeudaResponse(**fallback_data)
+                detalle_ajustado = self._aplicar_enmascaramiento(
+                    resumen_base.suministro,
+                    rol_usuario,
+                    telefono_usuario=telefono_usuario,
+                )
+                return ResumenDeudaResponse(
+                    cod_socio=resumen_base.cod_socio,
+                    suministro=detalle_ajustado,
+                    moneda=resumen_base.moneda,
+                    saldo_pendiente_bs=resumen_base.saldo_pendiente_bs,
+                    cantidad_facturas_pendientes=resumen_base.cantidad_facturas_pendientes,
+                    fecha_proximo_vencimiento=resumen_base.fecha_proximo_vencimiento,
+                    esta_vencido=resumen_base.esta_vencido,
+                    alerta_corte=resumen_base.alerta_corte,
+                    mensaje_alerta="Información de respaldo recuperada. El sistema central de facturación presenta demoras temporales.",
+                    facturas_pendientes=resumen_base.facturas_pendientes,
+                    fecha_consulta=datetime.now(timezone.utc),
+                    origen_datos="CACHE_DEGRADADA",
+                )
             raise NotFoundException(
                 message=f"El suministro con código '{codigo}' no fue encontrado en el sistema comercial de COSMOL.",
                 error_code="SUPPLY_NOT_FOUND"
             )
 
-        deudas_raw = await self.cosmol_client.obtener_deudas_socio(codigo)
+        origen_datos = "SISTEMA_LEGADO"
+        mensaje_alerta_override: Optional[str] = None
+
+        try:
+            deudas_raw = await self.cosmol_client.obtener_deudas_socio(codigo)
+        except Exception as exc:
+            logger.warning(f"[DEUDA] Fallo/Timeout al consultar deudas de socio '{codigo}' ({exc})")
+            # Resiliencia: si falla la consulta de deudas (por timeout en Informix), intentar fallback cache
+            fallback_data = await obtener_deuda_fallback(self.redis, codigo)
+            if fallback_data:
+                logger.info(f"[DEUDA] Sirviendo fallback cache para '{codigo}' tras timeout de deudas")
+                resumen_base = ResumenDeudaResponse(**fallback_data)
+                detalle_ajustado = self._aplicar_enmascaramiento(
+                    resumen_base.suministro,
+                    rol_usuario,
+                    telefono_usuario=telefono_usuario,
+                )
+                return ResumenDeudaResponse(
+                    cod_socio=resumen_base.cod_socio,
+                    suministro=detalle_ajustado,
+                    moneda=resumen_base.moneda,
+                    saldo_pendiente_bs=resumen_base.saldo_pendiente_bs,
+                    cantidad_facturas_pendientes=resumen_base.cantidad_facturas_pendientes,
+                    fecha_proximo_vencimiento=resumen_base.fecha_proximo_vencimiento,
+                    esta_vencido=resumen_base.esta_vencido,
+                    alerta_corte=resumen_base.alerta_corte,
+                    mensaje_alerta="Información de respaldo recuperada. El sistema central de facturación presenta demoras temporales.",
+                    facturas_pendientes=resumen_base.facturas_pendientes,
+                    fecha_consulta=datetime.now(timezone.utc),
+                    origen_datos="CACHE_DEGRADADA",
+                )
+            # Si no hay fallback previo, degradación elegante con datos_socio para no quebrar la app con 503
+            deudas_raw = []
+            origen_datos = "SISTEMA_LEGADO_DEGRADADO"
+            mensaje_alerta_override = "El sistema central de facturación de COSMOL está con alta demanda. Deslice hacia abajo para reintentar en unos instantes."
 
         # 4. Normalización y cálculo de semáforo de deuda
         facturas_pendientes = self._procesar_facturas(deudas_raw)
@@ -283,7 +347,9 @@ class ServicioDeuda:
         alerta_corte = cantidad_facturas >= 2
 
         # Mensaje institucional preventivo
-        if alerta_corte:
+        if mensaje_alerta_override:
+            mensaje_alerta = mensaje_alerta_override
+        elif alerta_corte:
             mensaje_alerta = (
                 f"Tiene {cantidad_facturas} facturas pendientes. "
                 "Evite el corte del servicio cancelando sus respectivas facturas."
@@ -337,7 +403,7 @@ class ServicioDeuda:
             mensaje_alerta=mensaje_alerta,
             facturas_pendientes=facturas_pendientes,
             fecha_consulta=datetime.now(timezone.utc),
-            origen_datos="SISTEMA_LEGADO",
+            origen_datos=origen_datos,
         )
 
         # 5. Persistir en Redis con los datos completos
@@ -366,7 +432,7 @@ class ServicioDeuda:
             mensaje_alerta=mensaje_alerta,
             facturas_pendientes=facturas_pendientes,
             fecha_consulta=datetime.now(timezone.utc),
-            origen_datos="SISTEMA_LEGADO",
+            origen_datos=origen_datos,
         )
 
     async def obtener_dashboard_general(

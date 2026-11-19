@@ -258,7 +258,7 @@ class _PerfilScreenState extends ConsumerState<PerfilScreen> {
                   ListTile(
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                     title: Text('Versión de la App', style: AppTextStyles.body1),
-                    trailing: Text('v1.1.0', style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary)),
+                    trailing: Text('v1.1.2', style: AppTextStyles.body2.copyWith(color: AppColors.textSecondary)),
                   ),
                 ],
               ),

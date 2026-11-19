@@ -108,11 +108,12 @@ class Settings(BaseSettings):
 
     # Integración con Sistema Comercial Legado de COSMOL
     COSMOL_LEGACY_URL: str = "http://api.cosmol.com.bo/api-consultas"
-    COSMOL_LEGACY_TIMEOUT_SECONDS: float = 8.0
+    COSMOL_LEGACY_TIMEOUT_SECONDS: float = 25.0
     MOCK_COSMOL_LEGACY: bool = False
     MOCK_COSMOL_CONSUMO: bool = False
     DEBT_CACHE_TTL_SECONDS: int = 600  # 10 minutos (600 segundos)
     CONSUMO_CACHE_TTL_SECONDS: int = 900  # 15 minutos (900 segundos)
+    FALLBACK_CACHE_TTL_SECONDS: int = 604800  # 7 días (604800 segundos) para resiliencia ante caídas del legado
 
     # Pasarelas de Pago Externas (Hosted Checkout)
     URL_MULTIPAGO_COSMOL: str = "https://multipago.com/service/cosmol_payment/first"
