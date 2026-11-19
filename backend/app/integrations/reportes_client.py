@@ -92,6 +92,10 @@ class ReportesApiClient(BaseApiClient):
         if not raw_url:
             raw_url = "http://host.docker.internal:8081/api/consultas" if es_docker else "http://localhost:8081/api/consultas"
 
+        # Auto-corrección de error tipográfico frecuente (comsol -> cosmol)
+        if "comsol.com.bo" in raw_url:
+            raw_url = raw_url.replace("comsol.com.bo", "cosmol.com.bo")
+
         # Auto-upgrade a HTTPS si apunta al dominio institucional (Caddy fuerza TLS en chatbot.cosmol.com.bo)
         if raw_url.startswith("http://chatbot.cosmol.com.bo"):
             raw_url = "https://" + raw_url[len("http://"):]
